@@ -402,7 +402,7 @@ Permitir aplicar propostas de agentes de forma revisavel e segura.
 - Falhas preservam arquivos originais.
 
 ## Labels
-`pos-mvp` `agents` `diff` `security`
+`pos-mvp` `agent` `diff` `security`
 ```
 
 ### Migrar secrets para storage seguro
