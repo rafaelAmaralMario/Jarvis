@@ -43,6 +43,27 @@ Icones principais:
 - Plugins.
 - Configuracoes.
 
+Padrao visual:
+
+- Usar icones modernos, vetoriais e de linha, preferencialmente da mesma biblioteca.
+- Manter espessura, tamanho e alinhamento consistentes.
+- Evitar misturar icones preenchidos, emojis, letras soltas e pictogramas de estilos diferentes.
+- O icone ativo deve ter cor de destaque e animacao sutil.
+- Acoes destrutivas devem usar cor de risco apenas no estado adequado.
+
+### Icone do JARVIS
+
+O icone do JARVIS deve ser tratado como identidade do produto.
+
+Diretrizes:
+
+- Aparencia moderna, tecnica e memoravel.
+- Deve funcionar em 16px, 32px, 128px, 256px e 1024px.
+- Deve ter versao para app desktop, instalador e favicon.
+- Deve evitar excesso de detalhe para permanecer legivel em tamanhos pequenos.
+- Deve combinar com a linguagem visual da IDE: precisa, limpa, tecnologica e profissional.
+- O icone atual e temporario e existe apenas para permitir build e empacotamento.
+
 ### Sidebar
 
 Deve exibir conteudo conforme item ativo da Activity Bar:
@@ -198,4 +219,3 @@ Regras:
 - Mostrar propostas de edicao antes de aplicar.
 - Permitir cancelar tarefa em andamento.
 - Permitir copiar, salvar ou transformar respostas.
-

@@ -3,6 +3,8 @@
 Status: backlog de ideias  
 Objetivo: registrar evolucoes importantes sem poluir o escopo do MVP.
 
+Nota: este conteudo tambem foi consolidado em [roadmap-versao-final.md](roadmap-versao-final.md), para que o roadmap principal mantenha a visao completa da versao final e das evolucoes posteriores.
+
 ## Produto
 
 - Marketplace publico de plugins.
@@ -72,6 +74,9 @@ Objetivo: registrar evolucoes importantes sem poluir o escopo do MVP.
 
 ## Interface
 
+- Icone definitivo e moderno do JARVIS.
+- Sistema de icones consistente para toda a UI.
+- Microanimacoes padronizadas.
 - Temas personalizados.
 - Layouts salvos.
 - Painel de timeline de acoes.
@@ -86,4 +91,3 @@ Objetivo: registrar evolucoes importantes sem poluir o escopo do MVP.
 - Assinatura de binarios.
 - Canal beta.
 - Telemetria opcional e transparente.
-

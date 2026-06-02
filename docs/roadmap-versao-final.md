@@ -113,11 +113,27 @@ Objetivo: mapear o que falta para transformar o MVP em uma IDE final, funcional 
 
 - Onboarding inicial.
 - Estados de loading e erro mais refinados.
+- Icone definitivo e moderno do JARVIS.
+- Sistema de icones moderno, consistente e baseado em linhas limpas.
+- Microanimacoes consistentes para hover, selecao, carregamento e transicoes de paineis.
 - Tema claro completo.
 - Tema escuro polido.
 - Layout redimensionavel.
 - Configuracao de atalhos.
 - Tour inicial opcional.
+
+### Icones e Identidade Visual
+
+- Criar icone definitivo do JARVIS em alta resolucao.
+- Gerar variantes do icone para Windows, macOS, Linux e favicon.
+- Usar icones modernos, geometricos e consistentes em toda a interface.
+- Priorizar biblioteca de icones vetoriais, como Lucide, para a UI interna.
+- Evitar mistura de estilos de icones no mesmo painel.
+- Definir tamanhos padrao: 16px para toolbar, 18px para activity bar, 20px para botoes principais.
+- Definir estados visuais de icones: normal, hover, ativo, desabilitado e risco.
+- Criar icones especificos apenas quando a biblioteca nao representar bem a acao.
+- Manter icones com contraste suficiente nos temas claro e escuro.
+- Animar icones com sutileza: hover, loading, sucesso e erro.
 
 ### Distribuicao
 
@@ -139,3 +155,90 @@ Objetivo: mapear o que falta para transformar o MVP em uma IDE final, funcional 
 7. Sistema de permissoes visual.
 8. Proposta real de edicao com diff aplicavel.
 
+## Melhorias Futuras Consolidadas
+
+Esta secao consolida ideias de evolucao futura que ficam fora da primeira versao final, mas devem orientar a arquitetura para nao fechar caminhos importantes.
+
+### Produto
+
+- Marketplace publico de plugins.
+- Perfis de uso: desenvolvedor, escritor, pesquisador, estudante.
+- Workspaces com presets de agentes e modelos.
+- Onboarding guiado.
+- Templates de projetos.
+- Sistema de comandos favoritos.
+
+### IA e Modelos
+
+- Roteador automatico de modelos por tarefa.
+- Comparacao de respostas entre modelos.
+- Medicao de custo por tarefa.
+- Cache de respostas.
+- Avaliacao de qualidade por modelo.
+- Suporte a modelos locais com Ollama e LM Studio.
+- Suporte a provedores OpenAI-compatible.
+- Suporte a modelos de imagem, audio e video.
+
+### Agentes
+
+- Multiagentes com coordenador.
+- Planos de execucao longos com checkpoints.
+- Agentes por projeto.
+- Agentes treinados por contexto do usuario.
+- Simulacao antes de executar.
+- Avaliador automatico de mudancas.
+
+### Contexto e Memoria
+
+- Embeddings locais.
+- Busca semantica no workspace.
+- Memoria longa editavel.
+- Grafo de conhecimento.
+- Integracao profunda com Obsidian.
+- Registro automatico de decisoes arquiteturais.
+- Explicacao de qual contexto foi usado em cada resposta.
+
+### Git e Colaboracao
+
+- Criar commits com mensagem sugerida por IA.
+- Criar branches pela interface.
+- Abrir pull requests.
+- Revisar PRs com agente revisor.
+- Comparar mudancas de agentes e humanas.
+- Gerar changelog.
+
+### Plugins
+
+- Sandbox de plugins.
+- Assinatura/verificacao de plugins.
+- Plugins privados.
+- Plugins por workspace.
+- Atualizacao automatica.
+- Loja/marketplace.
+- API publica para extensoes.
+
+### Seguranca
+
+- Perfis de permissao.
+- Politicas por workspace.
+- Modo seguro.
+- Auditoria exportavel.
+- Alertas para vazamento de secrets.
+- Bloqueio de envio de dados sensiveis a providers externos.
+
+### Interface
+
+- Temas personalizados.
+- Layouts salvos.
+- Painel de timeline de acoes.
+- Visualizacao grafica de contexto.
+- Mapa de agentes e ferramentas.
+- Melhor experiencia mobile/tablet apenas se fizer sentido no futuro.
+
+### Empacotamento e Distribuicao
+
+- Instaladores Windows, macOS e Linux.
+- Auto-update.
+- Assinatura de binarios.
+- Canal beta.
+- Telemetria opcional e transparente.
