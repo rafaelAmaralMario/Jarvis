@@ -27,6 +27,7 @@ pub fn run() {
             commands::rename_entry,
             commands::move_entry,
             commands::search_workspace,
+            commands::start_ollama_model,
             commands::git_status,
             commands::git_diff,
             commands::git_stage,

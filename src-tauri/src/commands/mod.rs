@@ -254,6 +254,24 @@ pub fn search_workspace(
 }
 
 #[tauri::command]
+pub fn start_ollama_model(model: String) -> Result<(), String> {
+    let model = model.trim();
+    if model.is_empty()
+        || !model
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | ':' | '-' | '_'))
+    {
+        return Err("Invalid Ollama model name".to_string());
+    }
+
+    Command::new("ollama")
+        .args(["run", model])
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub fn git_status(workspace_path: Option<String>) -> Result<Vec<GitFileStatus>, String> {
     let root = workspace_path.unwrap_or_else(default_workspace_path);
     let output = Command::new("git")

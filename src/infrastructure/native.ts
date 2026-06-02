@@ -123,6 +123,10 @@ export async function searchWorkspace(
   return invoke<SearchResult[]>('search_workspace', { workspacePath, query });
 }
 
+export async function startOllamaModel(model: string): Promise<void> {
+  return invoke<void>('start_ollama_model', { model });
+}
+
 export async function loadSecureSettings(): Promise<SecureSettings> {
   return invoke<{ openai_compatible_api_key: string }>('load_secure_settings').then((settings) => ({
     openaiCompatibleApiKey: settings.openai_compatible_api_key,

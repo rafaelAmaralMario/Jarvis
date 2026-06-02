@@ -10,6 +10,7 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  CircleHelp,
   Pencil,
   GitBranch,
   MoveRight,
@@ -24,7 +25,7 @@ import {
 
 import { appMetadata } from '../application';
 import { defaultModelId, models } from '../application/model-registry';
-import { agentDefinitions } from '../agents';
+import { agentDefinitions, type AgentDefinition } from '../agents';
 import jarvisIcon from '../assets/jarvis-icon.svg';
 import type { ProviderKind } from '../domain';
 import { createTextProvider } from '../infrastructure/model-providers';
@@ -51,6 +52,7 @@ import {
   searchWorkspace,
   selectWorkspaceFolder,
   stageGitFile,
+  startOllamaModel,
   unstageGitFile,
   validatePath,
   writeMarkdownNote,
@@ -65,7 +67,7 @@ import {
 import type { PluginManifest } from '../plugins';
 import { pluginManifests } from '../plugins/manifests';
 
-type ActivityView = 'files' | 'git' | 'search' | 'settings' | 'plugins' | 'context' | 'agents';
+type ActivityView = 'files' | 'git' | 'search' | 'settings' | 'plugins' | 'context' | 'agents' | 'help';
 type BottomView = 'terminal' | 'logs' | 'diff' | 'proposal' | 'audit';
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 type ActionLog = { id: string; message: string; status: 'ok' | 'warn' };
@@ -79,6 +81,9 @@ type AuditEvent = {
 };
 type MemoryEntry = { id: string; content: string; createdAt: string };
 type ContextResult = { id: string; title: string; source: string; score: number; preview: string };
+type ContextVaultKind = 'general' | 'project';
+type ModelHealth = 'unknown' | 'ok' | 'fail';
+type AgentFormState = { name: string; intent: string; permissions: string[] };
 type ModalState =
   | { type: 'create-file'; title: string }
   | { type: 'create-folder'; title: string }
@@ -93,7 +98,9 @@ interface SettingsState {
   providerKind: ProviderKind;
   ollamaBaseUrl: string;
   openaiCompatibleBaseUrl: string;
-  vaultPath: string;
+  generalVaultPath: string;
+  projectVaultPath: string;
+  contextVaultKind: ContextVaultKind;
   workspacePath: string;
   theme: 'dark' | 'light';
   sidebarWidth: number;
@@ -110,13 +117,21 @@ interface EditorTab {
 }
 
 const settingsKey = 'jarvis.settings.v1';
+const activityBarWidth = 52;
+const combinedResizerWidth = 8;
+const editorMinWidth = 520;
+const sidebarMinWidth = 260;
+const aiPanelMinWidth = 360;
+const agentDesignerPath = 'jarvis://new-agent';
 
 const defaultSettings: SettingsState = {
   selectedModelId: defaultModelId,
   providerKind: 'mock',
   ollamaBaseUrl: 'http://127.0.0.1:11434',
   openaiCompatibleBaseUrl: 'https://api.openai.com/v1',
-  vaultPath: '',
+  generalVaultPath: '',
+  projectVaultPath: '',
+  contextVaultKind: 'project',
   workspacePath: '',
   theme: 'dark',
   sidebarWidth: 300,
@@ -137,7 +152,14 @@ function loadSettings(): SettingsState {
   }
 
   try {
-    return { ...defaultSettings, ...JSON.parse(stored) };
+    const parsed = JSON.parse(stored) as Partial<SettingsState> & { vaultPath?: string };
+    return {
+      ...defaultSettings,
+      ...parsed,
+      generalVaultPath: parsed.generalVaultPath ?? parsed.vaultPath ?? defaultSettings.generalVaultPath,
+      projectVaultPath: parsed.projectVaultPath ?? defaultSettings.projectVaultPath,
+      contextVaultKind: parsed.contextVaultKind ?? defaultSettings.contextVaultKind,
+    };
   } catch {
     return defaultSettings;
   }
@@ -147,8 +169,10 @@ export function App() {
   const [activeView, setActiveView] = useState<ActivityView>('files');
   const [bottomView, setBottomView] = useState<BottomView>('logs');
   const [settings, setSettings] = useState<SettingsState>(loadSettings);
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [workspacePath, setWorkspacePath] = useState('');
   const [files, setFiles] = useState<WorkspaceEntry[]>([]);
+  const [workspaceLoadError, setWorkspaceLoadError] = useState('');
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [selectedEntry, setSelectedEntry] = useState<WorkspaceEntry | null>(null);
   const [gitFiles, setGitFiles] = useState<GitFileStatus[]>([]);
@@ -174,6 +198,14 @@ export function App() {
   const [secureApiKey, setSecureApiKey] = useState('');
   const [generationActive, setGenerationActive] = useState(false);
   const [modelTestActive, setModelTestActive] = useState(false);
+  const [modelHealth, setModelHealth] = useState<ModelHealth>('unknown');
+  const [customAgents, setCustomAgents] = useState<AgentDefinition[]>(loadCustomAgents);
+  const [agentForm, setAgentForm] = useState<AgentFormState>({
+    name: '',
+    intent: '',
+    permissions: ['read-workspace'],
+  });
+  const [agentCreationActive, setAgentCreationActive] = useState(false);
   const [logs, setLogs] = useState<ActionLog[]>([]);
   const [proposalAccepted, setProposalAccepted] = useState(false);
   const [modal, setModal] = useState<ModalState>(null);
@@ -185,12 +217,20 @@ export function App() {
   const generationController = useRef<AbortController | null>(null);
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
 
-  const activeTab = tabs.find((tab) => tab.path === activeTabPath) ?? tabs[0];
+  const activeTab = tabs.find((tab) => samePath(tab.path, activeTabPath)) ?? tabs[0];
+  const panelWidths = useMemo(
+    () => boundPanelWidths(settings.sidebarWidth, settings.aiPanelWidth, viewportWidth),
+    [settings.aiPanelWidth, settings.sidebarWidth, viewportWidth],
+  );
   const selectedModel = useMemo(
     () => models.find((model) => model.id === settings.selectedModelId) ?? models[0],
     [settings.selectedModelId],
   );
   const dirtyTabs = tabs.filter((tab) => tab.content !== tab.savedContent);
+  const activeVaultPath = settings.contextVaultKind === 'general'
+    ? settings.generalVaultPath
+    : settings.projectVaultPath;
+  const allAgents = [...agentDefinitions, ...customAgents];
   const visiblePlugins: PluginManifest[] = [
     ...pluginManifests.map((plugin) => ({ ...plugin, valid: true, source: 'builtin' })),
     ...localPlugins,
@@ -205,8 +245,25 @@ export function App() {
   }, [enabledPlugins]);
 
   useEffect(() => {
+    localStorage.setItem('jarvis.agents.custom', JSON.stringify(customAgents));
+  }, [customAgents]);
+
+  useEffect(() => {
+    setModelHealth('unknown');
+  }, [settings.providerKind, settings.selectedModelId, settings.ollamaBaseUrl, settings.openaiCompatibleBaseUrl]);
+
+  useEffect(() => {
     void initializeWorkspace();
     void initializeSecureSettings();
+  }, []);
+
+  useEffect(() => {
+    function onResize() {
+      setViewportWidth(window.innerWidth);
+    }
+
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   useEffect(() => {
@@ -291,15 +348,36 @@ export function App() {
   }
 
   async function refreshWorkspace(path = workspacePath, options?: { quiet?: boolean }) {
-    const [workspaceEntries, status] = await Promise.all([
-      listWorkspaceEntries(path),
-      getGitStatus(path),
-    ]);
-    setFiles(workspaceEntries);
-    setGitFiles(status);
-    await refreshBranches(path);
-    if (!options?.quiet) {
-      addLog(`Workspace atualizado: ${path}`, 'ok');
+    if (!path) {
+      setFiles([]);
+      setWorkspaceLoadError('Nenhuma pasta de projeto selecionada.');
+      return;
+    }
+
+    try {
+      setWorkspaceLoadError('');
+      const workspaceEntries = await listWorkspaceEntries(path);
+      setFiles(workspaceEntries);
+      if (!options?.quiet) {
+        addLog(`Workspace atualizado: ${path}`, 'ok');
+      }
+    } catch (error) {
+      setFiles([]);
+      const message = `Nao foi possivel listar arquivos: ${formatError(error)}`;
+      setWorkspaceLoadError(message);
+      addLog(message, 'warn');
+    }
+
+    try {
+      const status = await getGitStatus(path);
+      setGitFiles(status);
+      await refreshBranches(path);
+    } catch (error) {
+      setGitFiles([]);
+      setGitBranches([]);
+      if (!options?.quiet) {
+        addLog(`Git indisponivel neste projeto: ${formatError(error)}`, 'warn');
+      }
     }
   }
 
@@ -431,10 +509,12 @@ export function App() {
         modelId: settings.selectedModelId,
         signal: controller.signal,
       });
+      setModelHealth('ok');
       addLog(`Modelo funcional: ${provider.name} respondeu "${response.slice(0, 60) || 'OK'}"`, 'ok');
       addAudit('Model Tester', 'network', settings.selectedModelId, 'Teste concluido');
     } catch (error) {
       const canceled = error instanceof DOMException && error.name === 'AbortError';
+      setModelHealth('fail');
       addLog(
         canceled
           ? 'Teste do modelo excedeu 12 segundos'
@@ -448,15 +528,51 @@ export function App() {
     }
   }
 
+  async function runLlama32() {
+    try {
+      await startOllamaModel('llama3.2');
+      setSettings((current) => ({
+        ...current,
+        providerKind: 'ollama',
+        selectedModelId: 'ollama:llama3.2',
+      }));
+      addLog('Comando iniciado: ollama run llama3.2', 'ok');
+    } catch (error) {
+      addLog(`Nao foi possivel iniciar llama3.2: ${formatError(error)}`, 'warn');
+    }
+  }
+
+  function openAgentDesigner() {
+    const existing = tabs.find((tab) => tab.path === agentDesignerPath);
+    if (existing) {
+      setActiveTabPath(existing.path);
+      return;
+    }
+
+    const tab: EditorTab = {
+      path: agentDesignerPath,
+      name: 'novo-agente',
+      content: '',
+      savedContent: '',
+      language: 'plaintext',
+    };
+    setTabs((current) => [...current, tab]);
+    setActiveTabPath(tab.path);
+  }
+
   function startPanelResize(panel: 'sidebar' | 'ai', event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault();
     const startX = event.clientX;
-    const initialWidth = panel === 'sidebar' ? settings.sidebarWidth : settings.aiPanelWidth;
+    const initialWidth = panel === 'sidebar' ? panelWidths.sidebar : panelWidths.ai;
 
     function onPointerMove(pointerEvent: PointerEvent) {
       const delta = pointerEvent.clientX - startX;
       const nextWidth = panel === 'sidebar' ? initialWidth + delta : initialWidth - delta;
-      const boundedWidth = clamp(nextWidth, panel === 'sidebar' ? 240 : 300, panel === 'sidebar' ? 520 : 620);
+      const availableWidth = window.innerWidth - activityBarWidth - combinedResizerWidth - editorMinWidth;
+      const otherPanelWidth = panel === 'sidebar' ? panelWidths.ai : panelWidths.sidebar;
+      const minWidth = panel === 'sidebar' ? sidebarMinWidth : aiPanelMinWidth;
+      const maxWidth = Math.max(minWidth, availableWidth - otherPanelWidth);
+      const boundedWidth = clamp(nextWidth, minWidth, maxWidth);
 
       setSettings((current) => ({
         ...current,
@@ -603,7 +719,7 @@ export function App() {
       return;
     }
 
-    const existing = tabs.find((tab) => tab.path === file.path);
+    const existing = tabs.find((tab) => samePath(tab.path, file.path));
     if (existing) {
       setActiveTabPath(existing.path);
       return;
@@ -611,6 +727,12 @@ export function App() {
 
     try {
       const result = await readTextFile(workspacePath, file.path);
+      const existingByCanonicalPath = tabs.find((tab) => samePath(tab.path, result.path));
+      if (existingByCanonicalPath) {
+        setActiveTabPath(existingByCanonicalPath.path);
+        return;
+      }
+
       const tab: EditorTab = {
         path: result.path,
         name: file.name,
@@ -627,7 +749,7 @@ export function App() {
   }
 
   async function saveActiveFile() {
-    if (activeTab.path === welcomeTab.path) {
+    if (activeTab.path === welcomeTab.path || activeTab.path === agentDesignerPath) {
       addLog('Abra um arquivo do workspace antes de salvar', 'warn');
       return;
     }
@@ -636,7 +758,7 @@ export function App() {
       await writeTextFile(workspacePath, activeTab.path, activeTab.content);
       setTabs((current) =>
         current.map((tab) =>
-          tab.path === activeTab.path ? { ...tab, savedContent: tab.content } : tab,
+          samePath(tab.path, activeTab.path) ? { ...tab, savedContent: tab.content } : tab,
         ),
       );
       await refreshWorkspace(workspacePath, { quiet: true });
@@ -648,7 +770,7 @@ export function App() {
 
   function updateActiveTab(content: string) {
     setTabs((current) =>
-      current.map((tab) => (tab.path === activeTab.path ? { ...tab, content } : tab)),
+      current.map((tab) => (samePath(tab.path, activeTab.path) ? { ...tab, content } : tab)),
     );
   }
 
@@ -662,8 +784,8 @@ export function App() {
       return;
     }
 
-    setTabs((current) => current.filter((item) => item.path !== tab.path));
-    if (activeTabPath === tab.path) {
+    setTabs((current) => current.filter((item) => !samePath(item.path, tab.path)));
+    if (samePath(activeTabPath, tab.path)) {
       setActiveTabPath(welcomeTab.path);
     }
   }
@@ -685,20 +807,30 @@ export function App() {
     }
 
     try {
+      const requiresValue = !['delete', 'switch-workspace'].includes(modal.type);
+      if (requiresValue && !modalValue.trim()) {
+        addLog('Informe um nome ou destino para continuar', 'warn');
+        return;
+      }
+
       if (modal.type === 'create-file') {
-        await createFile(workspacePath, parentForNewEntry(), modalValue);
+        const parent = parentForNewEntry();
+        await createFile(workspacePath, parent, modalValue.trim());
+        ensureFolderExpanded(parent);
         addLog(`Arquivo criado: ${modalValue}`, 'ok');
       }
       if (modal.type === 'create-folder') {
-        await createFolder(workspacePath, parentForNewEntry(), modalValue);
+        const parent = parentForNewEntry();
+        await createFolder(workspacePath, parent, modalValue.trim());
+        ensureFolderExpanded(parent);
         addLog(`Pasta criada: ${modalValue}`, 'ok');
       }
       if (modal.type === 'rename') {
-        await renameEntry(workspacePath, modal.entry.path, modalValue);
+        await renameEntry(workspacePath, modal.entry.path, modalValue.trim());
         addLog(`Renomeado: ${modal.entry.name} -> ${modalValue}`, 'ok');
       }
       if (modal.type === 'move') {
-        await moveEntry(workspacePath, modal.entry.path, modalValue);
+        await moveEntry(workspacePath, modal.entry.path, modalValue.trim());
         addLog(`Movido: ${modal.entry.name}`, 'ok');
       }
       if (modal.type === 'switch-workspace') {
@@ -713,8 +845,8 @@ export function App() {
           setActiveTabPath(welcomeTab.path);
         } else {
           await deleteEntry(workspacePath, modal.entry.path);
-          setTabs((current) => current.filter((tab) => tab.path !== modal.entry.path));
-          if (activeTab.path === modal.entry.path) {
+          setTabs((current) => current.filter((tab) => !samePath(tab.path, modal.entry.path)));
+          if (samePath(activeTab.path, modal.entry.path)) {
             setActiveTabPath(welcomeTab.path);
           }
           addLog(`Removido: ${modal.entry.name}`, 'ok');
@@ -729,7 +861,19 @@ export function App() {
   }
 
   function parentForNewEntry() {
-    return selectedEntry?.kind === 'directory' ? selectedEntry.path : workspacePath;
+    if (!selectedEntry) {
+      return workspacePath;
+    }
+
+    return selectedEntry.kind === 'directory' ? selectedEntry.path : directoryPath(selectedEntry.path);
+  }
+
+  function ensureFolderExpanded(path: string) {
+    if (!path || path === workspacePath) {
+      return;
+    }
+
+    setExpandedFolders((current) => new Set(current).add(path));
   }
 
   async function runSearch() {
@@ -750,21 +894,21 @@ export function App() {
   }
 
   async function loadObsidianNotes() {
-    if (!settings.vaultPath.trim()) {
-      addLog('Informe o caminho do vault do Obsidian', 'warn');
+    if (!activeVaultPath.trim()) {
+      addLog('Informe o caminho do vault do Obsidian selecionado', 'warn');
       return;
     }
 
-    const exists = await validatePath(settings.vaultPath);
+    const exists = await validatePath(activeVaultPath);
     if (!exists) {
       addLog('Vault do Obsidian nao encontrado', 'warn');
       return;
     }
 
-    const markdownNotes = await listMarkdownNotes(settings.vaultPath);
+    const markdownNotes = await listMarkdownNotes(activeVaultPath);
     setNotes(markdownNotes);
     addLog(`${markdownNotes.length} notas Markdown carregadas`, 'ok');
-    addAudit('Context Engine', 'read-workspace', settings.vaultPath, 'Notas indexadas');
+    addAudit('Context Engine', 'read-workspace', activeVaultPath, 'Notas indexadas');
   }
 
   function addMemory() {
@@ -788,15 +932,15 @@ export function App() {
   }
 
   async function writeMemoryToObsidian() {
-    if (!settings.vaultPath.trim() || !memoryInput.trim()) {
-      addLog('Informe o vault e o conteudo da nota', 'warn');
+    if (!activeVaultPath.trim() || !memoryInput.trim()) {
+      addLog('Informe o vault selecionado e o conteudo da nota', 'warn');
       return;
     }
 
     try {
       const path = await writeMarkdownNote(
-        settings.vaultPath,
-        `Jarvis ${new Date().toISOString().slice(0, 10)}`,
+        activeVaultPath,
+        `${settings.contextVaultKind === 'general' ? 'Jarvis Geral' : 'Jarvis Projeto'} ${new Date().toISOString().slice(0, 10)}`,
         memoryInput,
       );
       addLog(`Nota criada no Obsidian: ${path}`, 'ok');
@@ -841,6 +985,7 @@ export function App() {
     if (command === 'save-file') void saveActiveFile();
     if (command === 'search') setActiveView('search');
     if (command === 'settings') setActiveView('settings');
+    if (command === 'help') setActiveView('help');
     if (command === 'toggle-theme') {
       setSettings((current) => ({ ...current, theme: current.theme === 'dark' ? 'light' : 'dark' }));
     }
@@ -867,7 +1012,7 @@ export function App() {
   }
 
   function runAgent(agentId: string) {
-    const agent = agentDefinitions.find((item) => item.id === agentId);
+    const agent = allAgents.find((item) => item.id === agentId);
     if (!agent) {
       return;
     }
@@ -875,6 +1020,11 @@ export function App() {
     if (!hasAgentPermissions(agent.permissions)) {
       addLog(`Permissoes insuficientes para o agente ${agent.name}`, 'warn');
       addAudit(agent.name, agent.permissions.join(', '), activeTab.path, 'Bloqueado por permissao');
+      return;
+    }
+
+    if (agent.output === 'context') {
+      void runProjectBrainAgent(agent);
       return;
     }
 
@@ -904,6 +1054,101 @@ export function App() {
     addAudit(agent.name, agent.permissions.join(', '), activeTab.path, 'Documentacao proposta');
   }
 
+  async function runProjectBrainAgent(agent: AgentDefinition) {
+    if (!settings.projectVaultPath.trim()) {
+      addLog('Informe o vault especifico do projeto antes de gerar o cerebro.', 'warn');
+      return;
+    }
+
+    if (modelHealth !== 'ok') {
+      addLog('Teste o modelo com sucesso antes de executar o agente de contexto.', 'warn');
+      return;
+    }
+
+    try {
+      const provider = createCurrentTextProvider();
+      const prompt = [
+        'Voce e um agente de arquitetura. Analise este projeto e gere uma nota Markdown para um vault Obsidian.',
+        'Separe em secoes: visao geral, arquitetura, funcionalidades, agentes, modelos, integracoes, riscos e proximos passos.',
+        'Use bullets objetivos e inclua caminhos importantes quando fizer sentido.',
+        '',
+        `Workspace: ${workspacePath}`,
+        `Modelo: ${settings.selectedModelId}`,
+        '',
+        'Arvore de arquivos:',
+        renderWorkspaceTree(files),
+        '',
+        'Mudancas Git:',
+        gitFiles.map((file) => `- ${file.status} ${file.path}`).join('\n') || '- Nenhuma mudanca Git detectada.',
+      ].join('\n');
+
+      const content = await provider.sendMessage({
+        input: prompt,
+        modelId: settings.selectedModelId,
+      });
+      const title = `JARVIS Cerebro ${shortPath(workspacePath)} ${new Date().toISOString().slice(0, 10)}`;
+      const notePath = await writeMarkdownNote(settings.projectVaultPath, title, content);
+      addLog(`Cerebro do projeto criado: ${notePath}`, 'ok');
+      addAudit(agent.name, 'read-workspace', settings.projectVaultPath, 'Contexto enviado ao Obsidian');
+    } catch (error) {
+      addLog(`Agente de contexto falhou: ${formatError(error)}`, 'warn');
+    }
+  }
+
+  async function createCustomAgent() {
+    if (modelHealth !== 'ok' || agentCreationActive) {
+      return;
+    }
+
+    if (!agentForm.name.trim() || !agentForm.intent.trim()) {
+      addLog('Informe nome e objetivo do agente.', 'warn');
+      return;
+    }
+
+    setAgentCreationActive(true);
+    try {
+      const provider = createCurrentTextProvider();
+      const response = await provider.sendMessage({
+        input: [
+          'Transforme a ideia abaixo em uma definicao curta de agente para uma IDE com IA.',
+          'Responda em portugues com uma frase de objetivo clara e objetiva.',
+          `Nome: ${agentForm.name}`,
+          `Intencao: ${agentForm.intent}`,
+        ].join('\n'),
+        modelId: settings.selectedModelId,
+      });
+      const agent: AgentDefinition = {
+        id: `custom-${crypto.randomUUID()}`,
+        name: agentForm.name.trim(),
+        goal: response.trim() || agentForm.intent.trim(),
+        defaultModelCapability: 'text',
+        permissions: agentForm.permissions,
+        output: 'docs',
+      };
+      setCustomAgents((current) => [agent, ...current]);
+      setAgentForm({ name: '', intent: '', permissions: ['read-workspace'] });
+      setTabs((current) => current.filter((tab) => tab.path !== agentDesignerPath));
+      setActiveTabPath(welcomeTab.path);
+      addLog(`Agente criado: ${agent.name}`, 'ok');
+    } catch (error) {
+      addLog(`Nao foi possivel criar agente: ${formatError(error)}`, 'warn');
+    } finally {
+      setAgentCreationActive(false);
+    }
+  }
+
+  function createCurrentTextProvider() {
+    return createTextProvider({
+      kind: settings.providerKind,
+      modelId: settings.selectedModelId,
+      baseUrl:
+        settings.providerKind === 'ollama'
+          ? settings.ollamaBaseUrl
+          : settings.openaiCompatibleBaseUrl,
+      apiKey: secureApiKey,
+    });
+  }
+
   function togglePlugin(plugin: PluginManifest) {
     const verification = verifyPlugin(plugin, settings.permissions);
     if (!verification.allowed) {
@@ -928,7 +1173,7 @@ export function App() {
     <main
       className={`app-shell theme-${settings.theme}`}
       style={{
-        gridTemplateColumns: `52px minmax(240px, ${settings.sidebarWidth}px) 4px minmax(480px, 1fr) 4px minmax(300px, ${settings.aiPanelWidth}px)`,
+        gridTemplateColumns: `${activityBarWidth}px ${panelWidths.sidebar}px 4px minmax(${editorMinWidth}px, 1fr) 4px ${panelWidths.ai}px`,
       }}
     >
       <aside className="activity-bar" aria-label="Navegacao principal">
@@ -976,13 +1221,35 @@ export function App() {
               </button>
             </div>
             <div className="workspace-path">{workspacePath}</div>
+            {workspaceLoadError && <div className="empty-state warning">{workspaceLoadError}</div>}
+            {!workspaceLoadError && files.length === 0 && (
+              <div className="empty-state">
+                Nenhum arquivo encontrado nesta pasta. Use Atualizar ou selecione outra pasta.
+              </div>
+            )}
             {files.map((file) => (
               <TreeEntry
                 entry={file}
                 expandedFolders={expandedFolders}
                 key={file.path}
                 level={0}
+                onCreateFile={(entry) => {
+                  setSelectedEntry(entry);
+                  openModal({ type: 'create-file', title: `Criar arquivo em ${entry.name}` });
+                }}
+                onCreateFolder={(entry) => {
+                  setSelectedEntry(entry);
+                  openModal({ type: 'create-folder', title: `Criar pasta em ${entry.name}` });
+                }}
+                onDelete={(entry) => {
+                  setSelectedEntry(entry);
+                  openModal({ type: 'delete', title: 'Remover item', entry });
+                }}
                 onOpen={(entry) => void openWorkspaceFile(entry)}
+                onRename={(entry) => {
+                  setSelectedEntry(entry);
+                  openModal({ type: 'rename', title: 'Renomear', entry });
+                }}
                 selectedPath={selectedEntry?.path}
               />
             ))}
@@ -1145,6 +1412,13 @@ export function App() {
               <Sparkles size={15} />
               {modelTestActive ? 'Testando modelo...' : 'Testar modelo'}
             </button>
+            <button className="text-button with-icon" onClick={() => void runLlama32()} type="button">
+              <Sparkles size={15} />
+              Rodar llama3.2
+            </button>
+            <div className={`status-line ${modelHealth}`}>
+              Modelo: {modelHealth === 'ok' ? 'funcional' : modelHealth === 'fail' ? 'falhou no ultimo teste' : 'nao testado'}
+            </div>
             {settings.providerKind === 'ollama' && (
               <label>
                 Endpoint Ollama
@@ -1202,17 +1476,42 @@ export function App() {
               </select>
             </label>
             <label>
-              Vault Obsidian
-              <input
-                value={settings.vaultPath}
+              Destino de contexto
+              <select
+                value={settings.contextVaultKind}
                 onChange={(event) =>
-                  setSettings((current) => ({ ...current, vaultPath: event.target.value }))
+                  setSettings((current) => ({
+                    ...current,
+                    contextVaultKind: event.target.value as ContextVaultKind,
+                  }))
                 }
-                placeholder="C:\\Users\\...\\Vault"
+              >
+                <option value="general">Geral</option>
+                <option value="project">Especifico do projeto</option>
+              </select>
+            </label>
+            <label>
+              Vault Obsidian geral
+              <input
+                value={settings.generalVaultPath}
+                onChange={(event) =>
+                  setSettings((current) => ({ ...current, generalVaultPath: event.target.value }))
+                }
+                placeholder="C:\\Users\\...\\Vault-Geral"
+              />
+            </label>
+            <label>
+              Vault Obsidian do projeto
+              <input
+                value={settings.projectVaultPath}
+                onChange={(event) =>
+                  setSettings((current) => ({ ...current, projectVaultPath: event.target.value }))
+                }
+                placeholder="C:\\Users\\...\\Vault-Projeto"
               />
             </label>
             <button className="primary-button" onClick={() => void loadObsidianNotes()} type="button">
-              Validar e carregar notas
+              Validar e carregar notas do destino
             </button>
             <section className="permission-center">
               <strong>Permissoes por workspace</strong>
@@ -1256,6 +1555,9 @@ export function App() {
         )}
         {activeView === 'context' && (
           <div className="panel-list">
+            <div className="workspace-path">
+              Destino ativo: {settings.contextVaultKind === 'general' ? 'Geral' : 'Projeto'} | {activeVaultPath || 'nao configurado'}
+            </div>
             <label className="context-input">
               Buscar contexto
               <input
@@ -1311,7 +1613,19 @@ export function App() {
         )}
         {activeView === 'agents' && (
           <div className="panel-list">
-            {agentDefinitions.map((agent) => (
+            <article className="plugin-card">
+              <strong>Criar novo agente</strong>
+              <p>Disponivel depois que o modelo ativo passar no teste.</p>
+              <button
+                className="primary-button"
+                disabled={modelHealth !== 'ok'}
+                onClick={openAgentDesigner}
+                type="button"
+              >
+                Novo agente
+              </button>
+            </article>
+            {allAgents.map((agent) => (
               <article className="plugin-card" key={agent.id}>
                 <strong>Agente {agent.name}</strong>
                 <p>{agent.goal}</p>
@@ -1321,6 +1635,66 @@ export function App() {
                 </button>
               </article>
             ))}
+          </div>
+        )}
+        {activeView === 'help' && (
+          <div className="panel-list help-panel">
+            <article className="plugin-card">
+              <strong>Instalar modelos locais com Ollama</strong>
+              <ol>
+                <li>Baixe o instalador oficial do Ollama para o seu sistema.</li>
+                <li>No Windows, use o instalador OllamaSetup.exe.</li>
+                <li>Abra o terminal e execute um modelo, por exemplo: ollama run llama3.2.</li>
+                <li>Em Configuracoes, selecione Provider de IA: Ollama local.</li>
+                <li>Confirme o endpoint http://127.0.0.1:11434 e clique em Testar modelo.</li>
+              </ol>
+              <a className="external-link" href="https://docs.ollama.com/" rel="noreferrer" target="_blank">
+                Documentacao Ollama
+              </a>
+              <a className="external-link" href="https://docs.ollama.com/windows" rel="noreferrer" target="_blank">
+                Instalar no Windows
+              </a>
+              <button className="primary-button with-icon" onClick={() => void runLlama32()} type="button">
+                <Sparkles size={15} />
+                Rodar llama3.2 agora
+              </button>
+            </article>
+            <article className="plugin-card">
+              <strong>Usar OpenAI-compatible</strong>
+              <ol>
+                <li>Crie ou obtenha uma API key do provider escolhido.</li>
+                <li>Configure o endpoint em formato OpenAI-compatible.</li>
+                <li>Salve a chave em Configuracoes e clique em Testar modelo.</li>
+              </ol>
+              <a className="external-link" href="https://developers.openai.com/api/docs/quickstart" rel="noreferrer" target="_blank">
+                Quickstart OpenAI API
+              </a>
+              <a className="external-link" href="https://platform.openai.com/docs/api-reference/authentication" rel="noreferrer" target="_blank">
+                Autenticacao OpenAI API
+              </a>
+            </article>
+            <article className="plugin-card">
+              <strong>LM Studio como servidor local</strong>
+              <ol>
+                <li>Instale o LM Studio e baixe um modelo pela aba Discover.</li>
+                <li>Ative o servidor local OpenAI-compatible.</li>
+                <li>No JARVIS, use Provider OpenAI-compatible e informe o endpoint local.</li>
+              </ol>
+              <a className="external-link" href="https://lmstudio.ai/docs/app" rel="noreferrer" target="_blank">
+                Documentacao LM Studio
+              </a>
+              <a className="external-link" href="https://www.lmstudio.ai/docs/app/offline" rel="noreferrer" target="_blank">
+                Rodar offline e servidor local
+              </a>
+            </article>
+            <article className="plugin-card">
+              <strong>Agentes e contexto</strong>
+              <ol>
+                <li>Teste o modelo antes de criar novos agentes.</li>
+                <li>Use o agente Cerebro do Projeto para gerar uma nota inicial no vault especifico.</li>
+                <li>Use o vault Geral para conhecimento reaproveitavel e o vault do Projeto para decisoes locais.</li>
+              </ol>
+            </article>
           </div>
         )}
       </section>
@@ -1345,9 +1719,14 @@ export function App() {
         <div className="editor-tabs">
           {tabs.map((tab) => (
             <button
-              className={activeTab.path === tab.path ? 'tab active' : 'tab'}
+              className={samePath(activeTab.path, tab.path) ? 'tab active' : 'tab'}
               key={tab.path}
               onClick={() => setActiveTabPath(tab.path)}
+              onAuxClick={(event) => {
+                if (event.button === 1 && tab.path !== welcomeTab.path) {
+                  closeTab(tab);
+                }
+              }}
               type="button"
             >
               {tab.content !== tab.savedContent && <span className="dirty-dot" />}
@@ -1365,14 +1744,69 @@ export function App() {
           </button>
         </div>
         <div className="editor-frame">
-          <Editor
-            language={activeTab.language}
-            height="100%"
-            theme={settings.theme === 'dark' ? 'vs-dark' : 'light'}
-            value={activeTab.content}
-            onChange={(value) => updateActiveTab(value ?? '')}
-            options={{ minimap: { enabled: false }, fontSize: 14, readOnly: false }}
-          />
+          {activeTab.path === agentDesignerPath ? (
+            <section className="agent-designer">
+              <div>
+                <strong>Novo agente</strong>
+                <span>O modelo ativo sera usado para refinar a definicao.</span>
+              </div>
+              <label>
+                Nome
+                <input
+                  value={agentForm.name}
+                  onChange={(event) => setAgentForm((current) => ({ ...current, name: event.target.value }))}
+                  placeholder="Ex.: Analista de requisitos"
+                />
+              </label>
+              <label>
+                O que ele deve fazer
+                <textarea
+                  value={agentForm.intent}
+                  onChange={(event) => setAgentForm((current) => ({ ...current, intent: event.target.value }))}
+                  placeholder="Descreva a funcao do agente..."
+                />
+              </label>
+              <div className="permission-grid">
+                {permissionItems.map((permission) => (
+                  <label className="toggle-row" key={permission.id}>
+                    <span>
+                      {permission.label}
+                      <small>{permission.description}</small>
+                    </span>
+                    <input
+                      checked={agentForm.permissions.includes(permission.id)}
+                      onChange={(event) => {
+                        setAgentForm((current) => ({
+                          ...current,
+                          permissions: event.target.checked
+                            ? [...current.permissions, permission.id]
+                            : current.permissions.filter((item) => item !== permission.id),
+                        }));
+                      }}
+                      type="checkbox"
+                    />
+                  </label>
+                ))}
+              </div>
+              <button
+                className="primary-button"
+                disabled={modelHealth !== 'ok' || agentCreationActive}
+                onClick={() => void createCustomAgent()}
+                type="button"
+              >
+                {agentCreationActive ? 'Criando agente...' : 'Criar agente com IA'}
+              </button>
+            </section>
+          ) : (
+            <Editor
+              language={activeTab.language}
+              height="100%"
+              theme={settings.theme === 'dark' ? 'vs-dark' : 'light'}
+              value={activeTab.content}
+              onChange={(value) => updateActiveTab(value ?? '')}
+              options={{ minimap: { enabled: false }, fontSize: 14, readOnly: false }}
+            />
+          )}
         </div>
         <section className="bottom-panel">
           <nav>
@@ -1516,28 +1950,66 @@ function TreeEntry({
   entry,
   expandedFolders,
   level,
+  onCreateFile,
+  onCreateFolder,
+  onDelete,
   onOpen,
+  onRename,
   selectedPath,
 }: {
   entry: WorkspaceEntry;
   expandedFolders: Set<string>;
   level: number;
+  onCreateFile: (entry: WorkspaceEntry) => void;
+  onCreateFolder: (entry: WorkspaceEntry) => void;
+  onDelete: (entry: WorkspaceEntry) => void;
   onOpen: (entry: WorkspaceEntry) => void;
+  onRename: (entry: WorkspaceEntry) => void;
   selectedPath?: string;
 }) {
   const expanded = expandedFolders.has(entry.path);
+  const selected = selectedPath === entry.path;
   return (
     <>
-      <button
-        className={selectedPath === entry.path ? 'list-row button-row selected' : 'list-row button-row'}
+      <div
+        className={selected ? 'list-row button-row selected' : 'list-row button-row'}
         onClick={() => onOpen(entry)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onOpen(entry);
+          }
+        }}
+        role="button"
         style={{ paddingLeft: `${8 + level * 14}px` }}
-        type="button"
+        tabIndex={0}
       >
         {entry.kind === 'directory' ? <Folder size={15} /> : <File size={15} />}
         {entry.kind === 'directory' && <span className="tree-caret">{expanded ? '-' : '+'}</span>}
-        {entry.name}
-      </button>
+        <span className="tree-label" title={entry.path}>{entry.name}</span>
+        <span
+          className="tree-actions"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {entry.kind === 'directory' && (
+            <>
+              <button className="tree-action-button" onClick={() => onCreateFile(entry)} title="Novo arquivo" type="button">
+                <FilePlus2 size={13} />
+              </button>
+              <button className="tree-action-button" onClick={() => onCreateFolder(entry)} title="Nova pasta" type="button">
+                <FolderPlus size={13} />
+              </button>
+            </>
+          )}
+          <button className="tree-action-button" onClick={() => onRename(entry)} title="Renomear" type="button">
+            <Pencil size={13} />
+          </button>
+          <button className="tree-action-button danger" onClick={() => onDelete(entry)} title="Remover" type="button">
+            <Trash2 size={13} />
+          </button>
+        </span>
+      </div>
       {entry.kind === 'directory' &&
         expanded &&
         entry.children.map((child) => (
@@ -1546,7 +2018,11 @@ function TreeEntry({
             expandedFolders={expandedFolders}
             key={child.path}
             level={level + 1}
+            onCreateFile={onCreateFile}
+            onCreateFolder={onCreateFolder}
+            onDelete={onDelete}
             onOpen={onOpen}
+            onRename={onRename}
             selectedPath={selectedPath}
           />
         ))}
@@ -1562,6 +2038,7 @@ const activityItems: Array<{ id: ActivityView; label: string; Icon: LucideIcon }
   { id: 'plugins', label: 'Plugins', Icon: Boxes },
   { id: 'context', label: 'Contexto', Icon: Code2 },
   { id: 'agents', label: 'Agentes', Icon: Bot },
+  { id: 'help', label: 'Ajuda', Icon: CircleHelp },
 ];
 
 const sidebarTitle: Record<ActivityView, string> = {
@@ -1572,6 +2049,7 @@ const sidebarTitle: Record<ActivityView, string> = {
   plugins: 'Plugins',
   context: 'Contexto',
   agents: 'Agentes',
+  help: 'Ajuda',
 };
 
 const bottomLabels: Record<BottomView, string> = {
@@ -1617,26 +2095,94 @@ const commands = [
   { id: 'save-file', label: 'Salvar arquivo atual' },
   { id: 'search', label: 'Buscar no projeto' },
   { id: 'settings', label: 'Abrir configuracoes' },
+  { id: 'help', label: 'Abrir ajuda' },
   { id: 'toggle-theme', label: 'Alternar tema' },
 ];
 
-const sampleCode = `import type { TextModelProvider } from './domain';
+const welcomeHelp = `# JARVIS - Ajuda rapida
 
-export const provider: TextModelProvider = {
-  id: 'mock',
-  name: 'Mock Provider',
-  async sendMessage(input) {
-    return \`Resposta simulada para: \${input}\`;
-  },
-};
+JARVIS e uma IDE pensada para trabalhar com modelos de IA, agentes, contexto do projeto e integracoes locais.
+
+## 1. Abrir um projeto
+
+1. Clique no icone de pasta na barra lateral de Arquivos.
+2. Selecione a pasta do projeto.
+3. A lista de arquivos deve aparecer no explorer.
+4. Use os botoes do explorer para criar arquivos, criar pastas, renomear, mover, remover e atualizar.
+
+## 2. Configurar um modelo
+
+1. Abra Configuracoes.
+2. Escolha o Provider de IA:
+   - Mock local: apenas valida o fluxo.
+   - Ollama local: usa modelos instalados localmente.
+   - OpenAI-compatible: usa APIs compativeis com OpenAI.
+3. Escolha o modelo ativo.
+4. Clique em Testar modelo.
+
+## 3. Instalar modelos locais com Ollama
+
+1. Acesse https://docs.ollama.com/
+2. No Windows, siga https://docs.ollama.com/windows
+3. Instale o Ollama.
+4. No terminal, execute: ollama run llama3.2
+5. Ou use o botao Rodar llama3.2 dentro do JARVIS.
+6. No JARVIS, selecione Provider de IA: Ollama local.
+7. Confirme o endpoint: http://127.0.0.1:11434
+8. Clique em Testar modelo.
+
+## 4. Usar OpenAI-compatible
+
+1. Obtenha uma API key do provider escolhido.
+2. Configure o endpoint em Configuracoes.
+3. Salve a chave.
+4. Clique em Testar modelo.
+
+Links uteis:
+
+- https://developers.openai.com/api/docs/quickstart
+- https://platform.openai.com/docs/api-reference/authentication
+
+## 5. Obsidian e contexto
+
+Configure dois caminhos:
+
+- Geral: conhecimento reutilizavel entre projetos.
+- Especifico do projeto: contexto, decisoes e notas que so fazem sentido neste projeto.
+
+Use o destino ativo na tela de Contexto para salvar memorias no vault correto.
+
+## 6. Agentes
+
+1. Teste o modelo antes de criar agentes.
+2. Abra Agentes.
+3. Use o formulario para descrever o novo agente.
+4. O JARVIS usa o modelo ativo para melhorar a definicao do agente.
+
+Agente inicial:
+
+- Cerebro do Projeto: analisa a estrutura do projeto e gera uma nota Markdown no vault especifico do projeto para indexacao no Obsidian.
+
+## 7. Regras de seguranca
+
+- Revise sempre propostas de agentes antes de aplicar alteracoes.
+- Mantenha permissoes sensiveis desativadas ate serem necessarias.
+- Separe contexto geral de contexto especifico por projeto.
+
+## 8. Atalhos
+
+- Ctrl+S: salva o arquivo aberto.
+- Ponto amarelo na aba: indica arquivo com alteracoes nao salvas.
+- Clique do meio na aba: fecha a aba, como no VS Code.
+- A mesma aba de arquivo e reutilizada quando o arquivo ja estiver aberto.
 `;
 
 const welcomeTab: EditorTab = {
-  path: 'welcome.ts',
-  name: 'welcome.ts',
-  content: sampleCode,
-  savedContent: sampleCode,
-  language: 'typescript',
+  path: 'welcome.md',
+  name: 'welcome.md',
+  content: welcomeHelp,
+  savedContent: welcomeHelp,
+  language: 'markdown',
 };
 
 function tabToEntry(tab: EditorTab): WorkspaceEntry {
@@ -1763,6 +2309,29 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+function normalizePath(value: string) {
+  return value
+    .replace(/^\\\\\?\\/, '')
+    .replace(/\\/g, '/')
+    .replace(/\/+$/, '')
+    .toLowerCase();
+}
+
+function samePath(left: string, right: string) {
+  return normalizePath(left) === normalizePath(right);
+}
+
+function boundPanelWidths(sidebarWidth: number, aiPanelWidth: number, viewportWidth: number) {
+  const available = Math.max(
+    sidebarMinWidth + aiPanelMinWidth,
+    viewportWidth - activityBarWidth - combinedResizerWidth - editorMinWidth,
+  );
+  const sidebar = clamp(sidebarWidth, sidebarMinWidth, Math.max(sidebarMinWidth, available - aiPanelMinWidth));
+  const ai = clamp(aiPanelWidth, aiPanelMinWidth, Math.max(aiPanelMinWidth, available - sidebar));
+
+  return { sidebar, ai };
+}
+
 function loadEnabledPlugins(): string[] {
   const stored = localStorage.getItem('jarvis.plugins.enabled');
   if (!stored) {
@@ -1774,6 +2343,32 @@ function loadEnabledPlugins(): string[] {
   } catch {
     return [];
   }
+}
+
+function loadCustomAgents(): AgentDefinition[] {
+  const stored = localStorage.getItem('jarvis.agents.custom');
+  if (!stored) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return [];
+  }
+}
+
+function renderWorkspaceTree(entries: WorkspaceEntry[], level = 0): string {
+  return entries
+    .slice(0, 80)
+    .map((entry) => {
+      const prefix = `${'  '.repeat(level)}- ${entry.kind === 'directory' ? '[dir]' : '[file]'} ${entry.name}`;
+      const children = entry.children.length > 0 && level < 3
+        ? `\n${renderWorkspaceTree(entry.children, level + 1)}`
+        : '';
+      return `${prefix}${children}`;
+    })
+    .join('\n');
 }
 
 function verifyPlugin(
@@ -1804,7 +2399,7 @@ function verifyPlugin(
 }
 
 function createAgentDiff(tab: EditorTab) {
-  const filePath = tab.path === welcomeTab.path ? 'novo-arquivo.ts' : tab.path;
+  const filePath = tab.path === welcomeTab.path ? 'novo-arquivo.md' : tab.path;
   return [
     `diff --git a/${shortPath(filePath)} b/${shortPath(filePath)}`,
     `--- a/${shortPath(filePath)}`,
@@ -1844,6 +2439,12 @@ function createDocumentationProposal(tab: EditorTab) {
 
 function shortPath(path: string) {
   return path.split(/[\\/]/).pop() || path;
+}
+
+function directoryPath(path: string) {
+  const normalized = path.replace(/\\/g, '/');
+  const index = normalized.lastIndexOf('/');
+  return index > 0 ? path.slice(0, index) : path;
 }
 
 function languageFromPath(path: string) {

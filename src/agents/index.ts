@@ -4,10 +4,18 @@ export interface AgentDefinition {
   goal: string;
   defaultModelCapability: 'text' | 'code';
   permissions: string[];
-  output: 'diff' | 'review' | 'docs';
+  output: 'diff' | 'review' | 'docs' | 'context';
 }
 
 export const agentDefinitions: AgentDefinition[] = [
+  {
+    id: 'project-brain',
+    name: 'Cerebro do Projeto',
+    goal: 'Analisar o projeto e gerar notas de contexto estruturadas para indexacao no Obsidian.',
+    defaultModelCapability: 'text',
+    permissions: ['read-workspace'],
+    output: 'context',
+  },
   {
     id: 'developer',
     name: 'Desenvolvedor',

@@ -61,10 +61,10 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 52px minmax(240px, 300px) 4px minmax(480px, 1fr) 4px minmax(300px, 380px);
+  grid-template-columns: 52px 300px 4px minmax(520px, 1fr) 4px 380px;
   width: 100%;
   height: 100%;
-  min-width: 1120px;
+  min-width: 1200px;
   background: #101317;
 }
 
@@ -210,6 +210,8 @@ button {
   grid-template-rows: 40px minmax(0, 1fr) auto;
   border-right: 0;
   border-left: 1px solid #252b34;
+  position: relative;
+  z-index: 2;
 }
 
 .panel-resizer {
@@ -220,6 +222,21 @@ button {
   position: relative;
   z-index: 4;
   transition: background 140ms ease;
+}
+
+.panel-resizer::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(117, 211, 181, 0.18);
+  transform: translate(-50%, -50%);
+  transition:
+    background 140ms ease,
+    height 140ms ease;
 }
 
 .panel-resizer::after {
@@ -233,9 +250,19 @@ button {
   background: #75d3b5;
 }
 
+.panel-resizer:hover::before,
+.is-resizing-panel .panel-resizer::before {
+  height: 56px;
+  background: rgba(16, 19, 23, 0.68);
+}
+
 .is-resizing-panel {
   cursor: col-resize;
   user-select: none;
+}
+
+.is-resizing-panel * {
+  cursor: col-resize !important;
 }
 
 .panel-header {
@@ -340,13 +367,46 @@ button {
 }
 
 .workspace-path,
+.empty-state,
+.search-result,
+.context-card,
+.plugin-card,
+.chat-message,
+.audit-row,
+.log-row {
+  overflow-wrap: anywhere;
+}
+
+.workspace-path,
 .empty-state {
   padding: 10px;
   border: 1px solid #2b3340;
   border-radius: 6px;
   color: #8f9bab;
   font-size: 12px;
-  overflow-wrap: anywhere;
+}
+
+.empty-state.warning {
+  border-color: #5c4630;
+  color: #f7c86a;
+}
+
+.status-line {
+  padding: 8px 10px;
+  border: 1px solid #2b3340;
+  border-radius: 6px;
+  color: #8f9bab;
+  font-size: 12px;
+}
+
+.status-line.ok {
+  border-color: #335347;
+  color: #75d3b5;
+}
+
+.status-line.fail {
+  border-color: #8f3843;
+  color: #e06c75;
 }
 
 .list-row {
@@ -354,6 +414,7 @@ button {
   align-items: center;
   gap: 8px;
   width: 100%;
+  min-width: 0;
   min-height: 30px;
   padding: 6px 8px;
   border: 0;
@@ -368,9 +429,64 @@ button {
     transform 140ms ease;
 }
 
+.button-row {
+  cursor: pointer;
+}
+
 .list-row:hover,
 .button-row:hover {
   background: #202630;
+}
+
+.tree-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.list-row:hover .tree-actions,
+.list-row:focus-within .tree-actions,
+.list-row.selected .tree-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tree-action-button {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #8f9bab;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.tree-action-button:hover {
+  border-color: #3b4554;
+  background: #151b24;
+  color: #75d3b5;
+}
+
+.tree-action-button.danger:hover {
+  border-color: #8f3843;
+  color: #e06c75;
 }
 
 .tree-caret {
@@ -606,6 +722,12 @@ button {
   border-top: 1px solid #2b3340;
 }
 
+.permission-grid {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+}
+
 .permission-center > strong {
   color: #e7ebf2;
   font-size: 12px;
@@ -643,6 +765,7 @@ button {
   grid-template-rows: 48px 36px minmax(260px, 1fr) 190px;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   background: #101317;
 }
 
@@ -749,6 +872,65 @@ button {
 
 .editor-frame {
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.editor-frame > div {
+  min-width: 0;
+}
+
+.agent-designer {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  height: 100%;
+  padding: 18px;
+  overflow: auto;
+  background: #101317;
+}
+
+.agent-designer > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.agent-designer strong {
+  color: #f4f7fb;
+  font-size: 16px;
+}
+
+.agent-designer span,
+.agent-designer label {
+  color: #aeb7c5;
+  font-size: 12px;
+}
+
+.agent-designer label {
+  display: grid;
+  gap: 6px;
+}
+
+.agent-designer input,
+.agent-designer textarea {
+  width: min(720px, 100%);
+  border: 1px solid #303846;
+  border-radius: 6px;
+  background: #15191f;
+  color: #e7ebf2;
+}
+
+.agent-designer input {
+  height: 34px;
+  padding: 0 10px;
+}
+
+.agent-designer textarea {
+  min-height: 140px;
+  padding: 10px;
+  resize: vertical;
 }
 
 .bottom-panel {
@@ -883,6 +1065,19 @@ button {
   color: #8f9bab;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.help-panel ol {
+  margin: 8px 0 10px;
+  padding-left: 18px;
+  color: #aeb7c5;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.help-panel .external-link {
+  display: flex;
+  margin-top: 6px;
 }
 
 .chat-messages {
