@@ -3,6 +3,14 @@
 Status: planejamento do que falta apos o MVP avancado  
 Objetivo: organizar os proximos entregaveis para transformar o JARVIS em uma IDE confiavel para uso diario com IA, agentes, plugins, Git e memoria de contexto.
 
+## Atualizacoes Recentes
+
+- Fluxo de abrir projeto corrigido com capability do dialog, validacao de pasta, logs e auditoria.
+- Layout lateral deixou de depender de configuracao manual e passou a permitir redimensionamento por arraste.
+- Scroll dos paineis laterais, busca, chat e paineis inferiores foi revisado para nao se perder em listas longas.
+- Chat foi estabilizado para preservar historico apos troca/hidratacao de workspace e mostrar erro quando provider falhar.
+- Botao `Testar modelo` foi adicionado nas configuracoes para validar o provider/modelo ativo.
+
 ## Estado Atual
 
 O JARVIS ja possui uma base funcional:
@@ -14,7 +22,9 @@ O JARVIS ja possui uma base funcional:
 - Seletor visual de pasta e persistencia do ultimo workspace.
 - Busca no projeto.
 - Command palette e atalhos iniciais.
+- Painel lateral e painel de IA redimensionaveis por arraste.
 - Chat com providers mock, Ollama e OpenAI-compatible.
+- Botao para testar o modelo/provider selecionado.
 - Streaming e cancelamento de respostas.
 - Historico de conversa por workspace.
 - Git com status, diff, stage, unstage, commit e branches.
@@ -34,7 +44,7 @@ Meta: tornar a IDE usavel em projetos reais pequenos, com seguranca basica e flu
 
 Entregaveis:
 
-- Revisar e corrigir o fluxo de abrir projeto, incluindo botao, persistencia do ultimo workspace e mensagens de erro.
+- Validar manualmente o fluxo corrigido de abrir projeto no app Tauri instalado e em modo dev.
 - Testes unitarios para providers, filesystem, Git, plugins e memoria.
 - Testes E2E para abrir workspace, editar arquivo, salvar, usar Git e chat.
 - Terminal integrado real.
@@ -46,6 +56,7 @@ Entregaveis:
 - Melhor tratamento de arquivos binarios e arquivos grandes.
 - Tela de auditoria com filtros.
 - Reorganizacao inicial das configuracoes em secoes separadas para facilitar busca e manutencao.
+- Testes automatizados para redimensionamento dos paineis, scroll de listas longas e estabilidade do chat.
 
 Critérios de pronto:
 
@@ -152,15 +163,16 @@ Critérios de pronto:
 ### Prioridade Alta
 
 1. Validar e corrigir o botao de abrir projeto.
-2. Adicionar testes automatizados.
-3. Implementar terminal integrado real.
-4. Aplicar diffs de agentes com aprovacao.
-5. Migrar secrets para keyring/Stronghold.
-6. Separar configuracoes por categorias e adicionar busca.
-7. Implementar push/pull/fetch Git.
-8. Criar testes de conexao para providers.
-9. Melhorar auditoria com filtros e detalhes.
-10. Criar pipeline CI.
+2. Validar manualmente abrir projeto, resize dos paineis, scroll da busca e estabilidade do chat no app Tauri.
+3. Adicionar testes automatizados.
+4. Implementar terminal integrado real.
+5. Aplicar diffs de agentes com aprovacao.
+6. Migrar secrets para keyring/Stronghold.
+7. Separar configuracoes por categorias e adicionar busca.
+8. Implementar push/pull/fetch Git.
+9. Criar testes de conexao para providers.
+10. Melhorar auditoria com filtros e detalhes.
+11. Criar pipeline CI.
 
 ### Prioridade Media
 
@@ -214,7 +226,7 @@ Critérios de pronto:
 
 Criar a milestone `v0.1 beta funcional` com as seguintes issues iniciais:
 
-1. Validar e corrigir o fluxo de abrir projeto.
+1. Validar manualmente fluxos criticos da UI no app Tauri.
 2. Adicionar suite de testes unitarios.
 3. Adicionar smoke test E2E da UI.
 4. Separar configuracoes por categorias e adicionar busca.
@@ -222,7 +234,7 @@ Criar a milestone `v0.1 beta funcional` com as seguintes issues iniciais:
 6. Implementar aplicacao de diff com aprovacao.
 7. Migrar secrets para storage seguro.
 8. Implementar push/pull/fetch Git.
-9. Criar teste de conexao dos providers.
+9. Criar teste automatizado de conexao dos providers.
 10. Criar pipeline CI com build web, cargo check e Tauri build.
 
 ## Epic Futuro - UI, Configuracoes e Voz
