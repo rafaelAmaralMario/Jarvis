@@ -31,6 +31,8 @@ pub fn run() {
             commands::git_diff,
             commands::validate_path,
             commands::list_markdown_notes,
+            commands::load_secure_settings,
+            commands::save_secure_settings,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run JARVIS");

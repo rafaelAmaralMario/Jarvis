@@ -6,6 +6,8 @@ use std::{
 
 use serde::Serialize;
 
+use crate::storage::{self, SecureSettings};
+
 #[derive(Serialize)]
 pub struct WorkspaceEntry {
     name: String,
@@ -291,6 +293,16 @@ pub fn list_markdown_notes(vault_path: String) -> Result<Vec<MarkdownNote>, Stri
     let mut notes = Vec::new();
     collect_markdown_notes(&root, &mut notes)?;
     Ok(notes)
+}
+
+#[tauri::command]
+pub fn load_secure_settings() -> Result<SecureSettings, String> {
+    storage::load_secure_settings()
+}
+
+#[tauri::command]
+pub fn save_secure_settings(settings: SecureSettings) -> Result<(), String> {
+    storage::save_secure_settings(settings)
 }
 
 fn collect_markdown_notes(path: &Path, notes: &mut Vec<MarkdownNote>) -> Result<(), String> {

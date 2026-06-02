@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Editor from '@monaco-editor/react';
 import {
   Bot,
@@ -24,7 +24,8 @@ import {
 
 import { appMetadata } from '../application';
 import { defaultModelId, models } from '../application/model-registry';
-import { mockTextProvider } from '../infrastructure/mock-provider';
+import type { ProviderKind } from '../domain';
+import { createTextProvider } from '../infrastructure/model-providers';
 import {
   createFile,
   createFolder,
@@ -34,9 +35,11 @@ import {
   getGitStatus,
   listMarkdownNotes,
   listWorkspaceEntries,
+  loadSecureSettings,
   moveEntry,
   readTextFile,
   renameEntry,
+  saveSecureSettings,
   searchWorkspace,
   selectWorkspaceFolder,
   validatePath,
@@ -63,6 +66,9 @@ type ModalState =
 
 interface SettingsState {
   selectedModelId: string;
+  providerKind: ProviderKind;
+  ollamaBaseUrl: string;
+  openaiCompatibleBaseUrl: string;
   vaultPath: string;
   workspacePath: string;
   theme: 'dark' | 'light';
@@ -80,6 +86,9 @@ const settingsKey = 'jarvis.settings.v1';
 
 const defaultSettings: SettingsState = {
   selectedModelId: defaultModelId,
+  providerKind: 'mock',
+  ollamaBaseUrl: 'http://127.0.0.1:11434',
+  openaiCompatibleBaseUrl: 'https://api.openai.com/v1',
   vaultPath: '',
   workspacePath: '',
   theme: 'dark',
@@ -114,6 +123,8 @@ export function App() {
   const [notes, setNotes] = useState<MarkdownNote[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [secureApiKey, setSecureApiKey] = useState('');
+  const [generationActive, setGenerationActive] = useState(false);
   const [logs, setLogs] = useState<ActionLog[]>([]);
   const [proposalAccepted, setProposalAccepted] = useState(false);
   const [modal, setModal] = useState<ModalState>(null);
@@ -122,6 +133,7 @@ export function App() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState('');
+  const generationController = useRef<AbortController | null>(null);
 
   const activeTab = tabs.find((tab) => tab.path === activeTabPath) ?? tabs[0];
   const selectedModel = useMemo(
@@ -136,7 +148,22 @@ export function App() {
 
   useEffect(() => {
     void initializeWorkspace();
+    void initializeSecureSettings();
   }, []);
+
+  useEffect(() => {
+    if (!workspacePath) {
+      return;
+    }
+
+    setMessages(loadWorkspaceMessages(workspacePath));
+  }, [workspacePath]);
+
+  useEffect(() => {
+    if (workspacePath) {
+      localStorage.setItem(historyKey(workspacePath), JSON.stringify(messages));
+    }
+  }, [messages, workspacePath]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -173,6 +200,15 @@ export function App() {
     await refreshWorkspace(path);
   }
 
+  async function initializeSecureSettings() {
+    try {
+      const secureSettings = await loadSecureSettings();
+      setSecureApiKey(secureSettings.openaiCompatibleApiKey);
+    } catch (error) {
+      addLog(`Configuracao sensivel nao carregada: ${String(error)}`, 'warn');
+    }
+  }
+
   async function refreshWorkspace(path = workspacePath, options?: { quiet?: boolean }) {
     const [workspaceEntries, status] = await Promise.all([
       listWorkspaceEntries(path),
@@ -194,15 +230,55 @@ export function App() {
 
   async function sendMessage() {
     const input = chatInput.trim();
-    if (!input) {
+    if (!input || generationActive) {
       return;
     }
 
     setMessages((current) => [...current, { role: 'user', content: input }]);
     setChatInput('');
-    const response = await mockTextProvider.sendMessage(input);
-    setMessages((current) => [...current, { role: 'assistant', content: response }]);
-    addLog(`Chat respondido por ${mockTextProvider.name}`, 'ok');
+    setMessages((current) => [...current, { role: 'assistant', content: '' }]);
+
+    const controller = new AbortController();
+    generationController.current = controller;
+    setGenerationActive(true);
+
+    const provider = createTextProvider({
+      kind: settings.providerKind,
+      modelId: settings.selectedModelId,
+      baseUrl:
+        settings.providerKind === 'ollama'
+          ? settings.ollamaBaseUrl
+          : settings.openaiCompatibleBaseUrl,
+      apiKey: secureApiKey,
+    });
+
+    try {
+      await provider.sendMessage({
+        input,
+        modelId: settings.selectedModelId,
+        signal: controller.signal,
+        onToken(token) {
+          setMessages((current) =>
+            current.map((message, index) =>
+              index === current.length - 1
+                ? { ...message, content: `${message.content}${token}` }
+                : message,
+            ),
+          );
+        },
+      });
+      addLog(`Chat respondido por ${provider.name}`, 'ok');
+    } catch (error) {
+      const canceled = error instanceof DOMException && error.name === 'AbortError';
+      addLog(canceled ? 'Geracao cancelada pelo usuario' : String(error), canceled ? 'ok' : 'warn');
+    } finally {
+      generationController.current = null;
+      setGenerationActive(false);
+    }
+  }
+
+  function cancelGeneration() {
+    generationController.current?.abort();
   }
 
   async function openDiff(filePath: string) {
@@ -405,6 +481,15 @@ export function App() {
     addLog(`${markdownNotes.length} notas Markdown carregadas`, 'ok');
   }
 
+  async function persistSecureApiKey(value = secureApiKey) {
+    try {
+      await saveSecureSettings({ openaiCompatibleApiKey: value });
+      addLog('Chave sensivel salva no backend local', 'ok');
+    } catch (error) {
+      addLog(String(error), 'warn');
+    }
+  }
+
   function acceptProposal() {
     setProposalAccepted(true);
     addLog('Proposta mockada aceita para validacao do fluxo', 'ok');
@@ -432,6 +517,15 @@ export function App() {
     if (command === 'toggle-theme') {
       setSettings((current) => ({ ...current, theme: current.theme === 'dark' ? 'light' : 'dark' }));
     }
+  }
+
+  function updateProviderKind(providerKind: ProviderKind) {
+    const firstModel = models.find((model) => model.providerId === providerKind) ?? models[0];
+    setSettings((current) => ({
+      ...current,
+      providerKind,
+      selectedModelId: firstModel.id,
+    }));
   }
 
   const filteredCommands = commands.filter((command) =>
@@ -560,20 +654,74 @@ export function App() {
               Selecionar pasta do projeto
             </button>
             <label>
-              Modelo padrao
+              Provider de IA
+              <select
+                value={settings.providerKind}
+                onChange={(event) => updateProviderKind(event.target.value as ProviderKind)}
+              >
+                <option value="mock">Mock local</option>
+                <option value="ollama">Ollama local</option>
+                <option value="openai-compatible">OpenAI-compatible</option>
+              </select>
+            </label>
+            <label>
+              Modelo ativo
               <select
                 value={settings.selectedModelId}
                 onChange={(event) =>
                   setSettings((current) => ({ ...current, selectedModelId: event.target.value }))
                 }
               >
-                {models.map((model) => (
+                {models
+                  .filter((model) => model.providerId === settings.providerKind)
+                  .map((model) => (
                   <option key={model.id} value={model.id}>
                     {model.name}
                   </option>
                 ))}
               </select>
             </label>
+            {settings.providerKind === 'ollama' && (
+              <label>
+                Endpoint Ollama
+                <input
+                  value={settings.ollamaBaseUrl}
+                  onChange={(event) =>
+                    setSettings((current) => ({ ...current, ollamaBaseUrl: event.target.value }))
+                  }
+                  placeholder="http://127.0.0.1:11434"
+                />
+              </label>
+            )}
+            {settings.providerKind === 'openai-compatible' && (
+              <>
+                <label>
+                  Endpoint OpenAI-compatible
+                  <input
+                    value={settings.openaiCompatibleBaseUrl}
+                    onChange={(event) =>
+                      setSettings((current) => ({
+                        ...current,
+                        openaiCompatibleBaseUrl: event.target.value,
+                      }))
+                    }
+                    placeholder="https://api.openai.com/v1"
+                  />
+                </label>
+                <label>
+                  API key
+                  <input
+                    value={secureApiKey}
+                    onChange={(event) => setSecureApiKey(event.target.value)}
+                    placeholder="sk-..."
+                    type="password"
+                  />
+                </label>
+                <button className="primary-button" onClick={() => void persistSecureApiKey()} type="button">
+                  Salvar chave
+                </button>
+              </>
+            )}
             <label>
               Tema
               <select
@@ -742,8 +890,13 @@ export function App() {
           />
           <button className="primary-button with-icon" onClick={() => void sendMessage()} type="button">
             <Sparkles size={15} />
-            Enviar
+            {generationActive ? 'Gerando...' : 'Enviar'}
           </button>
+          {generationActive && (
+            <button className="text-button" onClick={cancelGeneration} type="button">
+              Cancelar
+            </button>
+          )}
         </div>
       </aside>
 
@@ -896,6 +1049,23 @@ const welcomeTab: EditorTab = {
 
 function tabToEntry(tab: EditorTab): WorkspaceEntry {
   return { name: tab.name, path: `tab:${tab.path}`, kind: 'file', children: [] };
+}
+
+function historyKey(workspacePath: string) {
+  return `jarvis.chat.${workspacePath}`;
+}
+
+function loadWorkspaceMessages(workspacePath: string): ChatMessage[] {
+  const stored = localStorage.getItem(historyKey(workspacePath));
+  if (!stored) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return [];
+  }
 }
 
 function shortPath(path: string) {

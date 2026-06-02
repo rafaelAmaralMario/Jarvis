@@ -22,7 +22,34 @@ export const models: AiModel[] = [
     capabilities: ['embeddings'],
     status: 'experimental',
   },
+  {
+    id: 'ollama:llama3.2',
+    providerId: 'ollama',
+    name: 'Ollama Llama 3.2',
+    capabilities: ['text'],
+    status: 'experimental',
+  },
+  {
+    id: 'ollama:qwen2.5-coder',
+    providerId: 'ollama',
+    name: 'Ollama Qwen Coder',
+    capabilities: ['text', 'code'],
+    status: 'experimental',
+  },
+  {
+    id: 'openai:gpt-4.1-mini',
+    providerId: 'openai-compatible',
+    name: 'OpenAI-compatible GPT 4.1 Mini',
+    capabilities: ['text', 'code'],
+    status: 'experimental',
+  },
+  {
+    id: 'openai:image-model',
+    providerId: 'openai-compatible',
+    name: 'OpenAI-compatible Image Model',
+    capabilities: ['image'],
+    status: 'experimental',
+  },
 ];
 
 export const defaultModelId = 'mock-text';
-
