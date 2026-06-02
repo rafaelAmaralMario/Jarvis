@@ -4,5 +4,7 @@ export interface PluginManifest {
   version: string;
   capabilities: string[];
   permissions: string[];
+  source?: string;
+  valid?: boolean;
+  errors?: string[];
 }
-

@@ -38,8 +38,9 @@ import {
   getGithubPrUrl,
   getGitDiff,
   getGitStatus,
-  listMarkdownNotes,
   listGitBranches,
+  listLocalPluginManifests,
+  listMarkdownNotes,
   listWorkspaceEntries,
   loadSecureSettings,
   moveEntry,
@@ -54,10 +55,12 @@ import {
   writeTextFile,
   type GitBranch as GitBranchInfo,
   type GitFileStatus,
+  type LocalPluginManifest,
   type MarkdownNote,
   type SearchResult,
   type WorkspaceEntry,
 } from '../infrastructure/native';
+import type { PluginManifest } from '../plugins';
 import { pluginManifests } from '../plugins/manifests';
 
 type ActivityView = 'files' | 'git' | 'search' | 'settings' | 'plugins' | 'context' | 'agents';
@@ -150,6 +153,8 @@ export function App() {
   const [tabs, setTabs] = useState<EditorTab[]>([welcomeTab]);
   const [activeTabPath, setActiveTabPath] = useState(welcomeTab.path);
   const [notes, setNotes] = useState<MarkdownNote[]>([]);
+  const [localPlugins, setLocalPlugins] = useState<LocalPluginManifest[]>([]);
+  const [enabledPlugins, setEnabledPlugins] = useState<string[]>(loadEnabledPlugins);
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
@@ -171,10 +176,18 @@ export function App() {
     [settings.selectedModelId],
   );
   const dirtyTabs = tabs.filter((tab) => tab.content !== tab.savedContent);
+  const visiblePlugins: PluginManifest[] = [
+    ...pluginManifests.map((plugin) => ({ ...plugin, valid: true, source: 'builtin' })),
+    ...localPlugins,
+  ];
 
   useEffect(() => {
     localStorage.setItem(settingsKey, JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    localStorage.setItem('jarvis.plugins.enabled', JSON.stringify(enabledPlugins));
+  }, [enabledPlugins]);
 
   useEffect(() => {
     void initializeWorkspace();
@@ -188,6 +201,7 @@ export function App() {
 
     setMessages(loadWorkspaceMessages(workspacePath));
     setAuditEvents(loadWorkspaceAudit(workspacePath));
+    void refreshLocalPlugins(workspacePath);
   }, [workspacePath]);
 
   useEffect(() => {
@@ -264,6 +278,14 @@ export function App() {
       setGitBranches(await listGitBranches(path));
     } catch {
       setGitBranches([]);
+    }
+  }
+
+  async function refreshLocalPlugins(path = workspacePath) {
+    try {
+      setLocalPlugins(await listLocalPluginManifests(path));
+    } catch {
+      setLocalPlugins([]);
     }
   }
 
@@ -714,6 +736,22 @@ export function App() {
     addAudit(agent.name, agent.permissions.join(', '), activeTab.path, 'Documentacao proposta');
   }
 
+  function togglePlugin(plugin: PluginManifest) {
+    const verification = verifyPlugin(plugin, settings.permissions);
+    if (!verification.allowed) {
+      addLog(verification.reason, 'warn');
+      addAudit('Plugin Manager', plugin.permissions.join(', '), plugin.id, 'Ativacao bloqueada');
+      return;
+    }
+
+    setEnabledPlugins((current) =>
+      current.includes(plugin.id)
+        ? current.filter((id) => id !== plugin.id)
+        : [...current, plugin.id],
+    );
+    addAudit('Plugin Manager', plugin.permissions.join(', '), plugin.id, 'Estado alterado');
+  }
+
   const filteredCommands = commands.filter((command) =>
     command.label.toLowerCase().includes(paletteQuery.toLowerCase()),
   );
@@ -1014,14 +1052,22 @@ export function App() {
         )}
         {activeView === 'plugins' && (
           <div className="panel-list">
-            {pluginManifests.map((plugin) => (
+            <button className="text-button" onClick={() => void refreshLocalPlugins()} type="button">
+              Recarregar manifestos locais
+            </button>
+            {visiblePlugins.map((plugin) => (
               <article className="plugin-card" key={plugin.id}>
                 <div>
                   <strong>{plugin.name}</strong>
-                  <span>{plugin.version}</span>
+                  <span>{enabledPlugins.includes(plugin.id) ? 'Ativo' : plugin.version}</span>
                 </div>
                 <p>{plugin.capabilities.join(', ')}</p>
                 <small>Permissoes: {plugin.permissions.join(', ') || 'nenhuma'}</small>
+                {plugin.source && <small>Origem: {plugin.source}</small>}
+                {!plugin.valid && <small>Erros: {plugin.errors?.join(', ')}</small>}
+                <button className="text-button" onClick={() => togglePlugin(plugin)} type="button">
+                  {enabledPlugins.includes(plugin.id) ? 'Desativar' : 'Ativar'}
+                </button>
               </article>
             ))}
           </div>
@@ -1389,6 +1435,46 @@ function loadWorkspaceAudit(workspacePath: string): AuditEvent[] {
   } catch {
     return [];
   }
+}
+
+function loadEnabledPlugins(): string[] {
+  const stored = localStorage.getItem('jarvis.plugins.enabled');
+  if (!stored) {
+    return ['jarvis.mock-provider', 'jarvis.git', 'jarvis.obsidian'];
+  }
+
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return [];
+  }
+}
+
+function verifyPlugin(
+  plugin: PluginManifest,
+  permissions: Record<PermissionId, boolean>,
+): { allowed: boolean; reason: string } {
+  if (plugin.valid === false) {
+    return { allowed: false, reason: `Plugin invalido: ${plugin.name}` };
+  }
+
+  if (plugin.permissions.includes('commands.execute')) {
+    return { allowed: false, reason: 'Plugins ainda nao podem executar comandos locais.' };
+  }
+
+  if (plugin.permissions.includes('secrets.read') && !permissions.secrets) {
+    return { allowed: false, reason: 'Permissao de secrets nao autorizada neste workspace.' };
+  }
+
+  if (plugin.permissions.includes('network.request') && !permissions.network) {
+    return { allowed: false, reason: 'Permissao de rede nao autorizada neste workspace.' };
+  }
+
+  if (plugin.permissions.includes('git.write') && !permissions.git) {
+    return { allowed: false, reason: 'Permissao Git nao autorizada neste workspace.' };
+  }
+
+  return { allowed: true, reason: 'Plugin verificado.' };
 }
 
 function createAgentDiff(tab: EditorTab) {

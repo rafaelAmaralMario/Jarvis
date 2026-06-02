@@ -38,6 +38,17 @@ export interface SecureSettings {
   openaiCompatibleApiKey: string;
 }
 
+export interface LocalPluginManifest {
+  id: string;
+  name: string;
+  version: string;
+  capabilities: string[];
+  permissions: string[];
+  source: string;
+  valid: boolean;
+  errors: string[];
+}
+
 export async function selectWorkspaceFolder(): Promise<string | null> {
   const selected = await open({
     directory: true,
@@ -159,6 +170,12 @@ export async function createGitBranch(workspacePath: string, branch: string): Pr
 
 export async function getGithubPrUrl(workspacePath: string): Promise<string> {
   return invoke<string>('github_pr_url', { workspacePath });
+}
+
+export async function listLocalPluginManifests(
+  workspacePath: string,
+): Promise<LocalPluginManifest[]> {
+  return invoke<LocalPluginManifest[]>('list_local_plugin_manifests', { workspacePath });
 }
 
 export async function validatePath(path: string): Promise<boolean> {

@@ -36,6 +36,7 @@ pub fn run() {
             commands::git_checkout_branch,
             commands::git_create_branch,
             commands::github_pr_url,
+            commands::list_local_plugin_manifests,
             commands::validate_path,
             commands::list_markdown_notes,
             commands::load_secure_settings,
