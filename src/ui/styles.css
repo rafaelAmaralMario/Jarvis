@@ -73,6 +73,63 @@ button {
   background: #f4f6f8;
 }
 
+.theme-light .activity-bar,
+.theme-light .sidebar,
+.theme-light .ai-panel,
+.theme-light .top-bar,
+.theme-light .editor-tabs,
+.theme-light .bottom-panel nav {
+  border-color: #d8dee8;
+  background: #ffffff;
+}
+
+.theme-light .workbench,
+.theme-light .bottom-panel {
+  background: #f4f6f8;
+}
+
+.theme-light .activity-button,
+.theme-light .icon-button,
+.theme-light .workspace-path,
+.theme-light .empty-state,
+.theme-light .plugin-card,
+.theme-light .chat-message,
+.theme-light .git-tools,
+.theme-light .context-card,
+.theme-light .search-result,
+.theme-light .toggle-row,
+.theme-light .branch-button,
+.theme-light .tab-action,
+.theme-light .settings-panel input,
+.theme-light .settings-panel select,
+.theme-light .chat-input textarea,
+.theme-light .context-input input,
+.theme-light .context-input textarea,
+.theme-light .git-tools input {
+  border-color: #d8dee8;
+  background: #ffffff;
+  color: #202833;
+}
+
+.theme-light .panel-header,
+.theme-light .top-bar span,
+.theme-light .list-row,
+.theme-light .text-button,
+.theme-light .chat-message p,
+.theme-light .plugin-card p,
+.theme-light .plugin-card small,
+.theme-light .context-card span,
+.theme-light .context-card p {
+  color: #5f6b7a;
+}
+
+.theme-light .tab.active,
+.theme-light .bottom-tab.active,
+.theme-light .button-row.selected {
+  background: #e8f0f6;
+  color: #202833;
+}
+
 .activity-bar {
   display: flex;
   align-items: center;
@@ -104,6 +161,12 @@ button {
 
 .activity-logo {
   color: #9cc9ff;
+}
+
+.activity-logo img {
+  width: 23px;
+  height: 23px;
+  border-radius: 6px;
 }
 
 .activity-button.active {
@@ -426,6 +489,14 @@ button {
 .plugin-card:hover {
   border-color: #3d4a5c;
   transform: translateY(-1px);
+}
+
+.list-row,
+.search-result,
+.context-card,
+.git-file-row,
+.audit-row {
+  animation: panel-in 160ms ease both;
 }
 
 .plugin-card div {

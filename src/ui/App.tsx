@@ -25,6 +25,7 @@ import {
 import { appMetadata } from '../application';
 import { defaultModelId, models } from '../application/model-registry';
 import { agentDefinitions } from '../agents';
+import jarvisIcon from '../assets/jarvis-icon.svg';
 import type { ProviderKind } from '../domain';
 import { createTextProvider } from '../infrastructure/model-providers';
 import {
@@ -95,6 +96,8 @@ interface SettingsState {
   vaultPath: string;
   workspacePath: string;
   theme: 'dark' | 'light';
+  sidebarWidth: number;
+  aiPanelWidth: number;
   permissions: Record<PermissionId, boolean>;
 }
 
@@ -116,6 +119,8 @@ const defaultSettings: SettingsState = {
   vaultPath: '',
   workspacePath: '',
   theme: 'dark',
+  sidebarWidth: 300,
+  aiPanelWidth: 380,
   permissions: {
     'read-workspace': true,
     'write-workspace': false,
@@ -812,10 +817,15 @@ export function App() {
   );
 
   return (
-    <main className={`app-shell theme-${settings.theme}`}>
+    <main
+      className={`app-shell theme-${settings.theme}`}
+      style={{
+        gridTemplateColumns: `52px minmax(240px, ${settings.sidebarWidth}px) minmax(480px, 1fr) minmax(300px, ${settings.aiPanelWidth}px)`,
+      }}
+    >
       <aside className="activity-bar" aria-label="Navegacao principal">
         <span className="activity-logo">
-          <Sparkles size={17} />
+          <img alt="JARVIS" src={jarvisIcon} />
         </span>
         {activityItems.map((item) => (
           <button
@@ -1073,6 +1083,36 @@ export function App() {
                 <option value="dark">Escuro</option>
                 <option value="light">Claro</option>
               </select>
+            </label>
+            <label>
+              Largura do explorador
+              <input
+                max="420"
+                min="240"
+                onChange={(event) =>
+                  setSettings((current) => ({
+                    ...current,
+                    sidebarWidth: Number(event.target.value),
+                  }))
+                }
+                type="range"
+                value={settings.sidebarWidth}
+              />
+            </label>
+            <label>
+              Largura do painel de IA
+              <input
+                max="520"
+                min="300"
+                onChange={(event) =>
+                  setSettings((current) => ({
+                    ...current,
+                    aiPanelWidth: Number(event.target.value),
+                  }))
+                }
+                type="range"
+                value={settings.aiPanelWidth}
+              />
             </label>
             <label>
               Vault Obsidian
