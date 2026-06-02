@@ -11,6 +11,7 @@ pub struct WorkspaceEntry {
     name: String,
     path: String,
     kind: String,
+    children: Vec<WorkspaceEntry>,
 }
 
 #[derive(Serialize)]
@@ -31,6 +32,13 @@ pub struct FileContent {
     content: String,
 }
 
+#[derive(Serialize)]
+pub struct SearchResult {
+    path: String,
+    line: usize,
+    preview: String,
+}
+
 pub fn register() {}
 
 #[tauri::command]
@@ -47,26 +55,8 @@ pub fn default_workspace_path() -> String {
 pub fn list_workspace_entries(path: Option<String>) -> Result<Vec<WorkspaceEntry>, String> {
     let root = path.unwrap_or_else(default_workspace_path);
     let root_path = PathBuf::from(root);
-    let entries = fs::read_dir(&root_path).map_err(|error| error.to_string())?;
-
-    let mut result = Vec::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = entry.file_name().to_string_lossy().to_string();
-        if name == "node_modules" || name == "target" || name == ".git" || name == "dist" {
-            continue;
-        }
-
-        let kind = if path.is_dir() { "directory" } else { "file" }.to_string();
-        result.push(WorkspaceEntry {
-            name,
-            path: path.to_string_lossy().to_string(),
-            kind,
-        });
-    }
-
-    result.sort_by(|left, right| left.kind.cmp(&right.kind).then(left.name.cmp(&right.name)));
-    Ok(result)
+    let ignore_patterns = load_ignore_patterns(&root_path);
+    collect_workspace_entries(&root_path, &root_path, &ignore_patterns, 0)
 }
 
 #[tauri::command]
@@ -104,7 +94,11 @@ pub fn write_text_file(
 }
 
 #[tauri::command]
-pub fn create_file(workspace_path: String, parent_path: String, name: String) -> Result<(), String> {
+pub fn create_file(
+    workspace_path: String,
+    parent_path: String,
+    name: String,
+) -> Result<(), String> {
     let workspace = canonicalize_existing(&workspace_path)?;
     let parent = canonicalize_existing(&parent_path)?;
     ensure_inside_workspace(&workspace, &parent)?;
@@ -154,6 +148,87 @@ pub fn delete_entry(workspace_path: String, entry_path: String) -> Result<(), St
     } else {
         fs::remove_file(target).map_err(|error| error.to_string())
     }
+}
+
+#[tauri::command]
+pub fn rename_entry(
+    workspace_path: String,
+    entry_path: String,
+    name: String,
+) -> Result<(), String> {
+    let workspace = canonicalize_existing(&workspace_path)?;
+    let target = canonicalize_existing(&entry_path)?;
+    ensure_inside_workspace(&workspace, &target)?;
+    validate_entry_name(&name)?;
+
+    if target == workspace {
+        return Err("Cannot rename the workspace root".to_string());
+    }
+
+    let parent = target
+        .parent()
+        .ok_or_else(|| "Target has no parent directory".to_string())?;
+    let destination = parent.join(name);
+    ensure_inside_workspace(&workspace, &destination)?;
+    if destination.exists() {
+        return Err("Destination already exists".to_string());
+    }
+
+    fs::rename(target, destination).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn move_entry(
+    workspace_path: String,
+    entry_path: String,
+    destination_folder: String,
+) -> Result<(), String> {
+    let workspace = canonicalize_existing(&workspace_path)?;
+    let target = canonicalize_existing(&entry_path)?;
+    let destination_parent = canonicalize_existing(&destination_folder)?;
+    ensure_inside_workspace(&workspace, &target)?;
+    ensure_inside_workspace(&workspace, &destination_parent)?;
+
+    if target == workspace {
+        return Err("Cannot move the workspace root".to_string());
+    }
+    if !destination_parent.is_dir() {
+        return Err("Destination must be a folder".to_string());
+    }
+
+    let file_name = target
+        .file_name()
+        .ok_or_else(|| "Target has no file name".to_string())?;
+    let destination = destination_parent.join(file_name);
+    ensure_inside_workspace(&workspace, &destination)?;
+    if destination.exists() {
+        return Err("Destination already exists".to_string());
+    }
+
+    fs::rename(target, destination).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn search_workspace(
+    workspace_path: String,
+    query: String,
+) -> Result<Vec<SearchResult>, String> {
+    let workspace = canonicalize_existing(&workspace_path)?;
+    let query = query.trim().to_lowercase();
+    if query.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut results = Vec::new();
+    let ignore_patterns = load_ignore_patterns(&workspace);
+    search_directory(
+        &workspace,
+        &workspace,
+        &ignore_patterns,
+        &query,
+        &mut results,
+    )?;
+    Ok(results)
 }
 
 #[tauri::command]
@@ -230,7 +305,10 @@ fn collect_markdown_notes(path: &Path, notes: &mut Vec<MarkdownNote>) -> Result<
 
         if entry_path.is_dir() {
             collect_markdown_notes(&entry_path, notes)?;
-        } else if entry_path.extension().is_some_and(|extension| extension == "md") {
+        } else if entry_path
+            .extension()
+            .is_some_and(|extension| extension == "md")
+        {
             let title = entry_path
                 .file_stem()
                 .unwrap_or_default()
@@ -245,6 +323,164 @@ fn collect_markdown_notes(path: &Path, notes: &mut Vec<MarkdownNote>) -> Result<
 
     notes.sort_by(|left, right| left.title.cmp(&right.title));
     Ok(())
+}
+
+fn collect_workspace_entries(
+    root: &Path,
+    path: &Path,
+    ignore_patterns: &[String],
+    depth: usize,
+) -> Result<Vec<WorkspaceEntry>, String> {
+    if depth > 8 {
+        return Ok(Vec::new());
+    }
+
+    let entries = fs::read_dir(path).map_err(|error| error.to_string())?;
+    let mut result = Vec::new();
+    for entry in entries.flatten() {
+        let entry_path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if should_ignore_entry(root, &entry_path, &name, ignore_patterns) {
+            continue;
+        }
+
+        let is_dir = entry_path.is_dir();
+        let children = if is_dir {
+            collect_workspace_entries(root, &entry_path, ignore_patterns, depth + 1)
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
+        result.push(WorkspaceEntry {
+            name,
+            path: entry_path.to_string_lossy().to_string(),
+            kind: if is_dir { "directory" } else { "file" }.to_string(),
+            children,
+        });
+    }
+
+    result.sort_by(|left, right| left.kind.cmp(&right.kind).then(left.name.cmp(&right.name)));
+    Ok(result)
+}
+
+fn search_directory(
+    root: &Path,
+    path: &Path,
+    ignore_patterns: &[String],
+    query: &str,
+    results: &mut Vec<SearchResult>,
+) -> Result<(), String> {
+    if results.len() >= 200 {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(path).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let entry_path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if should_ignore_entry(root, &entry_path, &name, ignore_patterns) {
+            continue;
+        }
+
+        if entry_path.is_dir() {
+            search_directory(root, &entry_path, ignore_patterns, query, results)?;
+            continue;
+        }
+
+        if !is_probably_text_file(&entry_path) {
+            continue;
+        }
+
+        if let Ok(content) = fs::read_to_string(&entry_path) {
+            for (index, line) in content.lines().enumerate() {
+                if line.to_lowercase().contains(query) {
+                    results.push(SearchResult {
+                        path: entry_path.to_string_lossy().to_string(),
+                        line: index + 1,
+                        preview: line.trim().chars().take(160).collect(),
+                    });
+                    if results.len() >= 200 {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn load_ignore_patterns(root: &Path) -> Vec<String> {
+    let mut patterns = vec![
+        ".git".to_string(),
+        "node_modules".to_string(),
+        "target".to_string(),
+        "dist".to_string(),
+        ".vite".to_string(),
+        ".tmp".to_string(),
+        "tmp".to_string(),
+        "temp".to_string(),
+    ];
+
+    let gitignore = root.join(".gitignore");
+    if let Ok(content) = fs::read_to_string(gitignore) {
+        patterns.extend(content.lines().filter_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('!') {
+                return None;
+            }
+
+            Some(
+                trimmed
+                    .trim_start_matches('/')
+                    .trim_end_matches('/')
+                    .replace('\\', "/"),
+            )
+        }));
+    }
+
+    patterns
+}
+
+fn should_ignore_entry(root: &Path, path: &Path, name: &str, ignore_patterns: &[String]) -> bool {
+    let relative = path
+        .strip_prefix(root)
+        .ok()
+        .map(|value| value.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_else(|| name.to_string());
+
+    ignore_patterns.iter().any(|pattern| {
+        name == pattern
+            || relative == *pattern
+            || relative.starts_with(&format!("{pattern}/"))
+            || pattern
+                .strip_prefix("*.")
+                .is_some_and(|extension| relative.ends_with(&format!(".{extension}")))
+    })
+}
+
+fn is_probably_text_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            matches!(
+                extension.to_lowercase().as_str(),
+                "css"
+                    | "html"
+                    | "js"
+                    | "json"
+                    | "md"
+                    | "rs"
+                    | "toml"
+                    | "ts"
+                    | "tsx"
+                    | "txt"
+                    | "xml"
+                    | "yaml"
+                    | "yml"
+            )
+        })
 }
 
 fn canonicalize_existing(path: &str) -> Result<PathBuf, String> {

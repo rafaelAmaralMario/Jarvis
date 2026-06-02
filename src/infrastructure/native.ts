@@ -5,6 +5,7 @@ export interface WorkspaceEntry {
   name: string;
   path: string;
   kind: 'directory' | 'file';
+  children: WorkspaceEntry[];
 }
 
 export interface GitFileStatus {
@@ -20,6 +21,12 @@ export interface MarkdownNote {
 export interface FileContent {
   path: string;
   content: string;
+}
+
+export interface SearchResult {
+  path: string;
+  line: number;
+  preview: string;
 }
 
 export async function selectWorkspaceFolder(): Promise<string | null> {
@@ -70,6 +77,29 @@ export async function createFolder(
 
 export async function deleteEntry(workspacePath: string, entryPath: string): Promise<void> {
   return invoke<void>('delete_entry', { workspacePath, entryPath });
+}
+
+export async function renameEntry(
+  workspacePath: string,
+  entryPath: string,
+  name: string,
+): Promise<void> {
+  return invoke<void>('rename_entry', { workspacePath, entryPath, name });
+}
+
+export async function moveEntry(
+  workspacePath: string,
+  entryPath: string,
+  destinationFolder: string,
+): Promise<void> {
+  return invoke<void>('move_entry', { workspacePath, entryPath, destinationFolder });
+}
+
+export async function searchWorkspace(
+  workspacePath: string,
+  query: string,
+): Promise<SearchResult[]> {
+  return invoke<SearchResult[]>('search_workspace', { workspacePath, query });
 }
 
 export async function getGitStatus(workspacePath?: string): Promise<GitFileStatus[]> {

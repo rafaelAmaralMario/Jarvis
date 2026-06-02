@@ -10,12 +10,16 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  Pencil,
   GitBranch,
+  MoveRight,
   RefreshCw,
   Save,
+  Search,
   Settings,
   Sparkles,
   Trash2,
+  type LucideIcon,
 } from 'lucide-react';
 
 import { appMetadata } from '../application';
@@ -30,26 +34,46 @@ import {
   getGitStatus,
   listMarkdownNotes,
   listWorkspaceEntries,
+  moveEntry,
   readTextFile,
+  renameEntry,
+  searchWorkspace,
   selectWorkspaceFolder,
   validatePath,
   writeTextFile,
   type GitFileStatus,
   type MarkdownNote,
+  type SearchResult,
   type WorkspaceEntry,
 } from '../infrastructure/native';
 import { pluginManifests } from '../plugins/manifests';
 
-type ActivityView = 'files' | 'git' | 'settings' | 'plugins' | 'context' | 'agents';
+type ActivityView = 'files' | 'git' | 'search' | 'settings' | 'plugins' | 'context' | 'agents';
 type BottomView = 'terminal' | 'logs' | 'diff' | 'proposal';
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 type ActionLog = { id: string; message: string; status: 'ok' | 'warn' };
+type ModalState =
+  | { type: 'create-file'; title: string }
+  | { type: 'create-folder'; title: string }
+  | { type: 'rename'; title: string; entry: WorkspaceEntry }
+  | { type: 'move'; title: string; entry: WorkspaceEntry }
+  | { type: 'delete'; title: string; entry: WorkspaceEntry }
+  | { type: 'switch-workspace'; title: string }
+  | null;
 
 interface SettingsState {
   selectedModelId: string;
   vaultPath: string;
   workspacePath: string;
   theme: 'dark' | 'light';
+}
+
+interface EditorTab {
+  path: string;
+  name: string;
+  content: string;
+  savedContent: string;
+  language: string;
 }
 
 const settingsKey = 'jarvis.settings.v1';
@@ -80,23 +104,31 @@ export function App() {
   const [settings, setSettings] = useState<SettingsState>(loadSettings);
   const [workspacePath, setWorkspacePath] = useState('');
   const [files, setFiles] = useState<WorkspaceEntry[]>([]);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [selectedEntry, setSelectedEntry] = useState<WorkspaceEntry | null>(null);
   const [gitFiles, setGitFiles] = useState<GitFileStatus[]>([]);
   const [selectedGitFile, setSelectedGitFile] = useState<string>('');
   const [diff, setDiff] = useState('');
-  const [activeFilePath, setActiveFilePath] = useState('welcome.ts');
-  const [activeFileContent, setActiveFileContent] = useState(sampleCode);
-  const [activeLanguage, setActiveLanguage] = useState('typescript');
+  const [tabs, setTabs] = useState<EditorTab[]>([welcomeTab]);
+  const [activeTabPath, setActiveTabPath] = useState(welcomeTab.path);
   const [notes, setNotes] = useState<MarkdownNote[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [logs, setLogs] = useState<ActionLog[]>([]);
   const [proposalAccepted, setProposalAccepted] = useState(false);
+  const [modal, setModal] = useState<ModalState>(null);
+  const [modalValue, setModalValue] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState('');
 
+  const activeTab = tabs.find((tab) => tab.path === activeTabPath) ?? tabs[0];
   const selectedModel = useMemo(
     () => models.find((model) => model.id === settings.selectedModelId) ?? models[0],
     [settings.selectedModelId],
   );
+  const dirtyTabs = tabs.filter((tab) => tab.content !== tab.savedContent);
 
   useEffect(() => {
     localStorage.setItem(settingsKey, JSON.stringify(settings));
@@ -106,6 +138,34 @@ export function App() {
     void initializeWorkspace();
   }, []);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (workspacePath) {
+        void refreshWorkspace(workspacePath, { quiet: true });
+      }
+    }, 8000);
+
+    return () => window.clearInterval(interval);
+  }, [workspacePath]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        setPaletteOpen(true);
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        void saveActiveFile();
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
+
   async function initializeWorkspace() {
     const path = settings.workspacePath || (await getDefaultWorkspacePath());
     setWorkspacePath(path);
@@ -113,15 +173,16 @@ export function App() {
     await refreshWorkspace(path);
   }
 
-  async function refreshWorkspace(path = workspacePath) {
+  async function refreshWorkspace(path = workspacePath, options?: { quiet?: boolean }) {
     const [workspaceEntries, status] = await Promise.all([
       listWorkspaceEntries(path),
       getGitStatus(path),
     ]);
     setFiles(workspaceEntries);
     setGitFiles(status);
-    setSelectedEntry(null);
-    addLog(`Workspace atualizado: ${path}`, 'ok');
+    if (!options?.quiet) {
+      addLog(`Workspace atualizado: ${path}`, 'ok');
+    }
   }
 
   function addLog(message: string, status: ActionLog['status'] = 'ok') {
@@ -153,6 +214,15 @@ export function App() {
   }
 
   async function chooseWorkspace() {
+    if (dirtyTabs.length > 0) {
+      openModal({ type: 'switch-workspace', title: 'Trocar projeto?' });
+      return;
+    }
+
+    await selectAndApplyWorkspace();
+  }
+
+  async function selectAndApplyWorkspace() {
     const selected = await selectWorkspaceFolder();
     if (!selected) {
       return;
@@ -160,91 +230,138 @@ export function App() {
 
     setWorkspacePath(selected);
     setSettings((current) => ({ ...current, workspacePath: selected }));
+    setTabs([welcomeTab]);
+    setActiveTabPath(welcomeTab.path);
     await refreshWorkspace(selected);
   }
 
   async function openWorkspaceFile(file: WorkspaceEntry) {
     setSelectedEntry(file);
     if (file.kind === 'directory') {
+      toggleFolder(file.path);
+      return;
+    }
+
+    const existing = tabs.find((tab) => tab.path === file.path);
+    if (existing) {
+      setActiveTabPath(existing.path);
       return;
     }
 
     try {
       const result = await readTextFile(workspacePath, file.path);
-      setActiveFilePath(result.path);
-      setActiveFileContent(result.content);
-      setActiveLanguage(languageFromPath(result.path));
+      const tab: EditorTab = {
+        path: result.path,
+        name: file.name,
+        content: result.content,
+        savedContent: result.content,
+        language: languageFromPath(result.path),
+      };
+      setTabs((current) => [...current, tab]);
+      setActiveTabPath(tab.path);
       addLog(`Arquivo aberto: ${file.name}`, 'ok');
     } catch (error) {
       addLog(String(error), 'warn');
     }
   }
 
-  async function createWorkspaceFile() {
-    const name = window.prompt('Nome do novo arquivo');
-    if (!name) {
-      return;
-    }
-
-    try {
-      await createFile(workspacePath, parentForNewEntry(), name);
-      await refreshWorkspace();
-      addLog(`Arquivo criado: ${name}`, 'ok');
-    } catch (error) {
-      addLog(String(error), 'warn');
-    }
-  }
-
-  async function createWorkspaceFolder() {
-    const name = window.prompt('Nome da nova pasta');
-    if (!name) {
-      return;
-    }
-
-    try {
-      await createFolder(workspacePath, parentForNewEntry(), name);
-      await refreshWorkspace();
-      addLog(`Pasta criada: ${name}`, 'ok');
-    } catch (error) {
-      addLog(String(error), 'warn');
-    }
-  }
-
-  async function deleteSelectedEntry() {
-    if (!selectedEntry) {
-      addLog('Selecione um arquivo ou pasta para remover', 'warn');
-      return;
-    }
-
-    const confirmed = window.confirm(`Remover "${selectedEntry.name}"?`);
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      await deleteEntry(workspacePath, selectedEntry.path);
-      if (activeFilePath === selectedEntry.path) {
-        setActiveFilePath('welcome.ts');
-        setActiveFileContent(sampleCode);
-        setActiveLanguage('typescript');
-      }
-      await refreshWorkspace();
-      addLog(`Removido: ${selectedEntry.name}`, 'ok');
-    } catch (error) {
-      addLog(String(error), 'warn');
-    }
-  }
-
   async function saveActiveFile() {
-    if (activeFilePath === 'welcome.ts') {
+    if (activeTab.path === welcomeTab.path) {
       addLog('Abra um arquivo do workspace antes de salvar', 'warn');
       return;
     }
 
     try {
-      await writeTextFile(workspacePath, activeFilePath, activeFileContent);
+      await writeTextFile(workspacePath, activeTab.path, activeTab.content);
+      setTabs((current) =>
+        current.map((tab) =>
+          tab.path === activeTab.path ? { ...tab, savedContent: tab.content } : tab,
+        ),
+      );
+      await refreshWorkspace(workspacePath, { quiet: true });
+      addLog(`Arquivo salvo: ${activeTab.name}`, 'ok');
+    } catch (error) {
+      addLog(String(error), 'warn');
+    }
+  }
+
+  function updateActiveTab(content: string) {
+    setTabs((current) =>
+      current.map((tab) => (tab.path === activeTab.path ? { ...tab, content } : tab)),
+    );
+  }
+
+  function closeTab(tab: EditorTab) {
+    if (tab.path === welcomeTab.path) {
+      return;
+    }
+
+    if (tab.content !== tab.savedContent) {
+      openModal({ type: 'delete', title: `Fechar "${tab.name}" sem salvar?`, entry: tabToEntry(tab) });
+      return;
+    }
+
+    setTabs((current) => current.filter((item) => item.path !== tab.path));
+    if (activeTabPath === tab.path) {
+      setActiveTabPath(welcomeTab.path);
+    }
+  }
+
+  function openModal(nextModal: ModalState) {
+    setModal(nextModal);
+    if (nextModal?.type === 'rename') {
+      setModalValue(nextModal.entry.name);
+    } else if (nextModal?.type === 'move') {
+      setModalValue(workspacePath);
+    } else {
+      setModalValue('');
+    }
+  }
+
+  async function submitModal() {
+    if (!modal) {
+      return;
+    }
+
+    try {
+      if (modal.type === 'create-file') {
+        await createFile(workspacePath, parentForNewEntry(), modalValue);
+        addLog(`Arquivo criado: ${modalValue}`, 'ok');
+      }
+      if (modal.type === 'create-folder') {
+        await createFolder(workspacePath, parentForNewEntry(), modalValue);
+        addLog(`Pasta criada: ${modalValue}`, 'ok');
+      }
+      if (modal.type === 'rename') {
+        await renameEntry(workspacePath, modal.entry.path, modalValue);
+        addLog(`Renomeado: ${modal.entry.name} -> ${modalValue}`, 'ok');
+      }
+      if (modal.type === 'move') {
+        await moveEntry(workspacePath, modal.entry.path, modalValue);
+        addLog(`Movido: ${modal.entry.name}`, 'ok');
+      }
+      if (modal.type === 'switch-workspace') {
+        setModal(null);
+        await selectAndApplyWorkspace();
+        return;
+      }
+      if (modal.type === 'delete') {
+        if (modal.entry.path.startsWith('tab:')) {
+          const tabPath = modal.entry.path.replace('tab:', '');
+          setTabs((current) => current.filter((item) => item.path !== tabPath));
+          setActiveTabPath(welcomeTab.path);
+        } else {
+          await deleteEntry(workspacePath, modal.entry.path);
+          setTabs((current) => current.filter((tab) => tab.path !== modal.entry.path));
+          if (activeTab.path === modal.entry.path) {
+            setActiveTabPath(welcomeTab.path);
+          }
+          addLog(`Removido: ${modal.entry.name}`, 'ok');
+        }
+      }
+
+      setModal(null);
       await refreshWorkspace();
-      addLog(`Arquivo salvo: ${shortPath(activeFilePath)}`, 'ok');
     } catch (error) {
       addLog(String(error), 'warn');
     }
@@ -252,6 +369,23 @@ export function App() {
 
   function parentForNewEntry() {
     return selectedEntry?.kind === 'directory' ? selectedEntry.path : workspacePath;
+  }
+
+  async function runSearch() {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    const results = await searchWorkspace(workspacePath, searchQuery);
+    setSearchResults(results);
+    setActiveView('search');
+    addLog(`${results.length} resultados encontrados`, 'ok');
+  }
+
+  async function loadSearchResult(result: SearchResult) {
+    const name = shortPath(result.path);
+    await openWorkspaceFile({ name, path: result.path, kind: 'file', children: [] });
   }
 
   async function loadObsidianNotes() {
@@ -275,6 +409,34 @@ export function App() {
     setProposalAccepted(true);
     addLog('Proposta mockada aceita para validacao do fluxo', 'ok');
   }
+
+  function toggleFolder(path: string) {
+    setExpandedFolders((current) => {
+      const next = new Set(current);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }
+
+  function runCommand(command: string) {
+    setPaletteOpen(false);
+    setPaletteQuery('');
+    if (command === 'open-folder') void chooseWorkspace();
+    if (command === 'save-file') void saveActiveFile();
+    if (command === 'search') setActiveView('search');
+    if (command === 'settings') setActiveView('settings');
+    if (command === 'toggle-theme') {
+      setSettings((current) => ({ ...current, theme: current.theme === 'dark' ? 'light' : 'dark' }));
+    }
+  }
+
+  const filteredCommands = commands.filter((command) =>
+    command.label.toLowerCase().includes(paletteQuery.toLowerCase()),
+  );
 
   return (
     <main className={`app-shell theme-${settings.theme}`}>
@@ -303,31 +465,68 @@ export function App() {
               <button className="icon-button" onClick={() => void chooseWorkspace()} title="Abrir pasta" type="button">
                 <FolderOpen size={16} />
               </button>
-              <button className="icon-button" onClick={() => void createWorkspaceFile()} title="Criar arquivo" type="button">
+              <button className="icon-button" onClick={() => openModal({ type: 'create-file', title: 'Criar arquivo' })} title="Criar arquivo" type="button">
                 <FilePlus2 size={16} />
               </button>
-              <button className="icon-button" onClick={() => void createWorkspaceFolder()} title="Criar pasta" type="button">
+              <button className="icon-button" onClick={() => openModal({ type: 'create-folder', title: 'Criar pasta' })} title="Criar pasta" type="button">
                 <FolderPlus size={16} />
               </button>
-              <button className="icon-button danger" onClick={() => void deleteSelectedEntry()} title="Remover selecionado" type="button">
+              <button className="icon-button" disabled={!selectedEntry} onClick={() => selectedEntry && openModal({ type: 'rename', title: 'Renomear', entry: selectedEntry })} title="Renomear" type="button">
+                <Pencil size={16} />
+              </button>
+              <button className="icon-button" disabled={!selectedEntry} onClick={() => selectedEntry && openModal({ type: 'move', title: 'Mover', entry: selectedEntry })} title="Mover" type="button">
+                <MoveRight size={16} />
+              </button>
+              <button className="icon-button danger" disabled={!selectedEntry} onClick={() => selectedEntry && openModal({ type: 'delete', title: 'Remover item', entry: selectedEntry })} title="Remover selecionado" type="button">
                 <Trash2 size={16} />
               </button>
-            <button className="icon-button" onClick={() => void refreshWorkspace()} title="Atualizar" type="button">
+              <button className="icon-button" onClick={() => void refreshWorkspace()} title="Atualizar" type="button">
                 <RefreshCw size={16} />
               </button>
             </div>
             <div className="workspace-path">{workspacePath}</div>
             {files.map((file) => (
-              <button
-                className={selectedEntry?.path === file.path ? 'list-row button-row selected' : 'list-row button-row'}
+              <TreeEntry
+                entry={file}
+                expandedFolders={expandedFolders}
                 key={file.path}
-                onClick={() => void openWorkspaceFile(file)}
-                type="button"
-              >
-                {file.kind === 'directory' ? <Folder size={15} /> : <File size={15} />}
-                {file.name}
-              </button>
+                level={0}
+                onOpen={(entry) => void openWorkspaceFile(entry)}
+                selectedPath={selectedEntry?.path}
+              />
             ))}
+          </div>
+        )}
+        {activeView === 'search' && (
+          <div className="settings-panel">
+            <label>
+              Buscar no projeto
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void runSearch();
+                }}
+                placeholder="Texto a buscar"
+              />
+            </label>
+            <button className="primary-button with-icon" onClick={() => void runSearch()} type="button">
+              <Search size={15} />
+              Buscar
+            </button>
+            <div className="panel-list compact">
+              {searchResults.map((result) => (
+                <button
+                  className="search-result"
+                  key={`${result.path}-${result.line}-${result.preview}`}
+                  onClick={() => void loadSearchResult(result)}
+                  type="button"
+                >
+                  <strong>{shortPath(result.path)}:{result.line}</strong>
+                  <span>{result.preview}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {activeView === 'git' && (
@@ -448,11 +647,27 @@ export function App() {
             <strong>{appMetadata.name}</strong>
             <span>{appMetadata.description}</span>
           </div>
-          <div className="model-badge">{selectedModel.name}</div>
+          <button className="model-badge" onClick={() => setPaletteOpen(true)} type="button">
+            {selectedModel.name}
+          </button>
         </div>
         <div className="editor-tabs">
-          <span className="tab active">{shortPath(activeFilePath)}</span>
-          <span className="tab">proposal.diff</span>
+          {tabs.map((tab) => (
+            <button
+              className={activeTab.path === tab.path ? 'tab active' : 'tab'}
+              key={tab.path}
+              onClick={() => setActiveTabPath(tab.path)}
+              type="button"
+            >
+              {tab.content !== tab.savedContent && <span className="dirty-dot" />}
+              {tab.name}
+              {tab.path !== welcomeTab.path && (
+                <span className="tab-close" onClick={(event) => { event.stopPropagation(); closeTab(tab); }}>
+                  x
+                </span>
+              )}
+            </button>
+          ))}
           <button className="tab-action" onClick={() => void saveActiveFile()} title="Salvar arquivo" type="button">
             <Save size={15} />
             Salvar
@@ -460,11 +675,11 @@ export function App() {
         </div>
         <div className="editor-frame">
           <Editor
-            language={activeLanguage}
+            language={activeTab.language}
             height="100%"
             theme={settings.theme === 'dark' ? 'vs-dark' : 'light'}
-            value={activeFileContent}
-            onChange={(value) => setActiveFileContent(value ?? '')}
+            value={activeTab.content}
+            onChange={(value) => updateActiveTab(value ?? '')}
             options={{ minimap: { enabled: false }, fontSize: 14, readOnly: false }}
           />
         </div>
@@ -502,9 +717,7 @@ export function App() {
               {proposalAccepted && <span className="accepted">Proposta aceita.</span>}
             </div>
           )}
-          {bottomView === 'terminal' && (
-            <pre className="terminal-view">npm run tauri -- dev</pre>
-          )}
+          {bottomView === 'terminal' && <pre className="terminal-view">npm run tauri -- dev</pre>}
         </section>
       </section>
 
@@ -533,12 +746,103 @@ export function App() {
           </button>
         </div>
       </aside>
+
+      {paletteOpen && (
+        <div className="overlay" onMouseDown={() => setPaletteOpen(false)}>
+          <div className="palette" onMouseDown={(event) => event.stopPropagation()}>
+            <input
+              autoFocus
+              value={paletteQuery}
+              onChange={(event) => setPaletteQuery(event.target.value)}
+              placeholder="Digite um comando..."
+            />
+            {filteredCommands.map((command) => (
+              <button key={command.id} onClick={() => runCommand(command.id)} type="button">
+                {command.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {modal && (
+        <div className="overlay" onMouseDown={() => setModal(null)}>
+          <div className="modal" onMouseDown={(event) => event.stopPropagation()}>
+            <h2>{modal.title}</h2>
+            {modal.type === 'delete' || modal.type === 'switch-workspace' ? (
+              <p>Esta acao e sensivel. Confirme para continuar.</p>
+            ) : (
+              <input
+                autoFocus
+                value={modalValue}
+                onChange={(event) => setModalValue(event.target.value)}
+                placeholder={modal.type === 'move' ? 'Pasta de destino' : 'Nome'}
+              />
+            )}
+            <div className="modal-actions">
+              <button className="text-button" onClick={() => setModal(null)} type="button">
+                Cancelar
+              </button>
+              <button
+                className={modal.type === 'delete' || modal.type === 'switch-workspace' ? 'primary-button danger' : 'primary-button'}
+                onClick={() => void submitModal()}
+                type="button"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
 
-const activityItems: Array<{ id: ActivityView; label: string; Icon: typeof Folder }> = [
+function TreeEntry({
+  entry,
+  expandedFolders,
+  level,
+  onOpen,
+  selectedPath,
+}: {
+  entry: WorkspaceEntry;
+  expandedFolders: Set<string>;
+  level: number;
+  onOpen: (entry: WorkspaceEntry) => void;
+  selectedPath?: string;
+}) {
+  const expanded = expandedFolders.has(entry.path);
+  return (
+    <>
+      <button
+        className={selectedPath === entry.path ? 'list-row button-row selected' : 'list-row button-row'}
+        onClick={() => onOpen(entry)}
+        style={{ paddingLeft: `${8 + level * 14}px` }}
+        type="button"
+      >
+        {entry.kind === 'directory' ? <Folder size={15} /> : <File size={15} />}
+        {entry.kind === 'directory' && <span className="tree-caret">{expanded ? '-' : '+'}</span>}
+        {entry.name}
+      </button>
+      {entry.kind === 'directory' &&
+        expanded &&
+        entry.children.map((child) => (
+          <TreeEntry
+            entry={child}
+            expandedFolders={expandedFolders}
+            key={child.path}
+            level={level + 1}
+            onOpen={onOpen}
+            selectedPath={selectedPath}
+          />
+        ))}
+    </>
+  );
+}
+
+const activityItems: Array<{ id: ActivityView; label: string; Icon: LucideIcon }> = [
   { id: 'files', label: 'Arquivos', Icon: Folder },
+  { id: 'search', label: 'Busca', Icon: Search },
   { id: 'git', label: 'Git', Icon: GitBranch },
   { id: 'settings', label: 'Configuracoes', Icon: Settings },
   { id: 'plugins', label: 'Plugins', Icon: Boxes },
@@ -548,6 +852,7 @@ const activityItems: Array<{ id: ActivityView; label: string; Icon: typeof Folde
 
 const sidebarTitle: Record<ActivityView, string> = {
   files: 'Arquivos',
+  search: 'Busca',
   git: 'Git',
   settings: 'Configuracoes',
   plugins: 'Plugins',
@@ -562,6 +867,14 @@ const bottomLabels: Record<BottomView, string> = {
   proposal: 'Proposta',
 };
 
+const commands = [
+  { id: 'open-folder', label: 'Abrir pasta do projeto' },
+  { id: 'save-file', label: 'Salvar arquivo atual' },
+  { id: 'search', label: 'Buscar no projeto' },
+  { id: 'settings', label: 'Abrir configuracoes' },
+  { id: 'toggle-theme', label: 'Alternar tema' },
+];
+
 const sampleCode = `import type { TextModelProvider } from './domain';
 
 export const provider: TextModelProvider = {
@@ -572,6 +885,18 @@ export const provider: TextModelProvider = {
   },
 };
 `;
+
+const welcomeTab: EditorTab = {
+  path: 'welcome.ts',
+  name: 'welcome.ts',
+  content: sampleCode,
+  savedContent: sampleCode,
+  language: 'typescript',
+};
+
+function tabToEntry(tab: EditorTab): WorkspaceEntry {
+  return { name: tab.name, path: `tab:${tab.path}`, kind: 'file', children: [] };
+}
 
 function shortPath(path: string) {
   return path.split(/[\\/]/).pop() || path;
