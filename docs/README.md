@@ -15,6 +15,7 @@ Esta pasta contem as definicoes do projeto antes e durante o desenvolvimento.
 - [Padroes de Codigo](padroes-de-codigo.md)
 - [Qualidade e Testes](qualidade-testes.md)
 - [Fluxo de Trabalho](fluxo-de-trabalho.md)
+- [Desenvolvimento Local](desenvolvimento-local.md)
 
 ## Produto
 
@@ -29,4 +30,3 @@ Esta pasta contem as definicoes do projeto antes e durante o desenvolvimento.
 - [ADR 0002 - Usar Monaco Editor](adr/0002-usar-monaco-editor.md)
 - [ADR 0003 - Modelo explicito de permissoes](adr/0003-modelo-de-permissoes.md)
 - [ADR 0004 - Plugins declarativos no MVP](adr/0004-plugins-declarativos-no-mvp.md)
-

@@ -21,6 +21,10 @@ npm run tauri -- build
 
 Use `npm run dev` apenas quando quiser abrir o frontend Vite no navegador sem a janela desktop.
 
+Guia detalhado:
+
+- [docs/desenvolvimento-local.md](docs/desenvolvimento-local.md)
+
 Especificacao inicial do projeto:
 
 - [docs/especificacao-jarvis.md](docs/especificacao-jarvis.md)
