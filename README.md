@@ -2,6 +2,25 @@
 
 JARVIS e uma IDE experimental pensada desde o inicio para trabalhar com modelos, agentes, LLMs e contexto local.
 
+## Desenvolvimento
+
+Requisitos iniciais:
+
+- Node.js 20+
+- npm 11+
+- Rust 1.95+
+
+Comandos:
+
+```powershell
+npm install
+npm run build
+npm run tauri -- dev
+npm run tauri -- build
+```
+
+Use `npm run dev` apenas quando quiser abrir o frontend Vite no navegador sem a janela desktop.
+
 Especificacao inicial do projeto:
 
 - [docs/especificacao-jarvis.md](docs/especificacao-jarvis.md)
