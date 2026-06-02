@@ -24,6 +24,7 @@ import {
 
 import { appMetadata } from '../application';
 import { defaultModelId, models } from '../application/model-registry';
+import { agentDefinitions } from '../agents';
 import type { ProviderKind } from '../domain';
 import { createTextProvider } from '../infrastructure/model-providers';
 import {
@@ -52,9 +53,17 @@ import {
 import { pluginManifests } from '../plugins/manifests';
 
 type ActivityView = 'files' | 'git' | 'search' | 'settings' | 'plugins' | 'context' | 'agents';
-type BottomView = 'terminal' | 'logs' | 'diff' | 'proposal';
+type BottomView = 'terminal' | 'logs' | 'diff' | 'proposal' | 'audit';
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 type ActionLog = { id: string; message: string; status: 'ok' | 'warn' };
+type AuditEvent = {
+  id: string;
+  timestamp: string;
+  actor: string;
+  permission: string;
+  target: string;
+  result: string;
+};
 type ModalState =
   | { type: 'create-file'; title: string }
   | { type: 'create-folder'; title: string }
@@ -72,6 +81,7 @@ interface SettingsState {
   vaultPath: string;
   workspacePath: string;
   theme: 'dark' | 'light';
+  permissions: Record<PermissionId, boolean>;
 }
 
 interface EditorTab {
@@ -92,6 +102,13 @@ const defaultSettings: SettingsState = {
   vaultPath: '',
   workspacePath: '',
   theme: 'dark',
+  permissions: {
+    'read-workspace': true,
+    'write-workspace': false,
+    git: true,
+    network: false,
+    secrets: false,
+  },
 };
 
 function loadSettings(): SettingsState {
@@ -123,6 +140,7 @@ export function App() {
   const [notes, setNotes] = useState<MarkdownNote[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [secureApiKey, setSecureApiKey] = useState('');
   const [generationActive, setGenerationActive] = useState(false);
   const [logs, setLogs] = useState<ActionLog[]>([]);
@@ -157,6 +175,7 @@ export function App() {
     }
 
     setMessages(loadWorkspaceMessages(workspacePath));
+    setAuditEvents(loadWorkspaceAudit(workspacePath));
   }, [workspacePath]);
 
   useEffect(() => {
@@ -164,6 +183,12 @@ export function App() {
       localStorage.setItem(historyKey(workspacePath), JSON.stringify(messages));
     }
   }, [messages, workspacePath]);
+
+  useEffect(() => {
+    if (workspacePath) {
+      localStorage.setItem(auditKey(workspacePath), JSON.stringify(auditEvents));
+    }
+  }, [auditEvents, workspacePath]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -225,6 +250,20 @@ export function App() {
     setLogs((current) => [
       { id: crypto.randomUUID(), message, status },
       ...current.slice(0, 24),
+    ]);
+  }
+
+  function addAudit(actor: string, permission: string, target: string, result: string) {
+    setAuditEvents((current) => [
+      {
+        id: crypto.randomUUID(),
+        timestamp: new Date().toLocaleString(),
+        actor,
+        permission,
+        target,
+        result,
+      },
+      ...current.slice(0, 79),
     ]);
   }
 
@@ -493,6 +532,7 @@ export function App() {
   function acceptProposal() {
     setProposalAccepted(true);
     addLog('Proposta mockada aceita para validacao do fluxo', 'ok');
+    addAudit('Agente Desenvolvedor', 'write-workspace', activeTab.path, 'Proposta aceita pela UI');
   }
 
   function toggleFolder(path: string) {
@@ -526,6 +566,55 @@ export function App() {
       providerKind,
       selectedModelId: firstModel.id,
     }));
+  }
+
+  function updatePermission(permission: PermissionId, enabled: boolean) {
+    setSettings((current) => ({
+      ...current,
+      permissions: { ...current.permissions, [permission]: enabled },
+    }));
+  }
+
+  function hasAgentPermissions(permissions: string[]) {
+    return permissions.every((permission) => settings.permissions[permission as PermissionId]);
+  }
+
+  function runAgent(agentId: string) {
+    const agent = agentDefinitions.find((item) => item.id === agentId);
+    if (!agent) {
+      return;
+    }
+
+    if (!hasAgentPermissions(agent.permissions)) {
+      addLog(`Permissoes insuficientes para o agente ${agent.name}`, 'warn');
+      addAudit(agent.name, agent.permissions.join(', '), activeTab.path, 'Bloqueado por permissao');
+      return;
+    }
+
+    if (agent.id === 'developer') {
+      const proposal = createAgentDiff(activeTab);
+      setDiff(proposal);
+      setProposalAccepted(false);
+      setBottomView('proposal');
+      addLog('Agente Desenvolvedor gerou uma proposta revisavel', 'ok');
+      addAudit(agent.name, agent.permissions.join(', '), activeTab.path, 'Diff proposto');
+      return;
+    }
+
+    if (agent.id === 'reviewer') {
+      const review = createReview(activeTab);
+      setDiff(review);
+      setBottomView('diff');
+      addLog('Agente Revisor gerou uma revisao local', 'ok');
+      addAudit(agent.name, agent.permissions.join(', '), activeTab.path, 'Revisao gerada');
+      return;
+    }
+
+    const docs = createDocumentationProposal(activeTab);
+    setDiff(docs);
+    setBottomView('diff');
+    addLog('Agente Documentador gerou uma proposta de documentacao', 'ok');
+    addAudit(agent.name, agent.permissions.join(', '), activeTab.path, 'Documentacao proposta');
   }
 
   const filteredCommands = commands.filter((command) =>
@@ -750,6 +839,22 @@ export function App() {
             <button className="primary-button" onClick={() => void loadObsidianNotes()} type="button">
               Validar e carregar notas
             </button>
+            <section className="permission-center">
+              <strong>Permissoes por workspace</strong>
+              {permissionItems.map((permission) => (
+                <label className="toggle-row" key={permission.id}>
+                  <span>
+                    {permission.label}
+                    <small>{permission.description}</small>
+                  </span>
+                  <input
+                    checked={settings.permissions[permission.id]}
+                    onChange={(event) => updatePermission(permission.id, event.target.checked)}
+                    type="checkbox"
+                  />
+                </label>
+              ))}
+            </section>
           </div>
         )}
         {activeView === 'plugins' && (
@@ -779,10 +884,14 @@ export function App() {
         )}
         {activeView === 'agents' && (
           <div className="panel-list">
-            {['Desenvolvedor', 'Revisor', 'Documentador'].map((agent) => (
-              <article className="plugin-card" key={agent}>
-                <strong>Agente {agent}</strong>
-                <p>Modo assistido, sem execucao sensivel automatica.</p>
+            {agentDefinitions.map((agent) => (
+              <article className="plugin-card" key={agent.id}>
+                <strong>Agente {agent.name}</strong>
+                <p>{agent.goal}</p>
+                <small>Permissoes: {agent.permissions.join(', ')}</small>
+                <button className="text-button" onClick={() => runAgent(agent.id)} type="button">
+                  Executar
+                </button>
               </article>
             ))}
           </div>
@@ -833,7 +942,7 @@ export function App() {
         </div>
         <section className="bottom-panel">
           <nav>
-            {(['logs', 'diff', 'proposal', 'terminal'] as BottomView[]).map((view) => (
+            {(['logs', 'diff', 'proposal', 'audit', 'terminal'] as BottomView[]).map((view) => (
               <button
                 className={bottomView === view ? 'bottom-tab active' : 'bottom-tab'}
                 key={view}
@@ -856,13 +965,24 @@ export function App() {
           {bottomView === 'diff' && <pre className="diff-view">{diff || selectedGitFile}</pre>}
           {bottomView === 'proposal' && (
             <div className="proposal">
-              <strong>Proposta de alteracao mockada</strong>
-              <p>Adicionar provider mockado mantendo contrato substituivel.</p>
+              <strong>Proposta de alteracao</strong>
+              <pre className="proposal-diff">{diff || 'Nenhuma proposta gerada.'}</pre>
               <button className="primary-button" onClick={acceptProposal} type="button">
                 <CheckCircle2 size={15} />
                 Aceitar proposta
               </button>
               {proposalAccepted && <span className="accepted">Proposta aceita.</span>}
+            </div>
+          )}
+          {bottomView === 'audit' && (
+            <div className="bottom-content">
+              {auditEvents.map((event) => (
+                <div className="audit-row" key={event.id}>
+                  <strong>{event.actor}</strong>
+                  <span>{event.timestamp}</span>
+                  <small>{event.permission} | {event.target} | {event.result}</small>
+                </div>
+              ))}
             </div>
           )}
           {bottomView === 'terminal' && <pre className="terminal-view">npm run tauri -- dev</pre>}
@@ -1018,7 +1138,38 @@ const bottomLabels: Record<BottomView, string> = {
   logs: 'Logs',
   diff: 'Diff',
   proposal: 'Proposta',
+  audit: 'Auditoria',
 };
+
+type PermissionId = 'read-workspace' | 'write-workspace' | 'git' | 'network' | 'secrets';
+
+const permissionItems: Array<{ id: PermissionId; label: string; description: string }> = [
+  {
+    id: 'read-workspace',
+    label: 'Ler workspace',
+    description: 'Permite agentes analisarem arquivos do projeto.',
+  },
+  {
+    id: 'write-workspace',
+    label: 'Propor escrita',
+    description: 'Permite agentes criarem propostas de alteracao.',
+  },
+  {
+    id: 'git',
+    label: 'Usar Git',
+    description: 'Permite leitura de status e diffs Git.',
+  },
+  {
+    id: 'network',
+    label: 'Acessar rede',
+    description: 'Reservado para providers e integracoes externas.',
+  },
+  {
+    id: 'secrets',
+    label: 'Usar secrets',
+    description: 'Permite acessar chaves salvas quando necessario.',
+  },
+];
 
 const commands = [
   { id: 'open-folder', label: 'Abrir pasta do projeto' },
@@ -1066,6 +1217,62 @@ function loadWorkspaceMessages(workspacePath: string): ChatMessage[] {
   } catch {
     return [];
   }
+}
+
+function auditKey(workspacePath: string) {
+  return `jarvis.audit.${workspacePath}`;
+}
+
+function loadWorkspaceAudit(workspacePath: string): AuditEvent[] {
+  const stored = localStorage.getItem(auditKey(workspacePath));
+  if (!stored) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return [];
+  }
+}
+
+function createAgentDiff(tab: EditorTab) {
+  const filePath = tab.path === welcomeTab.path ? 'novo-arquivo.ts' : tab.path;
+  return [
+    `diff --git a/${shortPath(filePath)} b/${shortPath(filePath)}`,
+    `--- a/${shortPath(filePath)}`,
+    `+++ b/${shortPath(filePath)}`,
+    '@@',
+    '+// Proposta do Agente Desenvolvedor:',
+    '+// revisar este arquivo e adicionar testes antes de aplicar.',
+    tab.content
+      .split('\n')
+      .slice(0, 8)
+      .map((line) => ` ${line}`)
+      .join('\n'),
+  ].join('\n');
+}
+
+function createReview(tab: EditorTab) {
+  return [
+    `Revisao do arquivo: ${tab.name}`,
+    '',
+    '- Verificar caminhos de erro antes de aplicar alteracoes.',
+    '- Adicionar teste para o fluxo principal alterado.',
+    '- Confirmar se a mudanca nao expande permissao sensivel sem aprovacao.',
+  ].join('\n');
+}
+
+function createDocumentationProposal(tab: EditorTab) {
+  return [
+    `Proposta de documentacao para ${tab.name}`,
+    '',
+    '## Contexto',
+    'Descrever objetivo do arquivo e principais contratos usados.',
+    '',
+    '## Cuidados',
+    'Registrar permissoes, dependencias externas e impacto no workspace.',
+  ].join('\n');
 }
 
 function shortPath(path: string) {

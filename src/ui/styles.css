@@ -377,6 +377,50 @@ button {
   font-size: 12px;
 }
 
+.plugin-card .text-button {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.permission-center {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #2b3340;
+}
+
+.permission-center > strong {
+  color: #e7ebf2;
+  font-size: 12px;
+}
+
+.toggle-row {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px;
+  border: 1px solid #2b3340;
+  border-radius: 6px;
+  background: #11161d;
+}
+
+.toggle-row span {
+  display: grid;
+  gap: 3px;
+}
+
+.toggle-row small {
+  color: #8f9bab;
+  font-size: 11px;
+}
+
+.toggle-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: #75d3b5;
+}
+
 .workbench {
   display: grid;
   grid-template-rows: 48px 36px minmax(260px, 1fr) 190px;
@@ -534,9 +578,44 @@ button {
   color: #8f9bab;
 }
 
+.proposal-diff {
+  width: 100%;
+  max-height: 96px;
+  margin: 0;
+  overflow: auto;
+  color: #c4ccd8;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 .accepted {
   color: #75d3b5;
   font-size: 12px;
+}
+
+.audit-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) auto;
+  gap: 4px 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid #202630;
+}
+
+.audit-row strong {
+  color: #e7ebf2;
+  font-size: 12px;
+}
+
+.audit-row span,
+.audit-row small {
+  color: #8f9bab;
+  font-size: 11px;
+}
+
+.audit-row small {
+  grid-column: 1 / -1;
 }
 
 .chat-messages {
