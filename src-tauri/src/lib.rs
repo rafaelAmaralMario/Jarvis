@@ -18,7 +18,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::default_workspace_path,
+            commands::default_ollama_models_path,
             commands::list_workspace_entries,
+            commands::list_ollama_models,
             commands::read_text_file,
             commands::write_text_file,
             commands::create_file,
@@ -28,6 +30,7 @@ pub fn run() {
             commands::move_entry,
             commands::search_workspace,
             commands::start_ollama_model,
+            commands::test_ollama_model,
             commands::git_status,
             commands::git_diff,
             commands::git_stage,

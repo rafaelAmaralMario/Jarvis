@@ -27,7 +27,7 @@ import { appMetadata } from '../application';
 import { defaultModelId, models } from '../application/model-registry';
 import { agentDefinitions, type AgentDefinition } from '../agents';
 import jarvisIcon from '../assets/jarvis-icon.svg';
-import type { ProviderKind } from '../domain';
+import type { AiModel, ProviderKind } from '../domain';
 import { createTextProvider } from '../infrastructure/model-providers';
 import {
   createFile,
@@ -36,6 +36,7 @@ import {
   checkoutGitBranch,
   createGitBranch,
   deleteEntry,
+  getDefaultOllamaModelsPath,
   getDefaultWorkspacePath,
   getGithubPrUrl,
   getGitDiff,
@@ -43,6 +44,7 @@ import {
   listGitBranches,
   listLocalPluginManifests,
   listMarkdownNotes,
+  listOllamaModels,
   listWorkspaceEntries,
   loadSecureSettings,
   moveEntry,
@@ -50,9 +52,11 @@ import {
   renameEntry,
   saveSecureSettings,
   searchWorkspace,
+  selectFolder,
   selectWorkspaceFolder,
   stageGitFile,
   startOllamaModel,
+  testOllamaModel,
   unstageGitFile,
   validatePath,
   writeMarkdownNote,
@@ -97,6 +101,7 @@ interface SettingsState {
   selectedModelId: string;
   providerKind: ProviderKind;
   ollamaBaseUrl: string;
+  ollamaModelsPath: string;
   openaiCompatibleBaseUrl: string;
   generalVaultPath: string;
   projectVaultPath: string;
@@ -128,6 +133,7 @@ const defaultSettings: SettingsState = {
   selectedModelId: defaultModelId,
   providerKind: 'mock',
   ollamaBaseUrl: 'http://127.0.0.1:11434',
+  ollamaModelsPath: '',
   openaiCompatibleBaseUrl: 'https://api.openai.com/v1',
   generalVaultPath: '',
   projectVaultPath: '',
@@ -190,6 +196,8 @@ export function App() {
   const [contextQuery, setContextQuery] = useState('');
   const [contextResults, setContextResults] = useState<ContextResult[]>([]);
   const [localPlugins, setLocalPlugins] = useState<LocalPluginManifest[]>([]);
+  const [localOllamaModels, setLocalOllamaModels] = useState<string[]>([]);
+  const [ollamaModelsError, setOllamaModelsError] = useState('');
   const [enabledPlugins, setEnabledPlugins] = useState<string[]>(loadEnabledPlugins);
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -222,9 +230,13 @@ export function App() {
     () => boundPanelWidths(settings.sidebarWidth, settings.aiPanelWidth, viewportWidth),
     [settings.aiPanelWidth, settings.sidebarWidth, viewportWidth],
   );
+  const availableModels = useMemo(
+    () => mergeModelRegistry(models, localOllamaModels),
+    [localOllamaModels],
+  );
   const selectedModel = useMemo(
-    () => models.find((model) => model.id === settings.selectedModelId) ?? models[0],
-    [settings.selectedModelId],
+    () => availableModels.find((model) => model.id === settings.selectedModelId) ?? availableModels[0],
+    [availableModels, settings.selectedModelId],
   );
   const dirtyTabs = tabs.filter((tab) => tab.content !== tab.savedContent);
   const activeVaultPath = settings.contextVaultKind === 'general'
@@ -255,6 +267,7 @@ export function App() {
   useEffect(() => {
     void initializeWorkspace();
     void initializeSecureSettings();
+    void initializeOllamaModelsPath();
   }, []);
 
   useEffect(() => {
@@ -347,6 +360,16 @@ export function App() {
     }
   }
 
+  async function initializeOllamaModelsPath() {
+    const path = settings.ollamaModelsPath || (await getDefaultOllamaModelsPath());
+    if (!path) {
+      return;
+    }
+
+    setSettings((current) => ({ ...current, ollamaModelsPath: current.ollamaModelsPath || path }));
+    await refreshOllamaModels(path, { quiet: true });
+  }
+
   async function refreshWorkspace(path = workspacePath, options?: { quiet?: boolean }) {
     if (!path) {
       setFiles([]);
@@ -397,6 +420,30 @@ export function App() {
     }
   }
 
+  async function refreshOllamaModels(path = settings.ollamaModelsPath, options?: { quiet?: boolean }) {
+    if (!path.trim()) {
+      setLocalOllamaModels([]);
+      setOllamaModelsError('Informe a pasta de modelos do Ollama.');
+      return;
+    }
+
+    try {
+      const detectedModels = await listOllamaModels(path);
+      setLocalOllamaModels(detectedModels);
+      setOllamaModelsError('');
+      if (!options?.quiet) {
+        addLog(`${detectedModels.length} modelos Ollama detectados`, 'ok');
+      }
+    } catch (error) {
+      setLocalOllamaModels([]);
+      const message = `Modelos Ollama nao carregados: ${formatError(error)}`;
+      setOllamaModelsError(message);
+      if (!options?.quiet) {
+        addLog(message, 'warn');
+      }
+    }
+  }
+
   function addLog(message: string, status: ActionLog['status'] = 'ok') {
     setLogs((current) => [
       { id: crypto.randomUUID(), message, status },
@@ -438,10 +485,7 @@ export function App() {
     const provider = createTextProvider({
       kind: settings.providerKind,
       modelId: settings.selectedModelId,
-      baseUrl:
-        settings.providerKind === 'ollama'
-          ? settings.ollamaBaseUrl
-          : settings.openaiCompatibleBaseUrl,
+      baseUrl: settings.openaiCompatibleBaseUrl,
       apiKey: secureApiKey,
     });
 
@@ -490,13 +534,27 @@ export function App() {
     }
 
     setModelTestActive(true);
+    if (settings.providerKind === 'ollama') {
+      try {
+        const model = settings.selectedModelId.replace('ollama:', '');
+        const response = await testOllamaModel(model);
+        setModelHealth('ok');
+        addLog(`Modelo funcional: Ollama respondeu "${response.slice(0, 60) || 'OK'}"`, 'ok');
+        addAudit('Model Tester', 'network', settings.selectedModelId, 'Teste Ollama concluido');
+      } catch (error) {
+        setModelHealth('fail');
+        addLog(`Teste Ollama falhou: ${formatError(error)}`, 'warn');
+        addAudit('Model Tester', 'network', settings.selectedModelId, 'Teste Ollama falhou');
+      } finally {
+        setModelTestActive(false);
+      }
+      return;
+    }
+
     const provider = createTextProvider({
       kind: settings.providerKind,
       modelId: settings.selectedModelId,
-      baseUrl:
-        settings.providerKind === 'ollama'
-          ? settings.ollamaBaseUrl
-          : settings.openaiCompatibleBaseUrl,
+      baseUrl: settings.openaiCompatibleBaseUrl,
       apiKey: secureApiKey,
     });
 
@@ -528,17 +586,17 @@ export function App() {
     }
   }
 
-  async function runLlama32() {
+  async function startSelectedOllamaModel() {
     try {
-      await startOllamaModel('llama3.2');
+      const model = settings.selectedModelId.replace('ollama:', '');
+      await startOllamaModel(model);
       setSettings((current) => ({
         ...current,
         providerKind: 'ollama',
-        selectedModelId: 'ollama:llama3.2',
       }));
-      addLog('Comando iniciado: ollama run llama3.2', 'ok');
+      addLog(`Comando iniciado: ollama run ${model}`, 'ok');
     } catch (error) {
-      addLog(`Nao foi possivel iniciar llama3.2: ${formatError(error)}`, 'warn');
+      addLog(`Nao foi possivel iniciar o modelo selecionado: ${formatError(error)}`, 'warn');
     }
   }
 
@@ -992,7 +1050,7 @@ export function App() {
   }
 
   function updateProviderKind(providerKind: ProviderKind) {
-    const firstModel = models.find((model) => model.providerId === providerKind) ?? models[0];
+    const firstModel = availableModels.find((model) => model.providerId === providerKind) ?? availableModels[0];
     setSettings((current) => ({
       ...current,
       providerKind,
@@ -1394,7 +1452,7 @@ export function App() {
                   setSettings((current) => ({ ...current, selectedModelId: event.target.value }))
                 }
               >
-                {models
+                {availableModels
                   .filter((model) => model.providerId === settings.providerKind)
                   .map((model) => (
                   <option key={model.id} value={model.id}>
@@ -1412,24 +1470,65 @@ export function App() {
               <Sparkles size={15} />
               {modelTestActive ? 'Testando modelo...' : 'Testar modelo'}
             </button>
-            <button className="text-button with-icon" onClick={() => void runLlama32()} type="button">
+            <button
+              className="text-button with-icon"
+              disabled={settings.providerKind !== 'ollama'}
+              onClick={() => void startSelectedOllamaModel()}
+              type="button"
+            >
               <Sparkles size={15} />
-              Rodar llama3.2
+              Iniciar modelo selecionado
             </button>
             <div className={`status-line ${modelHealth}`}>
               Modelo: {modelHealth === 'ok' ? 'funcional' : modelHealth === 'fail' ? 'falhou no ultimo teste' : 'nao testado'}
             </div>
             {settings.providerKind === 'ollama' && (
-              <label>
-                Endpoint Ollama
-                <input
-                  value={settings.ollamaBaseUrl}
-                  onChange={(event) =>
-                    setSettings((current) => ({ ...current, ollamaBaseUrl: event.target.value }))
-                  }
-                  placeholder="http://127.0.0.1:11434"
-                />
-              </label>
+              <>
+                <label>
+                  Endpoint Ollama
+                  <input
+                    value={settings.ollamaBaseUrl}
+                    onChange={(event) =>
+                      setSettings((current) => ({ ...current, ollamaBaseUrl: event.target.value }))
+                    }
+                    placeholder="http://127.0.0.1:11434"
+                  />
+                </label>
+                <label>
+                  Pasta de modelos Ollama
+                  <input
+                    value={settings.ollamaModelsPath}
+                    onChange={(event) =>
+                      setSettings((current) => ({ ...current, ollamaModelsPath: event.target.value }))
+                    }
+                    placeholder="C:\\Users\\...\\.ollama\\models"
+                  />
+                </label>
+                <div className="split-actions">
+                  <button
+                    className="text-button"
+                    onClick={async () => {
+                      const selected = await selectFolder('Selecionar pasta de modelos do Ollama');
+                      if (selected) {
+                        setSettings((current) => ({ ...current, ollamaModelsPath: selected }));
+                        await refreshOllamaModels(selected);
+                      }
+                    }}
+                    type="button"
+                  >
+                    Escolher pasta
+                  </button>
+                  <button className="text-button" onClick={() => void refreshOllamaModels()} type="button">
+                    Detectar modelos
+                  </button>
+                </div>
+                {ollamaModelsError && <div className="empty-state warning">{ollamaModelsError}</div>}
+                {!ollamaModelsError && localOllamaModels.length > 0 && (
+                  <div className="status-line ok">
+                    Modelos locais: {localOllamaModels.join(', ')}
+                  </div>
+                )}
+              </>
             )}
             {settings.providerKind === 'openai-compatible' && (
               <>
@@ -1654,9 +1753,14 @@ export function App() {
               <a className="external-link" href="https://docs.ollama.com/windows" rel="noreferrer" target="_blank">
                 Instalar no Windows
               </a>
-              <button className="primary-button with-icon" onClick={() => void runLlama32()} type="button">
+              <button
+                className="primary-button with-icon"
+                disabled={settings.providerKind !== 'ollama'}
+                onClick={() => void startSelectedOllamaModel()}
+                type="button"
+              >
                 <Sparkles size={15} />
-                Rodar llama3.2 agora
+                Iniciar modelo selecionado
               </button>
             </article>
             <article className="plugin-card">
@@ -2126,10 +2230,11 @@ JARVIS e uma IDE pensada para trabalhar com modelos de IA, agentes, contexto do 
 2. No Windows, siga https://docs.ollama.com/windows
 3. Instale o Ollama.
 4. No terminal, execute: ollama run llama3.2
-5. Ou use o botao Rodar llama3.2 dentro do JARVIS.
-6. No JARVIS, selecione Provider de IA: Ollama local.
-7. Confirme o endpoint: http://127.0.0.1:11434
-8. Clique em Testar modelo.
+5. No JARVIS, selecione Provider de IA: Ollama local.
+6. Aponte a pasta de modelos, normalmente C:\\Users\\SeuUsuario\\.ollama\\models.
+7. Clique em Detectar modelos para preencher o seletor com os modelos baixados.
+8. Escolha o modelo ativo.
+9. Use Iniciar modelo selecionado ou clique em Testar modelo.
 
 ## 4. Usar OpenAI-compatible
 
@@ -2356,6 +2461,21 @@ function loadCustomAgents(): AgentDefinition[] {
   } catch {
     return [];
   }
+}
+
+function mergeModelRegistry(baseModels: AiModel[], ollamaModels: string[]): AiModel[] {
+  const knownIds = new Set(baseModels.map((model) => model.id));
+  const detectedModels: AiModel[] = ollamaModels
+    .map((model) => ({
+      id: `ollama:${model}`,
+      providerId: 'ollama',
+      name: `Ollama ${model}`,
+      capabilities: ['text' as const, 'code' as const],
+      status: 'active' as const,
+    }))
+    .filter((model) => !knownIds.has(model.id));
+
+  return [...baseModels, ...detectedModels];
 }
 
 function renderWorkspaceTree(entries: WorkspaceEntry[], level = 0): string {
