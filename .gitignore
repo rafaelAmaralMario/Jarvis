@@ -53,6 +53,7 @@ indexes/
 embeddings/
 
 # Temporary files
+.tmp/
 tmp/
 temp/
 *.tmp
