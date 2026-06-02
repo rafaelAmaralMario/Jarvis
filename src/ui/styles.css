@@ -61,7 +61,7 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 52px minmax(240px, 300px) minmax(480px, 1fr) minmax(300px, 380px);
+  grid-template-columns: 52px minmax(240px, 300px) 4px minmax(480px, 1fr) 4px minmax(300px, 380px);
   width: 100%;
   height: 100%;
   min-width: 1120px;
@@ -86,6 +86,16 @@ button {
 .theme-light .workbench,
 .theme-light .bottom-panel {
   background: #f4f6f8;
+}
+
+.theme-light .panel-resizer {
+  background: #eef2f6;
+}
+
+.theme-light .panel-resizer:hover,
+.theme-light.is-resizing-panel .panel-resizer,
+.is-resizing-panel .theme-light .panel-resizer {
+  background: #3c8dbc;
 }
 
 .theme-light .activity-button,
@@ -185,15 +195,47 @@ button {
 .sidebar,
 .ai-panel {
   min-width: 0;
+  min-height: 0;
   border-right: 1px solid #252b34;
   background: #15191f;
 }
 
+.sidebar {
+  display: grid;
+  grid-template-rows: 40px minmax(0, 1fr);
+}
+
 .ai-panel {
   display: grid;
-  grid-template-rows: 40px 1fr auto;
+  grid-template-rows: 40px minmax(0, 1fr) auto;
   border-right: 0;
   border-left: 1px solid #252b34;
+}
+
+.panel-resizer {
+  width: 4px;
+  min-width: 4px;
+  background: #101317;
+  cursor: col-resize;
+  position: relative;
+  z-index: 4;
+  transition: background 140ms ease;
+}
+
+.panel-resizer::after {
+  content: "";
+  position: absolute;
+  inset: 0 -3px;
+}
+
+.panel-resizer:hover,
+.is-resizing-panel .panel-resizer {
+  background: #75d3b5;
+}
+
+.is-resizing-panel {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .panel-header {
@@ -212,9 +254,49 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
   padding: 12px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   animation: panel-in 180ms ease both;
+}
+
+.settings-panel .compact {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.panel-list::-webkit-scrollbar,
+.settings-panel::-webkit-scrollbar,
+.chat-messages::-webkit-scrollbar,
+.bottom-content::-webkit-scrollbar,
+.diff-view::-webkit-scrollbar,
+.terminal-view::-webkit-scrollbar,
+.proposal::-webkit-scrollbar,
+.proposal-diff::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.panel-list::-webkit-scrollbar-thumb,
+.settings-panel::-webkit-scrollbar-thumb,
+.chat-messages::-webkit-scrollbar-thumb,
+.bottom-content::-webkit-scrollbar-thumb,
+.diff-view::-webkit-scrollbar-thumb,
+.terminal-view::-webkit-scrollbar-thumb,
+.proposal::-webkit-scrollbar-thumb,
+.proposal-diff::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #3b4554;
+  background-clip: padding-box;
+}
+
+.panel-list::-webkit-scrollbar-track,
+.settings-panel::-webkit-scrollbar-track,
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .toolbar {
@@ -560,6 +642,7 @@ button {
   display: grid;
   grid-template-rows: 48px 36px minmax(260px, 1fr) 190px;
   min-width: 0;
+  min-height: 0;
   background: #101317;
 }
 
@@ -806,8 +889,10 @@ button {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 0;
   padding: 12px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .chat-message {

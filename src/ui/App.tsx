@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import Editor from '@monaco-editor/react';
 import {
   Bot,
@@ -169,9 +169,11 @@ export function App() {
   const [enabledPlugins, setEnabledPlugins] = useState<string[]>(loadEnabledPlugins);
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatHydratedWorkspace, setChatHydratedWorkspace] = useState('');
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [secureApiKey, setSecureApiKey] = useState('');
   const [generationActive, setGenerationActive] = useState(false);
+  const [modelTestActive, setModelTestActive] = useState(false);
   const [logs, setLogs] = useState<ActionLog[]>([]);
   const [proposalAccepted, setProposalAccepted] = useState(false);
   const [modal, setModal] = useState<ModalState>(null);
@@ -181,6 +183,7 @@ export function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState('');
   const generationController = useRef<AbortController | null>(null);
+  const chatMessagesRef = useRef<HTMLDivElement | null>(null);
 
   const activeTab = tabs.find((tab) => tab.path === activeTabPath) ?? tabs[0];
   const selectedModel = useMemo(
@@ -212,16 +215,24 @@ export function App() {
     }
 
     setMessages(loadWorkspaceMessages(workspacePath));
+    setChatHydratedWorkspace(workspacePath);
     setAuditEvents(loadWorkspaceAudit(workspacePath));
     setMemoryEntries(loadWorkspaceMemory(workspacePath));
     void refreshLocalPlugins(workspacePath);
   }, [workspacePath]);
 
   useEffect(() => {
-    if (workspacePath) {
+    if (workspacePath && chatHydratedWorkspace === workspacePath) {
       localStorage.setItem(historyKey(workspacePath), JSON.stringify(messages));
     }
-  }, [messages, workspacePath]);
+  }, [chatHydratedWorkspace, messages, workspacePath]);
+
+  useEffect(() => {
+    chatMessagesRef.current?.scrollTo({
+      top: chatMessagesRef.current.scrollHeight,
+      behavior: 'smooth',
+    });
+  }, [generationActive, messages]);
 
   useEffect(() => {
     if (workspacePath) {
@@ -335,9 +346,12 @@ export function App() {
       return;
     }
 
-    setMessages((current) => [...current, { role: 'user', content: input }]);
     setChatInput('');
-    setMessages((current) => [...current, { role: 'assistant', content: '' }]);
+    setMessages((current) => [
+      ...current,
+      { role: 'user', content: input },
+      { role: 'assistant', content: '' },
+    ]);
 
     const controller = new AbortController();
     generationController.current = controller;
@@ -371,7 +385,17 @@ export function App() {
       addLog(`Chat respondido por ${provider.name}`, 'ok');
     } catch (error) {
       const canceled = error instanceof DOMException && error.name === 'AbortError';
-      addLog(canceled ? 'Geracao cancelada pelo usuario' : String(error), canceled ? 'ok' : 'warn');
+      const message = canceled
+        ? 'Geracao cancelada pelo usuario.'
+        : `Nao consegui responder com o modelo atual: ${formatError(error)}`;
+      setMessages((current) =>
+        current.map((item, index) =>
+          index === current.length - 1 && item.role === 'assistant' && item.content.trim() === ''
+            ? { ...item, content: message }
+            : item,
+        ),
+      );
+      addLog(message, canceled ? 'ok' : 'warn');
     } finally {
       generationController.current = null;
       setGenerationActive(false);
@@ -380,6 +404,75 @@ export function App() {
 
   function cancelGeneration() {
     generationController.current?.abort();
+  }
+
+  async function testSelectedModel() {
+    if (modelTestActive) {
+      return;
+    }
+
+    setModelTestActive(true);
+    const provider = createTextProvider({
+      kind: settings.providerKind,
+      modelId: settings.selectedModelId,
+      baseUrl:
+        settings.providerKind === 'ollama'
+          ? settings.ollamaBaseUrl
+          : settings.openaiCompatibleBaseUrl,
+      apiKey: secureApiKey,
+    });
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
+
+    try {
+      const response = await provider.sendMessage({
+        input: 'Responda apenas OK para confirmar que o modelo esta funcional.',
+        modelId: settings.selectedModelId,
+        signal: controller.signal,
+      });
+      addLog(`Modelo funcional: ${provider.name} respondeu "${response.slice(0, 60) || 'OK'}"`, 'ok');
+      addAudit('Model Tester', 'network', settings.selectedModelId, 'Teste concluido');
+    } catch (error) {
+      const canceled = error instanceof DOMException && error.name === 'AbortError';
+      addLog(
+        canceled
+          ? 'Teste do modelo excedeu 12 segundos'
+          : `Teste do modelo falhou: ${formatError(error)}`,
+        'warn',
+      );
+      addAudit('Model Tester', 'network', settings.selectedModelId, 'Teste falhou');
+    } finally {
+      window.clearTimeout(timeout);
+      setModelTestActive(false);
+    }
+  }
+
+  function startPanelResize(panel: 'sidebar' | 'ai', event: ReactPointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const startX = event.clientX;
+    const initialWidth = panel === 'sidebar' ? settings.sidebarWidth : settings.aiPanelWidth;
+
+    function onPointerMove(pointerEvent: PointerEvent) {
+      const delta = pointerEvent.clientX - startX;
+      const nextWidth = panel === 'sidebar' ? initialWidth + delta : initialWidth - delta;
+      const boundedWidth = clamp(nextWidth, panel === 'sidebar' ? 240 : 300, panel === 'sidebar' ? 520 : 620);
+
+      setSettings((current) => ({
+        ...current,
+        [panel === 'sidebar' ? 'sidebarWidth' : 'aiPanelWidth']: boundedWidth,
+      }));
+    }
+
+    function onPointerUp() {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      document.body.classList.remove('is-resizing-panel');
+    }
+
+    document.body.classList.add('is-resizing-panel');
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
   }
 
   async function openDiff(filePath: string) {
@@ -835,7 +928,7 @@ export function App() {
     <main
       className={`app-shell theme-${settings.theme}`}
       style={{
-        gridTemplateColumns: `52px minmax(240px, ${settings.sidebarWidth}px) minmax(480px, 1fr) minmax(300px, ${settings.aiPanelWidth}px)`,
+        gridTemplateColumns: `52px minmax(240px, ${settings.sidebarWidth}px) 4px minmax(480px, 1fr) 4px minmax(300px, ${settings.aiPanelWidth}px)`,
       }}
     >
       <aside className="activity-bar" aria-label="Navegacao principal">
@@ -1043,6 +1136,15 @@ export function App() {
                 ))}
               </select>
             </label>
+            <button
+              className="primary-button with-icon"
+              disabled={modelTestActive}
+              onClick={() => void testSelectedModel()}
+              type="button"
+            >
+              <Sparkles size={15} />
+              {modelTestActive ? 'Testando modelo...' : 'Testar modelo'}
+            </button>
             {settings.providerKind === 'ollama' && (
               <label>
                 Endpoint Ollama
@@ -1098,36 +1200,6 @@ export function App() {
                 <option value="dark">Escuro</option>
                 <option value="light">Claro</option>
               </select>
-            </label>
-            <label>
-              Largura do explorador
-              <input
-                max="420"
-                min="240"
-                onChange={(event) =>
-                  setSettings((current) => ({
-                    ...current,
-                    sidebarWidth: Number(event.target.value),
-                  }))
-                }
-                type="range"
-                value={settings.sidebarWidth}
-              />
-            </label>
-            <label>
-              Largura do painel de IA
-              <input
-                max="520"
-                min="300"
-                onChange={(event) =>
-                  setSettings((current) => ({
-                    ...current,
-                    aiPanelWidth: Number(event.target.value),
-                  }))
-                }
-                type="range"
-                value={settings.aiPanelWidth}
-              />
             </label>
             <label>
               Vault Obsidian
@@ -1253,6 +1325,13 @@ export function App() {
         )}
       </section>
 
+      <div
+        aria-label="Redimensionar menu lateral"
+        className="panel-resizer sidebar-resizer"
+        onPointerDown={(event) => startPanelResize('sidebar', event)}
+        role="separator"
+      />
+
       <section className="workbench" aria-label="Editor">
         <div className="top-bar">
           <div>
@@ -1344,9 +1423,16 @@ export function App() {
         </section>
       </section>
 
+      <div
+        aria-label="Redimensionar painel de IA"
+        className="panel-resizer ai-resizer"
+        onPointerDown={(event) => startPanelResize('ai', event)}
+        role="separator"
+      />
+
       <aside className="ai-panel" aria-label="Painel de IA">
         <header className="panel-header">IA</header>
-        <div className="chat-messages">
+        <div className="chat-messages" ref={chatMessagesRef}>
           {messages.length === 0 && (
             <div className="empty-state">Envie uma mensagem para testar o provider mockado.</div>
           )}
@@ -1671,6 +1757,10 @@ function formatError(error: unknown) {
   }
 
   return String(error);
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function loadEnabledPlugins(): string[] {
