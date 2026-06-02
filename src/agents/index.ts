@@ -7,7 +7,7 @@ export interface AgentDefinition {
   output: 'diff' | 'review' | 'docs' | 'context';
 }
 
-export const agentDefinitions: AgentDefinition[] = [
+const builtInAgentDefinitions: AgentDefinition[] = [
   {
     id: 'project-brain',
     name: 'Cerebro do Projeto',
@@ -41,3 +41,21 @@ export const agentDefinitions: AgentDefinition[] = [
     output: 'docs',
   },
 ];
+
+function createAgentRegistry() {
+  const definitions = new Map(builtInAgentDefinitions.map((a) => [a.id, a]));
+
+  return {
+    register(agent: AgentDefinition) {
+      definitions.set(agent.id, agent);
+    },
+    getAll(): AgentDefinition[] {
+      return Array.from(definitions.values());
+    },
+    get(id: string): AgentDefinition | undefined {
+      return definitions.get(id);
+    },
+  };
+}
+
+export const agentRegistry = createAgentRegistry();
