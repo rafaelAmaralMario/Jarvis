@@ -1,14 +1,22 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { MarkdownNote } from '../../infrastructure/native';
-import { validatePath, listMarkdownNotes, writeMarkdownNote } from '../../infrastructure/native';
 import { searchContext as searchContextHelper } from '../../shared/helpers';
 import type { MemoryEntry, ContextResult } from '../../shared/types';
+import { createContextService, type ContextService } from '../../application/services/context';
 
 export function useContextManager(
   workspacePath: string,
   addLog: (message: string, status?: 'ok' | 'warn') => void,
   addAudit: (actor: string, permission: string, target: string, result: string) => void,
 ) {
+  const serviceRef = useRef<ContextService | null>(null);
+  function getService() {
+    if (!serviceRef.current) {
+      serviceRef.current = createContextService(addLog, addAudit);
+    }
+    return serviceRef.current;
+  }
+
   const [notes, setNotes] = useState<MarkdownNote[]>([]);
   const [memoryEntries, setMemoryEntries] = useState<MemoryEntry[]>([]);
   const [memoryInput, setMemoryInput] = useState('');
@@ -16,21 +24,10 @@ export function useContextManager(
   const [contextResults, setContextResults] = useState<ContextResult[]>([]);
 
   async function loadObsidianNotes(activeVaultPath: string) {
-    if (!activeVaultPath.trim()) {
-      addLog('Informe o caminho do vault do Obsidian selecionado', 'warn');
-      return;
+    const markdownNotes = await getService().loadObsidianNotes(activeVaultPath);
+    if (markdownNotes) {
+      setNotes(markdownNotes);
     }
-
-    const exists = await validatePath(activeVaultPath);
-    if (!exists) {
-      addLog('Vault do Obsidian nao encontrado', 'warn');
-      return;
-    }
-
-    const markdownNotes = await listMarkdownNotes(activeVaultPath);
-    setNotes(markdownNotes);
-    addLog(`${markdownNotes.length} notas Markdown carregadas`, 'ok');
-    addAudit('Context Engine', 'read-workspace', activeVaultPath, 'Notas indexadas');
   }
 
   function addMemory() {
@@ -57,18 +54,9 @@ export function useContextManager(
       return;
     }
 
-    try {
-      const path = await writeMarkdownNote(
-        activeVaultPath,
-        `${contextVaultKind === 'general' ? 'Jarvis Geral' : 'Jarvis Projeto'} ${new Date().toISOString().slice(0, 10)}`,
-        memoryInput,
-      );
-      addLog(`Nota criada no Obsidian: ${path}`, 'ok');
-      addAudit('Obsidian Writer', 'write-workspace', path, 'Nota Markdown criada');
-      await loadObsidianNotes(activeVaultPath);
-    } catch (error) {
-      addLog(String(error), 'warn');
-    }
+    const title = `${contextVaultKind === 'general' ? 'Jarvis Geral' : 'Jarvis Projeto'} ${new Date().toISOString().slice(0, 10)}`;
+    await getService().writeMemoryToObsidian(activeVaultPath, memoryInput, title);
+    await loadObsidianNotes(activeVaultPath);
   }
 
   return {

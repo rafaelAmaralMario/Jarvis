@@ -60,15 +60,17 @@ Modulos de alto nivel devem depender de abstracoes, nao de implementacoes concre
 Exemplos:
 
 - Agentes dependem de contratos de ferramentas, nao de comandos Tauri diretamente.
-- A UI depende de servicos de aplicacao, nao de detalhes de filesystem.
+- A UI (hooks) depende de servicos de aplicacao, nao de detalhes de filesystem ou Tauri.
+Componentes de UI nunca dependem de servicos ou infrastructure — apenas de props.
 - O orquestrador de IA depende de providers registrados, nao de uma API especifica.
 
 ## Separacao de Camadas
 
-Camadas esperadas:
+Camadas atuais:
 
-- `ui`: componentes, telas, layout e estado visual.
-- `application`: casos de uso, orquestracao e regras do produto.
+- `ui/components/`: UI pura com props. Nunca chamam services ou infrastructure.
+- `ui/hooks/`: estado + efeitos colaterais. Chamam `application/services/*`.
+- `application/services/`: orquestracao. Chamam `infrastructure/native.ts`.
 - `domain`: entidades, contratos e tipos centrais.
 - `infrastructure`: Tauri, filesystem, Git, rede, armazenamento e APIs externas.
 - `plugins`: manifestos, registro e ciclo de vida de extensoes.
@@ -76,11 +78,62 @@ Camadas esperadas:
 
 Regras:
 
-- `ui` pode chamar `application`.
-- `application` pode depender de `domain`.
-- `application` deve depender de contratos para acessar `infrastructure`.
+- `ui/components/` → `ui/hooks/` (props)
+- `ui/hooks/` → `application/services/`
+- `application/services/` → `infrastructure/native.ts`
+- `application` depende de `domain` e contratos.
 - `domain` nao deve depender de UI, Tauri, banco, rede ou provider especifico.
 - `infrastructure` implementa contratos definidos nas camadas internas.
+
+## Padrao para Hooks Customizados
+
+Hooks seguem o padrao state-only + service delegation:
+
+```typescript
+// Hook declara estado + funcoes que delegam ao service
+export function useGit() {
+  const [gitFiles, setGitFiles] = useState<GitFile[]>([]);
+  const svcRef = useRef(createGitService());
+
+  const refresh = useCallback(async () => {
+    const result = await svcRef.current.getStatus();
+    setGitFiles(result);
+  }, []);
+
+  return { gitFiles, refresh };
+}
+```
+
+Regras:
+- Hook nao importa de `infrastructure/` diretamente.
+- Service e criado com `useRef` para lazy initialization.
+- Funcoes retornadas usam `useCallback` com dependencias minimas.
+- Hooks podem importar de `application/services/*` e `domain/*`.
+
+## Padrao para Application Services
+
+Services sao factory functions que retornam objeto de metodos:
+
+```typescript
+// application/services/git.ts
+export function createGitService() {
+  return {
+    async getStatus(): Promise<GitFile[]> {
+      return invoke<GitFile[]>('git_status');
+    },
+    async getDiff(file: string): Promise<string> {
+      return invoke<string>('git_diff', { file });
+    },
+  };
+}
+```
+
+Regras:
+- Service nao tem estado interno (stateless).
+- Toda dependencia externa e injetada por parametro ou importada de `infrastructure/`.
+- Metodos retornam `Promise`, nunca recebem callbacks.
+- Factory pode receber parametros de configuracao se necessario.
+- Services sao testaveis com `infrastructure/__mocks__/tauri.ts`.
 
 ## Padrao para Provedores de Modelo
 

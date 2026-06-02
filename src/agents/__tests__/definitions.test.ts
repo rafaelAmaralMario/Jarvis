@@ -1,12 +1,12 @@
-import { agentDefinitions, type AgentDefinition } from '../index';
+import { agentRegistry, type AgentDefinition } from '../index';
 
 describe('Agent Definitions', () => {
   it('has exactly 4 built-in agents', () => {
-    expect(agentDefinitions).toHaveLength(4);
+    expect(agentRegistry.getAll()).toHaveLength(4);
   });
 
   it('each agent has required fields', () => {
-    for (const agent of agentDefinitions) {
+    for (const agent of agentRegistry.getAll()) {
       expect(agent.id).toBeTruthy();
       expect(agent.name).toBeTruthy();
       expect(agent.goal).toBeTruthy();
@@ -17,19 +17,19 @@ describe('Agent Definitions', () => {
   });
 
   it('has unique agent ids', () => {
-    const ids = agentDefinitions.map((a) => a.id);
+    const ids = agentRegistry.getAll().map((a) => a.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('agent project-brain has read-workspace permission', () => {
-    const brain = agentDefinitions.find((a) => a.id === 'project-brain')!;
+    const brain = agentRegistry.get('project-brain')!;
     expect(brain.permissions).toContain('read-workspace');
     expect(brain.output).toBe('context');
     expect(brain.defaultModelCapability).toBe('text');
   });
 
   it('agent developer has read and write permissions', () => {
-    const dev = agentDefinitions.find((a) => a.id === 'developer')!;
+    const dev = agentRegistry.get('developer')!;
     expect(dev.permissions).toContain('read-workspace');
     expect(dev.permissions).toContain('write-workspace');
     expect(dev.output).toBe('diff');
@@ -37,7 +37,7 @@ describe('Agent Definitions', () => {
   });
 
   it('agent reviewer has read-workspace and git permissions', () => {
-    const reviewer = agentDefinitions.find((a) => a.id === 'reviewer')!;
+    const reviewer = agentRegistry.get('reviewer')!;
     expect(reviewer.permissions).toContain('read-workspace');
     expect(reviewer.permissions).toContain('git');
     expect(reviewer.output).toBe('review');
@@ -45,10 +45,22 @@ describe('Agent Definitions', () => {
   });
 
   it('agent documenter has read-workspace permission', () => {
-    const doc = agentDefinitions.find((a) => a.id === 'documenter')!;
+    const doc = agentRegistry.get('documenter')!;
     expect(doc.permissions).toContain('read-workspace');
     expect(doc.permissions).toHaveLength(1);
     expect(doc.output).toBe('docs');
     expect(doc.defaultModelCapability).toBe('text');
+  });
+
+  it('allows registering new agents', () => {
+    agentRegistry.register({
+      id: 'tester',
+      name: 'Tester',
+      goal: 'Write tests for code changes.',
+      defaultModelCapability: 'code',
+      permissions: ['read-workspace', 'git'],
+      output: 'review',
+    });
+    expect(agentRegistry.get('tester')?.name).toBe('Tester');
   });
 });

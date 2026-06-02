@@ -1,5 +1,3 @@
-import type { WorkspaceEntry } from '../infrastructure/native';
-
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -40,12 +38,6 @@ export type ModelHealth = 'unknown' | 'ok' | 'fail';
 
 export type PermissionId = 'read-workspace' | 'write-workspace' | 'git' | 'network' | 'secrets';
 
-export type AgentFormState = {
-  name: string;
-  intent: string;
-  permissions: string[];
-};
-
 export interface EditorTab {
   path: string;
   name: string;
@@ -53,10 +45,6 @@ export interface EditorTab {
   savedContent: string;
   language: string;
 }
-
-export type ActivityView = 'files' | 'git' | 'search' | 'settings' | 'plugins' | 'context' | 'agents' | 'help';
-
-export type BottomView = 'terminal' | 'logs' | 'diff' | 'proposal' | 'audit';
 
 export interface SettingsState {
   selectedModelId: string;
@@ -73,12 +61,3 @@ export interface SettingsState {
   aiPanelWidth: number;
   permissions: Record<PermissionId, boolean>;
 }
-
-export type ModalState =
-  | { type: 'create-file'; title: string }
-  | { type: 'create-folder'; title: string }
-  | { type: 'rename'; title: string; entry: WorkspaceEntry }
-  | { type: 'move'; title: string; entry: WorkspaceEntry }
-  | { type: 'delete'; title: string; entry: WorkspaceEntry }
-  | { type: 'switch-workspace'; title: string }
-  | null;

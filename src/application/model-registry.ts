@@ -1,6 +1,6 @@
 import type { AiModel } from '../domain';
 
-export const models: AiModel[] = [
+const builtInModels: AiModel[] = [
   {
     id: 'mock-text',
     providerId: 'mock',
@@ -52,4 +52,37 @@ export const models: AiModel[] = [
   },
 ];
 
-export const defaultModelId = 'mock-text';
+function createModelRegistry(defaultModelId: string) {
+  const models = new Map(builtInModels.map((model) => [model.id, model]));
+  let defaultId = defaultModelId;
+
+  return {
+    register(model: AiModel) {
+      models.set(model.id, model);
+    },
+    getAll(): AiModel[] {
+      return Array.from(models.values());
+    },
+    get(id: string): AiModel | undefined {
+      return models.get(id);
+    },
+    getDefault(): AiModel | undefined {
+      return models.get(defaultId);
+    },
+    get defaultId(): string {
+      return defaultId;
+    },
+    setDefault(id: string) {
+      defaultId = id;
+    },
+    get byProvider() {
+      return {
+        forProvider(providerId: string): AiModel[] {
+          return Array.from(models.values()).filter((m) => m.providerId === providerId);
+        },
+      };
+    },
+  };
+}
+
+export const modelRegistry = createModelRegistry('mock-text');

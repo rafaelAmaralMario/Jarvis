@@ -1,31 +1,63 @@
-import type { WorkspaceEntry } from '../infrastructure/native';
-import type { MarkdownNote } from '../infrastructure/native';
+import type { WorkspaceEntry } from '../infrastructure/workspace';
+import type { MarkdownNote } from '../infrastructure/note';
 import type { PluginManifest } from '../plugins';
 import type { AiModel } from '../domain';
 import type { PermissionId, EditorTab, ContextResult, MemoryEntry } from './types';
 import { tokenize } from './utils';
 
-export function verifyPlugin(
+type PluginCheck = (
   plugin: PluginManifest,
-  permissions: Record<PermissionId, boolean>,
-): { allowed: boolean; reason: string } {
-  if (plugin.valid === false) {
-    return { allowed: false, reason: `Plugin invalido: ${plugin.name}` };
-  }
-  if (plugin.permissions.includes('commands.execute')) {
-    return { allowed: false, reason: 'Plugins ainda nao podem executar comandos locais.' };
-  }
-  if (plugin.permissions.includes('secrets.read') && !permissions.secrets) {
-    return { allowed: false, reason: 'Permissao de secrets nao autorizada neste workspace.' };
-  }
-  if (plugin.permissions.includes('network.request') && !permissions.network) {
-    return { allowed: false, reason: 'Permissao de rede nao autorizada neste workspace.' };
-  }
-  if (plugin.permissions.includes('git.write') && !permissions.git) {
-    return { allowed: false, reason: 'Permissao Git nao autorizada neste workspace.' };
-  }
-  return { allowed: true, reason: 'Plugin verificado.' };
+  permissions: Record<string, boolean>,
+) => { allowed: boolean; reason: string } | null;
+
+function createPluginVerifier() {
+  const checks: PluginCheck[] = [
+    (plugin) =>
+      plugin.valid === false
+        ? { allowed: false, reason: `Plugin invalido: ${plugin.name}` }
+        : null,
+    (plugin) =>
+      plugin.permissions.includes('commands.execute')
+        ? { allowed: false, reason: 'Plugins ainda nao podem executar comandos locais.' }
+        : null,
+  ];
+
+  const permissionChecks: Record<string, string> = {
+    'secrets.read': 'Permissao de secrets nao autorizada neste workspace.',
+    'network.request': 'Permissao de rede nao autorizada neste workspace.',
+    'git.write': 'Permissao Git nao autorizada neste workspace.',
+  };
+
+  return {
+    registerCheck(check: PluginCheck) {
+      checks.push(check);
+    },
+    registerPermissionCheck(permission: string, reason: string) {
+      permissionChecks[permission] = reason;
+    },
+    verify(
+      plugin: PluginManifest,
+      permissions: Record<string, boolean>,
+    ): { allowed: boolean; reason: string } {
+      for (const check of checks) {
+        const result = check(plugin, permissions);
+        if (result) return result;
+      }
+
+      for (const [permission, reason] of Object.entries(permissionChecks)) {
+        if (plugin.permissions.includes(permission) && !permissions[permission]) {
+          return { allowed: false, reason };
+        }
+      }
+
+      return { allowed: true, reason: 'Plugin verificado.' };
+    },
+  };
 }
+
+const pluginVerifier = createPluginVerifier();
+export const verifyPlugin = pluginVerifier.verify.bind(pluginVerifier);
+export const pluginVerifierApi = pluginVerifier;
 
 export function mergeModelRegistry(baseModels: AiModel[], ollamaModels: string[]): AiModel[] {
   const knownIds = new Set(baseModels.map((model) => model.id));

@@ -25,15 +25,24 @@ Definir a estrutura inicial do repositorio para suportar uma IDE Tauri com front
 ```text
 src/
 ├── application/
+│   └── services/       # Application services (SRP + DIP)
 ├── domain/
 ├── infrastructure/
 ├── ui/
+│   ├── hooks/          # Custom hooks de estado (13 hooks)
+│   ├── components/     # Componentes React (17 componentes)
+│   ├── App.tsx         # Componente principal (~750 linhas)
+│   ├── styles.css
+│   ├── constants.tsx
+│   └── TreeEntry.tsx
 ├── agents/
 ├── plugins/
 ├── shared/
 ├── main.tsx
 └── vite-env.d.ts
 ```
+
+A arquitetura de dependências segue: `ui/components/ → ui/hooks/ → application/services/ → infrastructure/native.ts`
 
 ### `src/domain`
 
@@ -53,14 +62,13 @@ Nao deve depender de React, Tauri, filesystem, Git ou APIs externas.
 
 Contem casos de uso e orquestracao.
 
-Pode conter:
-
-- Servicos de aplicacao.
-- Casos de uso de workspace.
-- Casos de uso de modelos.
-- Coordenacao entre UI e contratos.
+Contém atualmente:
+- **`services/`** — 6 services (workspace, git, settings, editor, plugins, context) que orquestram chamadas a `infrastructure/native.ts`
+- `app-metadata.ts` — metadados da aplicação
+- `model-registry.ts` — registro de modelos de IA
 
 Deve depender de `domain` e de contratos, nao de implementacoes concretas.
+Services usam factory pattern com `useRef` para lazy initialization.
 
 ### `src/infrastructure`
 
@@ -78,9 +86,16 @@ Implementa contratos definidos em `domain`.
 
 ### `src/ui`
 
-Contem telas, componentes e estilos.
+Contem telas, componentes, hooks e estilos.
 
-Pode chamar `application`, mas nao deve executar efeitos colaterais sensiveis diretamente.
+Organização interna:
+- **`hooks/`** — estado e efeitos colaterais por domínio. Chamam `application/services/*`.
+- **`components/`** — UI pura com props. Não chamam services nem infrastructure.
+- **`App.tsx`** — composição: hooks para estado, componentes para renderizar.
+- **`constants.tsx`** — dados estáticos (activityItems, commands, sidebarTitle, etc).
+- **`TreeEntry.tsx`** — componente de árvore do explorador de arquivos.
+
+Não deve executar efeitos colaterais sensiveis diretamente.
 
 ### `src/agents`
 

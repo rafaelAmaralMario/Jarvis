@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import type { ChatMessage } from '../../shared/types';
-import type { ProviderKind, AiModel } from '../../domain';
-import { createTextProvider } from '../../infrastructure/model-providers';
-import { formatError } from '../../shared/utils';
+import type { ProviderKind } from '../../domain';
+import { createChatService } from '../../application/services/chat';
+import type { ChatServiceConfig } from '../../application/services/chat';
 
 export function useChat(
   settings: { providerKind: ProviderKind; selectedModelId: string; openaiCompatibleBaseUrl: string; ollamaBaseUrl: string },
@@ -13,19 +13,27 @@ export function useChat(
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [generationActive, setGenerationActive] = useState(false);
   const [chatHydratedWorkspace, setChatHydratedWorkspace] = useState('');
-  const generationController = useRef<AbortController | null>(null);
+  const serviceRef = useRef<ReturnType<typeof createChatService> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
 
-  function createCurrentTextProvider() {
-    return createTextProvider({
-      kind: settings.providerKind,
-      modelId: settings.selectedModelId,
-      baseUrl:
+  function getService() {
+    if (!serviceRef.current) {
+      const baseUrl =
         settings.providerKind === 'ollama'
           ? settings.ollamaBaseUrl
-          : settings.openaiCompatibleBaseUrl,
-      apiKey: secureApiKey,
-    });
+          : settings.openaiCompatibleBaseUrl;
+
+      const config: ChatServiceConfig = {
+        providerKind: settings.providerKind,
+        selectedModelId: settings.selectedModelId,
+        baseUrl,
+        apiKey: secureApiKey,
+      };
+
+      serviceRef.current = createChatService(config);
+    }
+    return serviceRef.current;
   }
 
   async function sendMessage(input: string) {
@@ -39,48 +47,45 @@ export function useChat(
     ]);
 
     const controller = new AbortController();
-    generationController.current = controller;
+    abortRef.current = controller;
     setGenerationActive(true);
 
-    const provider = createCurrentTextProvider();
+    const service = getService();
 
-    try {
-      await provider.sendMessage({
-        input,
-        modelId: settings.selectedModelId,
-        signal: controller.signal,
-        onToken(token) {
-          setMessages((current) =>
-            current.map((message, index) =>
-              index === current.length - 1
-                ? { ...message, content: `${message.content}${token}` }
-                : message,
-            ),
-          );
-        },
-      });
-      addLog(`Chat respondido por ${provider.name}`, 'ok');
-    } catch (error) {
-      const canceled = error instanceof DOMException && error.name === 'AbortError';
-      const message = canceled
-        ? 'Geracao cancelada pelo usuario.'
-        : `Nao consegui responder com o modelo atual: ${formatError(error)}`;
+    const { canceled } = await service.sendMessage(
+      input,
+      settings.selectedModelId,
+      controller.signal,
+      (token) => {
+        setMessages((current) =>
+          current.map((message, index) =>
+            index === current.length - 1
+              ? { ...message, content: `${message.content}${token}` }
+              : message,
+          ),
+        );
+      },
+    );
+
+    abortRef.current = null;
+    setGenerationActive(false);
+
+    if (canceled) {
       setMessages((current) =>
         current.map((item, index) =>
           index === current.length - 1 && item.role === 'assistant' && item.content.trim() === ''
-            ? { ...item, content: message }
+            ? { ...item, content: 'Geracao cancelada pelo usuario.' }
             : item,
         ),
       );
-      addLog(message, canceled ? 'ok' : 'warn');
-    } finally {
-      generationController.current = null;
-      setGenerationActive(false);
+      addLog('Geracao cancelada pelo usuario.', 'ok');
+    } else {
+      addLog(`Chat respondido por ${service.providerName}`, 'ok');
     }
   }
 
   function cancelGeneration() {
-    generationController.current?.abort();
+    abortRef.current?.abort();
   }
 
   return {
@@ -88,9 +93,7 @@ export function useChat(
     messages, setMessages,
     generationActive,
     chatHydratedWorkspace, setChatHydratedWorkspace,
-    generationController,
     chatMessagesRef,
-    createCurrentTextProvider,
     sendMessage,
     cancelGeneration,
   };

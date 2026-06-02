@@ -2,7 +2,9 @@
 
 ## Arquitetura da UI
 
-- **Componente principal:** `src/ui/App.tsx` (~2584 linhas) — aplicação single-file React
+- **Componente principal:** `src/ui/App.tsx` (~750 linhas) — composição de hooks + componentes
+- **Hooks customizados:** `src/ui/hooks/` (13 hooks de estado)
+- **Componentes React:** `src/ui/components/` (17 componentes de UI)
 - **Estilos:** `src/ui/styles.css` (~1197 linhas) — tema dark/light, scrollbars, animações
 
 ## Estrutura do Layout
@@ -22,6 +24,48 @@
 │ y  ├────────────────────────┴───────────────────┤
 │    │  Bottom Panel (Logs/Diff/Proposal/Audit)   │
 └────┴────────────────────────────────────────────┘
+```
+
+## Estrutura de Componentes
+
+```
+src/ui/
+├── App.tsx              # Componente principal (~750 linhas)
+├── styles.css           # Estilos globais
+├── constants.tsx        # Constantes de UI (activityItems, sidebarTitle, commands, etc.)
+├── TreeEntry.tsx        # Componente de entrada de árvore (explorador de arquivos)
+├── hooks/               # 13 hooks customizados de estado
+│   ├── useWorkspace.ts  # Estado do workspace (path, files, search)
+│   ├── useGit.ts        # Estado Git (status, branches, diff)
+│   ├── useEditor.ts     # Estado do editor (tabs, activeTab, dirty)
+│   ├── useChat.ts       # Estado do chat (mensagens, input, geração)
+│   ├── useSettings.ts   # Estado das configurações
+│   ├── usePlugins.ts    # Estado dos plugins (enable/disable)
+│   ├── useContextManager.ts  # Estado de contexto (memória, notas)
+│   ├── useAgents.ts     # Estado dos agentes (custom, form)
+│   ├── useModals.ts     # Estado de modais
+│   ├── useAudit.ts      # Estado de auditoria
+│   ├── usePalette.ts    # Estado da paleta de comandos
+│   ├── useLogs.ts       # Estado de logs
+│   └── usePanelResize.ts # Estado de redimensionamento
+├── components/          # 17 componentes React
+│   ├── ActivityBar.tsx
+│   ├── FilesPanel.tsx
+│   ├── SearchPanel.tsx
+│   ├── GitPanel.tsx
+│   ├── SettingsPanel.tsx
+│   ├── PluginsPanel.tsx
+│   ├── ContextPanel.tsx
+│   ├── AgentsPanel.tsx
+│   ├── HelpPanel.tsx
+│   ├── EditorPanel.tsx
+│   ├── BottomPanel.tsx
+│   ├── LogsView.tsx
+│   ├── ProposalView.tsx
+│   ├── AuditView.tsx
+│   ├── ChatPanel.tsx
+│   ├── CommandPalette.tsx
+│   └── ModalDialog.tsx
 ```
 
 ## Activity Bar (views)
@@ -116,6 +160,5 @@
 
 ## Pontos de Atenção
 
-- App.tsx muito grande (~2584 linhas) — candidato a refatoração em componentes menores
-- styles.css também extenso (~1197 linhas)
+- styles.css extenso (~1197 linhas) — candidato a modularização futura
 - Tema claro tem overrides completos sobre o escuro

@@ -1,5 +1,5 @@
 import { File, FilePlus2, Folder, FolderPlus, Pencil, Trash2 } from 'lucide-react';
-import type { WorkspaceEntry } from '../infrastructure/native';
+import type { WorkspaceEntry } from '../infrastructure/workspace';
 
 export function TreeEntry({
   entry,

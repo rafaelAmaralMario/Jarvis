@@ -16,15 +16,20 @@ O objetivo principal e permitir evolucao constante sem acoplar o core da IDE a u
 Responsavel por:
 
 - Telas, componentes e layout.
-- Estado visual.
+- Estado visual (hooks).
 - Interacoes do usuario.
 - Exibicao de diffs, logs, arquivos, agentes e configuracoes.
+
+Organizacao interna:
+- **`hooks/`** — estado + efeitos colaterais por domínio. Chamam `application/services/*`.
+- **`components/`** — UI pura com props. Sem dependências de infrastructure.
 
 Nao deve:
 
 - Executar comandos de sistema diretamente.
 - Decidir permissoes sensiveis.
 - Conhecer detalhes de provedores externos.
+- Importar de `infrastructure/` diretamente (feito via services).
 
 ### Application
 
@@ -35,13 +40,15 @@ Responsavel por:
 - Coordenacao entre UI, dominio e infraestrutura.
 - Validacao de regras de produto.
 
+Contém atualmente `services/` com 6 services (workspace, git, settings, editor, plugins, context).
+Cada service é uma factory function que retorna um objeto de métodos, usando `useRef` para lazy initialization nos hooks.
+
 Exemplos:
 
-- Abrir workspace.
-- Solicitar resposta de modelo.
-- Propor alteracao em arquivo.
-- Listar status Git.
-- Indexar fonte de contexto.
+- Abrir workspace (WorkspaceService).
+- Solicitar resposta de modelo (ChatService — ainda no hook).
+- Listar status Git (GitService).
+- Indexar fonte de contexto (ContextService).
 
 ### Domain
 
@@ -115,13 +122,19 @@ No MVP, plugins devem ser declarativos. Execucao de codigo local por plugins dev
 
 Frontend deve chamar comandos Tauri por uma camada de servicos, nunca diretamente de qualquer componente.
 
-Padrao esperado:
+Padrao atual:
 
 ```text
-UI Component -> Application Service -> Tauri Adapter -> Tauri Command -> Rust Service
+UI Component (props) -> Hook (state + effects) -> Application Service (orquestracao) -> native.ts (Tauri adapter) -> Tauri Command -> Rust Service
 ```
 
-Isso permite testar UI e regras de aplicacao sem depender do runtime Tauri.
+Camadas:
+- **`ui/components/`** — recebem props dos hooks, nunca chamam services ou infrastructure.
+- **`ui/hooks/`** — estado e efeitos colaterais por domínio. Chamam `application/services/*` com `useRef` para lazy initialization.
+- **`application/services/`** — orquestram chamadas a `infrastructure/native.ts`. Implementam factory pattern (fn retorna objeto de métodos).
+- **`infrastructure/native.ts`** — adaptador Tauri puro (invoke).
+
+Isso permite testar UI, hooks e regras de aplicacao sem depender do runtime Tauri.
 
 ## Contratos Iniciais
 

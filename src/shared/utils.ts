@@ -31,19 +31,36 @@ export function directoryPath(path: string) {
   return index > 0 ? path.slice(0, index) : path;
 }
 
-export function languageFromPath(path: string) {
-  const extension = path.split('.').pop()?.toLowerCase();
-  const languageByExtension: Record<string, string> = {
-    css: 'css',
-    html: 'html',
-    js: 'javascript',
-    json: 'json',
-    md: 'markdown',
-    rs: 'rust',
-    ts: 'typescript',
-    tsx: 'typescript',
+function createLanguageRegistry() {
+  const extensionToLanguage = new Map<string, string>([
+    ['css', 'css'],
+    ['html', 'html'],
+    ['js', 'javascript'],
+    ['json', 'json'],
+    ['md', 'markdown'],
+    ['rs', 'rust'],
+    ['ts', 'typescript'],
+    ['tsx', 'typescript'],
+  ]);
+
+  return {
+    register(extension: string, language: string) {
+      extensionToLanguage.set(extension, language);
+    },
+    getAll(): Record<string, string> {
+      return Object.fromEntries(extensionToLanguage);
+    },
+    detect(path: string): string {
+      const extension = path.split('.').pop()?.toLowerCase();
+      return extension ? (extensionToLanguage.get(extension) ?? 'plaintext') : 'plaintext';
+    },
   };
-  return extension ? (languageByExtension[extension] ?? 'plaintext') : 'plaintext';
+}
+
+export const languageRegistry = createLanguageRegistry();
+
+export function languageFromPath(path: string) {
+  return languageRegistry.detect(path);
 }
 
 export function tokenize(value: string) {

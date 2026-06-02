@@ -1,5 +1,4 @@
 import type { SettingsState } from './types';
-import type { AgentDefinition } from '../agents';
 
 const settingsKey = 'jarvis.settings.v1';
 
@@ -24,38 +23,6 @@ export function loadSettings(defaultSettings: SettingsState): SettingsState {
 
 export function saveSettings(settings: SettingsState): void {
   localStorage.setItem(settingsKey, JSON.stringify(settings));
-}
-
-export function loadEnabledPlugins(): string[] {
-  const stored = localStorage.getItem('jarvis.plugins.enabled');
-  if (!stored) {
-    return ['jarvis.mock-provider', 'jarvis.git', 'jarvis.obsidian'];
-  }
-  try {
-    return JSON.parse(stored);
-  } catch {
-    return [];
-  }
-}
-
-export function saveEnabledPlugins(plugins: string[]): void {
-  localStorage.setItem('jarvis.plugins.enabled', JSON.stringify(plugins));
-}
-
-export function loadCustomAgents(): AgentDefinition[] {
-  const stored = localStorage.getItem('jarvis.agents.custom');
-  if (!stored) {
-    return [];
-  }
-  try {
-    return JSON.parse(stored);
-  } catch {
-    return [];
-  }
-}
-
-export function saveCustomAgents(agents: AgentDefinition[]): void {
-  localStorage.setItem('jarvis.agents.custom', JSON.stringify(agents));
 }
 
 import type { ChatMessage, AuditEvent, MemoryEntry } from './types';

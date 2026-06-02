@@ -1,14 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import type { LocalPluginManifest } from '../../infrastructure/native';
-import { listLocalPluginManifests } from '../../infrastructure/native';
 import type { PluginManifest } from '../../plugins';
-import { verifyPlugin } from '../../shared/helpers';
-import type { PermissionId, SettingsState } from '../../shared/types';
+import type { SettingsState } from '../../shared/types';
+import { createPluginService, type PluginService } from '../../application/services/plugins';
 
 export function usePlugins(
   addLog: (message: string, status?: 'ok' | 'warn') => void,
   addAudit: (actor: string, permission: string, target: string, result: string) => void,
 ) {
+  const serviceRef = useRef<PluginService | null>(null);
+  function getService() {
+    if (!serviceRef.current) {
+      serviceRef.current = createPluginService(addLog, addAudit);
+    }
+    return serviceRef.current;
+  }
+
   const [enabledPlugins, setEnabledPlugins] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem('jarvis-enabled-plugins');
@@ -27,10 +34,7 @@ export function usePlugins(
     plugin: PluginManifest,
     permissions: SettingsState['permissions'],
   ) {
-    const verification = verifyPlugin(plugin, permissions);
-    if (!verification.allowed) {
-      addLog(verification.reason, 'warn');
-      addAudit('Plugin Manager', plugin.permissions.join(', '), plugin.id, 'Ativacao bloqueada');
+    if (!getService().canTogglePlugin(plugin, permissions as Record<string, boolean>)) {
       return;
     }
 
@@ -43,11 +47,8 @@ export function usePlugins(
   }
 
   async function refreshLocalPlugins(path = '') {
-    try {
-      setLocalPlugins(await listLocalPluginManifests(path));
-    } catch {
-      setLocalPlugins([]);
-    }
+    const manifests = await getService().refreshLocalPlugins(path);
+    setLocalPlugins(manifests);
   }
 
   return {

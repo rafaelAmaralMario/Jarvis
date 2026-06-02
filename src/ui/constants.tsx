@@ -1,5 +1,5 @@
 import { Folder, Search, GitBranch, Settings, Boxes, Code2, Bot, CircleHelp, type LucideIcon } from 'lucide-react';
-import type { ActivityView, BottomView } from '../shared/types';
+import type { ActivityView, BottomView } from './types';
 
 export const activityItems: Array<{ id: ActivityView; label: string; Icon: LucideIcon }> = [
   { id: 'files', label: 'Arquivos', Icon: Folder },

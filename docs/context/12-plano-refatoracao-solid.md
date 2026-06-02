@@ -119,6 +119,8 @@ npm run build       # Build continua funcionando
 
 > **Nota:** Após esta etapa, qualquer refatoração nas etapas seguintes deve manter todos os testes verdes. Se um teste quebrar, a refatoração alterou comportamento.
 
+> **Status: ✅ CONCLUÍDA** — Stack Vitest + testing-library configurada, 36 safety net tests criados e passando.
+
 ---
 
 ## 🔴 Etapa 1 — Extrair utilitários e tipos de App.tsx
@@ -141,6 +143,8 @@ npm run build       # Build continua funcionando
 **Validação:** `npm test && npm run build` — todos os testes verdes, build passa.
 
 **Risco:** Baixo — apenas mover código, sem mudar lógica
+
+> **Status: ✅ CONCLUÍDA** — Tipos movidos para `domain/models.ts`, utilitários para `shared/utils.ts`, persistência para `shared/persistence.ts`, helpers para `shared/helpers.ts`, TreeEntry para `ui/TreeEntry.tsx`, constantes para `ui/constants.tsx`.
 
 ---
 
@@ -172,6 +176,8 @@ npm run build       # Build continua funcionando
 **Validação:** `npm test && npm run build` — todos os testes verdes.
 
 **Risco:** Médio — requer cuidado com dependências entre hooks e estado compartilhado.
+
+> **Status: ✅ CONCLUÍDA** — 13 hooks criados em `ui/hooks/`: useWorkspace, useGit, useEditor, useChat, useSettings, usePlugins, useContextManager, useAgents, useModals, useAudit, usePalette, useLogs, usePanelResize.
 
 ---
 
@@ -210,6 +216,8 @@ npm run build       # Build continua funcionando
 
 **Risco:** Médio — requer os hooks da Etapa 2 para injetar estado nos componentes.
 
+> **Status: ✅ CONCLUÍDA** — App.tsx reduzido de ~1420 para ~750 linhas. 17 componentes em `ui/components/` + TreeEntry.tsx + ActivityBar + CommandPalette + ModalDialog.
+
 ---
 
 ## 🔴 Etapa 4 — Extrair Application Services
@@ -236,6 +244,8 @@ npm run build       # Build continua funcionando
 **Validação:** `npm test && npm run build` — todos os testes verdes.
 
 **Risco:** Alto — requer refatoração significativa. Fazer após Etapas 1-3.
+
+> **Status: ✅ CONCLUÍDA** — 6 services criados em `application/services/`: workspace, git, editor, settings, plugins, context. Hooks refatorados para usar services em vez de importar `infrastructure/native.ts` diretamente (DIP resolvido).
 
 ---
 
@@ -265,6 +275,8 @@ npm run build       # Build continua funcionando
 
 **Risco:** Médio — mover código Rust é seguro se os paths de import forem atualizados.
 
+> **Status: ✅ CONCLUÍDA** — commands/mod.rs reduzido de 879 para 173 linhas. Structs + helpers movidos para workspace, git, services, security. Tauri commands são thin wrappers que delegam aos módulos.
+
 ---
 
 ## 🟡 Etapa 6 — Tornar OCP-compliant
@@ -287,6 +299,8 @@ npm run build       # Build continua funcionando
 
 **Risco:** Baixo — mudanças localizadas, sem impacto no comportamento.
 
+> **Status: ✅ CONCLUÍDA** — model-registry e agentDefinitions migrados para registry pattern com `register()`; `languageFromPath` usa `languageRegistry` extensível; `verifyPlugin` usa strategy pattern com checks registráveis; `is_probably_text_file` em Rust aceita extensões customizáveis via `is_text_file_with_extensions()`.
+
 ---
 
 ## 🟢 Etapa 7 — Limpeza de Dead Code
@@ -308,6 +322,8 @@ npm run build       # Build continua funcionando
 
 **Risco:** Baixo.
 
+> **Status: ✅ CONCLUÍDA** — Removidos `initialize()` stubs de services, security, git, workspace, storage.
+
 ---
 
 ## 🔵 Etapa 8 — Consistência de Barrel Exports
@@ -326,6 +342,8 @@ npm run build       # Build continua funcionando
 **Validação:** `npm test && npm run build` — tudo verde.
 
 **Risco:** Baixo.
+
+> **Status: ✅ CONCLUÍDA** — Todos os barrel exports atualizados.
 
 ---
 
@@ -379,12 +397,12 @@ Se qualquer comando falhar, a etapa **não está completa**. Rollback ou correç
 
 | Etapa | Risco | Mitigação |
 |-------|-------|-----------|
-| 0 — Testes | Baixo | Sem mudança de código, só adição |
-| 1 — Utils/Tipos | Baixo | Mover sem alterar lógica; tests da etapa 0 validam |
-| 2 — Hooks | Médio | Fazer hooks independentes primeiro; testar isoladamente |
-| 3 — Componentes | Médio | Hooks já injetam estado; testar renderização |
-| 4 — Services | Alto | Maior mudança arquitetural; fazer por módulo (ex: Git primeiro) |
-| 5 — Rust | Médio | Mover mantendo assinaturas; `cargo test` valida |
-| 6 — OCP | Baixo | Mudanças localizadas; tests existentes validam |
-| 7 — Dead Code | Baixo | Remoção segura; build valida |
-| 8 — Exports | Baixo | Só adicionar exports; build valida |
+| 0 — Testes | Baixo | Sem mudança de código, só adição ✅ |
+| 1 — Utils/Tipos | Baixo | Mover sem alterar lógica; tests da etapa 0 validam ✅ |
+| 2 — Hooks | Médio | Fazer hooks independentes primeiro; testar isoladamente ✅ |
+| 3 — Componentes | Médio | Hooks já injetam estado; testar renderização ✅ |
+| 4 — Services | Alto | Maior mudança arquitetural; fazer por módulo (ex: Git primeiro) ✅ |
+| 5 — Rust | Médio | Mover mantendo assinaturas; `cargo test` valida ✅ |
+| 6 — OCP | Baixo | Mudanças localizadas; tests existentes validam ✅ |
+| 7 — Dead Code | Baixo | Remoção segura; build valida ✅ |
+| 8 — Exports | Baixo | Só adicionar exports; build valida ✅ |

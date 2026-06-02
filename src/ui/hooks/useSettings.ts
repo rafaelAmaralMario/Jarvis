@@ -1,14 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import type { ModelHealth, PermissionId, SettingsState } from '../../shared/types';
 import type { ProviderKind } from '../../domain';
 import { loadSettings as loadPersistedSettings, saveSettings } from '../../shared/persistence';
-import { defaultModelId } from '../../application/model-registry';
-import { createTextProvider } from '../../infrastructure/model-providers';
-import { getDefaultOllamaModelsPath, listOllamaModels, loadSecureSettings, saveSecureSettings, startOllamaModel, testOllamaModel } from '../../infrastructure/native';
-import { formatError } from '../../shared/utils';
+import { modelRegistry } from '../../application/model-registry';
+import { createSettingsService, type SettingsService } from '../../application/services/settings';
 
 const defaultSettings: SettingsState = {
-  selectedModelId: defaultModelId,
+  selectedModelId: modelRegistry.defaultId,
   providerKind: 'mock',
   ollamaBaseUrl: 'http://127.0.0.1:11434',
   ollamaModelsPath: '',
@@ -35,6 +33,14 @@ export function useSettings(
   addLog: (message: string, status?: 'ok' | 'warn') => void,
   addAudit?: (actor: string, permission: string, target: string, result: string) => void,
 ) {
+  const serviceRef = useRef<SettingsService | null>(null);
+  function getService() {
+    if (!serviceRef.current) {
+      serviceRef.current = createSettingsService(addLog, addAudit);
+    }
+    return serviceRef.current;
+  }
+
   const [settings, setSettings] = useState<SettingsState>(() => loadPersistedSettings(defaultSettings));
   const [secureApiKey, setSecureApiKey] = useState('');
   const [modelHealth, setModelHealth] = useState<ModelHealth>('unknown');
@@ -51,21 +57,12 @@ export function useSettings(
   }, [settings.providerKind, settings.selectedModelId, settings.ollamaBaseUrl, settings.openaiCompatibleBaseUrl]);
 
   async function initializeSecureSettings() {
-    try {
-      const secureSettings = await loadSecureSettings();
-      setSecureApiKey(secureSettings.openaiCompatibleApiKey);
-    } catch (error) {
-      addLog(`Configuracao sensivel nao carregada: ${String(error)}`, 'warn');
-    }
+    const apiKey = await getService().loadSecureApiKey();
+    setSecureApiKey(apiKey);
   }
 
   async function persistSecureApiKey(value = secureApiKey) {
-    try {
-      await saveSecureSettings({ openaiCompatibleApiKey: value });
-      addLog('Chave sensivel salva no backend local', 'ok');
-    } catch (error) {
-      addLog(String(error), 'warn');
-    }
+    await getService().persistSecureApiKey(value);
   }
 
   function updateProviderKind(providerKind: ProviderKind, providerModels: Array<{ id: string; providerId: string }>) {
@@ -88,74 +85,21 @@ export function useSettings(
     if (modelTestActive) return;
 
     setModelTestActive(true);
-    if (settings.providerKind === 'ollama') {
-      try {
-        const model = settings.selectedModelId.replace('ollama:', '');
-        const response = await testOllamaModel(model);
-        setModelHealth('ok');
-        addLog(`Modelo funcional: Ollama respondeu "${response.slice(0, 60) || 'OK'}"`, 'ok');
-        addAudit?.('Model Tester', 'network', settings.selectedModelId, 'Teste Ollama concluido');
-      } catch (error) {
-        setModelHealth('fail');
-        addLog(`Teste Ollama falhou: ${formatError(error)}`, 'warn');
-        addAudit?.('Model Tester', 'network', settings.selectedModelId, 'Teste Ollama falhou');
-      } finally {
-        setModelTestActive(false);
-      }
-      return;
-    }
-
-    const provider = createTextProvider({
-      kind: settings.providerKind,
-      modelId: settings.selectedModelId,
-      baseUrl: settings.openaiCompatibleBaseUrl,
-      apiKey: secureApiKey,
-    });
-
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 12000);
-
-    try {
-      const response = await provider.sendMessage({
-        input: 'Responda apenas OK para confirmar que o modelo esta funcional.',
-        modelId: settings.selectedModelId,
-        signal: controller.signal,
-      });
-      setModelHealth('ok');
-      addLog(`Modelo funcional: ${provider.name} respondeu "${response.slice(0, 60) || 'OK'}"`, 'ok');
-      addAudit?.('Model Tester', 'network', settings.selectedModelId, 'Teste concluido');
-    } catch (error) {
-      const canceled = error instanceof DOMException && error.name === 'AbortError';
-      setModelHealth('fail');
-      addLog(
-        canceled
-          ? 'Teste do modelo excedeu 12 segundos'
-          : `Teste do modelo falhou: ${formatError(error)}`,
-        'warn',
-      );
-      addAudit?.('Model Tester', 'network', settings.selectedModelId, 'Teste falhou');
-    } finally {
-      window.clearTimeout(timeout);
-      setModelTestActive(false);
-    }
+    const health = await getService().testSelectedModel(settings, secureApiKey);
+    setModelHealth(health);
+    setModelTestActive(false);
   }
 
   async function startSelectedOllamaModel() {
-    try {
-      const model = settings.selectedModelId.replace('ollama:', '');
-      await startOllamaModel(model);
-      setSettings((current) => ({
-        ...current,
-        providerKind: 'ollama',
-      }));
-      addLog(`Comando iniciado: ollama run ${model}`, 'ok');
-    } catch (error) {
-      addLog(`Nao foi possivel iniciar o modelo selecionado: ${formatError(error)}`, 'warn');
-    }
+    await getService().startSelectedOllamaModel(settings.selectedModelId);
+    setSettings((current) => ({
+      ...current,
+      providerKind: 'ollama',
+    }));
   }
 
   async function initializeOllamaModelsPath() {
-    const path = settings.ollamaModelsPath || (await getDefaultOllamaModelsPath());
+    const path = await getService().initializeOllamaModelsPath(settings.ollamaModelsPath);
     if (!path) {
       return;
     }
@@ -165,27 +109,9 @@ export function useSettings(
   }
 
   async function refreshOllamaModels(path = settings.ollamaModelsPath, options?: { quiet?: boolean }) {
-    if (!path.trim()) {
-      setLocalOllamaModels([]);
-      setOllamaModelsError('Informe a pasta de modelos do Ollama.');
-      return;
-    }
-
-    try {
-      const detectedModels = await listOllamaModels(path);
-      setLocalOllamaModels(detectedModels);
-      setOllamaModelsError('');
-      if (!options?.quiet) {
-        addLog(`${detectedModels.length} modelos Ollama detectados`, 'ok');
-      }
-    } catch (error) {
-      setLocalOllamaModels([]);
-      const message = `Modelos Ollama nao carregados: ${formatError(error)}`;
-      setOllamaModelsError(message);
-      if (!options?.quiet) {
-        addLog(message, 'warn');
-      }
-    }
+    const result = await getService().refreshOllamaModels(path, options);
+    setLocalOllamaModels(result.models);
+    setOllamaModelsError(result.error);
   }
 
   return {

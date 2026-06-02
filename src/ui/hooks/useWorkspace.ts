@@ -1,20 +1,17 @@
-import { useState, useCallback, useEffect } from 'react';
-import type {
-  WorkspaceEntry,
-  GitFileStatus,
-  GitBranch as GitBranchInfo,
-  SearchResult,
-} from '../../infrastructure/native';
-import {
-  listWorkspaceEntries,
-  getGitStatus,
-  listGitBranches,
-  searchWorkspace,
-} from '../../infrastructure/native';
-import { formatError } from '../../shared/utils';
+import { useState, useCallback, useRef } from 'react';
+import type { WorkspaceEntry, SearchResult } from '../../infrastructure/native';
+import { createWorkspaceService, type WorkspaceService } from '../../application/services/workspace';
 import type { ActionLog } from '../../shared/types';
 
 export function useWorkspace(addLog: (message: string, status?: ActionLog['status']) => void) {
+  const serviceRef = useRef<WorkspaceService | null>(null);
+  function getService() {
+    if (!serviceRef.current) {
+      serviceRef.current = createWorkspaceService(addLog);
+    }
+    return serviceRef.current;
+  }
+
   const [workspacePath, setWorkspacePath] = useState('');
   const [files, setFiles] = useState<WorkspaceEntry[]>([]);
   const [workspaceLoadError, setWorkspaceLoadError] = useState('');
@@ -30,20 +27,15 @@ export function useWorkspace(addLog: (message: string, status?: ActionLog['statu
       return;
     }
 
+    setWorkspaceLoadError('');
     try {
-      setWorkspaceLoadError('');
-      const workspaceEntries = await listWorkspaceEntries(path);
-      setFiles(workspaceEntries);
-      if (!options?.quiet) {
-        addLog(`Workspace atualizado: ${path}`, 'ok');
-      }
-    } catch (error) {
+      const entries = await getService().refresh(path, options);
+      setFiles(entries);
+    } catch {
       setFiles([]);
-      const message = `Nao foi possivel listar arquivos: ${formatError(error)}`;
-      setWorkspaceLoadError(message);
-      addLog(message, 'warn');
+      setWorkspaceLoadError(`Nao foi possivel listar arquivos em: ${path}`);
     }
-  }, [workspacePath, addLog]);
+  }, [workspacePath]);
 
   async function initializeWorkspace(
     settingsWorkspacePath: string,
@@ -75,9 +67,8 @@ export function useWorkspace(addLog: (message: string, status?: ActionLog['statu
       setSearchResults([]);
       return;
     }
-    const results = await searchWorkspace(workspacePath, query);
+    const results = await getService().runSearch(workspacePath, query);
     setSearchResults(results);
-    addLog(`${results.length} resultados encontrados`, 'ok');
   }
 
   return {

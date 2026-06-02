@@ -7,8 +7,6 @@ pub struct SecureSettings {
     pub openai_compatible_api_key: String,
 }
 
-pub fn initialize() {}
-
 pub fn load_secure_settings() -> Result<SecureSettings, String> {
     let path = settings_path()?;
     if !path.exists() {

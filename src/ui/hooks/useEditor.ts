@@ -1,14 +1,22 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { EditorTab } from '../../shared/types';
 import { samePath } from '../../shared/utils';
 import type { WorkspaceEntry } from '../../infrastructure/native';
-import { writeTextFile } from '../../infrastructure/native';
+import { createEditorService, type EditorService } from '../../application/services/editor';
 
 export function useEditor(
   workspacePath: string,
   addLog: (message: string, status?: 'ok' | 'warn') => void,
   options?: { initialTabs?: EditorTab[]; defaultTabPath?: string },
 ) {
+  const serviceRef = useRef<EditorService | null>(null);
+  function getService() {
+    if (!serviceRef.current) {
+      serviceRef.current = createEditorService(addLog);
+    }
+    return serviceRef.current;
+  }
+
   const [tabs, setTabs] = useState<EditorTab[]>(options?.initialTabs ?? []);
   const [activeTabPath, setActiveTabPath] = useState(options?.initialTabs?.[0]?.path ?? options?.defaultTabPath ?? '');
 
@@ -76,20 +84,19 @@ export function useEditor(
     onSaved: () => Promise<void>,
     denyList: string[],
   ) {
-    if (denyList.includes(activeTab.path)) {
+    if (denyList.some((denied) => samePath(activeTab.path, denied))) {
       addLog('Abra um arquivo do workspace antes de salvar', 'warn');
       return;
     }
 
     try {
-      await writeTextFile(workspacePath, activeTab.path, activeTab.content);
+      await getService().saveFile(workspacePath, activeTab.path, activeTab.content, denyList);
       setTabs((current) =>
         current.map((tab) =>
           samePath(tab.path, activeTab.path) ? { ...tab, savedContent: tab.content } : tab,
         ),
       );
       await onSaved();
-      addLog(`Arquivo salvo: ${activeTab.name}`, 'ok');
     } catch (error) {
       addLog(String(error), 'warn');
     }
