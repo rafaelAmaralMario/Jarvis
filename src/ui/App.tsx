@@ -30,11 +30,16 @@ import { createTextProvider } from '../infrastructure/model-providers';
 import {
   createFile,
   createFolder,
+  commitGit,
+  checkoutGitBranch,
+  createGitBranch,
   deleteEntry,
   getDefaultWorkspacePath,
+  getGithubPrUrl,
   getGitDiff,
   getGitStatus,
   listMarkdownNotes,
+  listGitBranches,
   listWorkspaceEntries,
   loadSecureSettings,
   moveEntry,
@@ -43,8 +48,11 @@ import {
   saveSecureSettings,
   searchWorkspace,
   selectWorkspaceFolder,
+  stageGitFile,
+  unstageGitFile,
   validatePath,
   writeTextFile,
+  type GitBranch as GitBranchInfo,
   type GitFileStatus,
   type MarkdownNote,
   type SearchResult,
@@ -133,7 +141,11 @@ export function App() {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [selectedEntry, setSelectedEntry] = useState<WorkspaceEntry | null>(null);
   const [gitFiles, setGitFiles] = useState<GitFileStatus[]>([]);
+  const [gitBranches, setGitBranches] = useState<GitBranchInfo[]>([]);
   const [selectedGitFile, setSelectedGitFile] = useState<string>('');
+  const [commitMessage, setCommitMessage] = useState('');
+  const [branchName, setBranchName] = useState('');
+  const [prUrl, setPrUrl] = useState('');
   const [diff, setDiff] = useState('');
   const [tabs, setTabs] = useState<EditorTab[]>([welcomeTab]);
   const [activeTabPath, setActiveTabPath] = useState(welcomeTab.path);
@@ -241,8 +253,17 @@ export function App() {
     ]);
     setFiles(workspaceEntries);
     setGitFiles(status);
+    await refreshBranches(path);
     if (!options?.quiet) {
       addLog(`Workspace atualizado: ${path}`, 'ok');
+    }
+  }
+
+  async function refreshBranches(path = workspacePath) {
+    try {
+      setGitBranches(await listGitBranches(path));
+    } catch {
+      setGitBranches([]);
     }
   }
 
@@ -326,6 +347,82 @@ export function App() {
     const result = await getGitDiff(workspacePath, filePath);
     setDiff(result || 'Sem diff textual disponivel para este arquivo.');
     addLog(`Diff carregado: ${filePath}`, 'ok');
+  }
+
+  async function stageFile(filePath: string) {
+    try {
+      await stageGitFile(workspacePath, filePath);
+      await refreshWorkspace(workspacePath, { quiet: true });
+      addAudit('Git', 'git', filePath, 'Stage');
+      addLog(`Stage aplicado: ${filePath}`, 'ok');
+    } catch (error) {
+      addLog(String(error), 'warn');
+    }
+  }
+
+  async function unstageFile(filePath: string) {
+    try {
+      await unstageGitFile(workspacePath, filePath);
+      await refreshWorkspace(workspacePath, { quiet: true });
+      addAudit('Git', 'git', filePath, 'Unstage');
+      addLog(`Stage removido: ${filePath}`, 'ok');
+    } catch (error) {
+      addLog(String(error), 'warn');
+    }
+  }
+
+  async function createCommit() {
+    try {
+      await commitGit(workspacePath, commitMessage);
+      setCommitMessage('');
+      await refreshWorkspace(workspacePath, { quiet: true });
+      addAudit('Git', 'git', workspacePath, 'Commit criado');
+      addLog('Commit criado com sucesso', 'ok');
+    } catch (error) {
+      addLog(String(error), 'warn');
+    }
+  }
+
+  function suggestCommitMessage() {
+    const summary = gitFiles
+      .slice(0, 3)
+      .map((file) => shortPath(file.path))
+      .join(', ');
+    setCommitMessage(summary ? `chore: update ${summary}` : 'chore: update project');
+  }
+
+  async function createBranch() {
+    try {
+      await createGitBranch(workspacePath, branchName);
+      setBranchName('');
+      await refreshWorkspace(workspacePath, { quiet: true });
+      addAudit('Git', 'git', workspacePath, 'Branch criada');
+      addLog('Branch criada e ativada', 'ok');
+    } catch (error) {
+      addLog(String(error), 'warn');
+    }
+  }
+
+  async function checkoutBranch(branch: string) {
+    try {
+      await checkoutGitBranch(workspacePath, branch);
+      await refreshWorkspace(workspacePath, { quiet: true });
+      addAudit('Git', 'git', branch, 'Checkout de branch');
+      addLog(`Branch ativa: ${branch}`, 'ok');
+    } catch (error) {
+      addLog(String(error), 'warn');
+    }
+  }
+
+  async function createPullRequestUrl() {
+    try {
+      const url = await getGithubPrUrl(workspacePath);
+      setPrUrl(url);
+      addAudit('GitHub', 'network', workspacePath, 'URL de PR gerada');
+      addLog('URL de Pull Request gerada', 'ok');
+    } catch (error) {
+      addLog(String(error), 'warn');
+    }
   }
 
   async function chooseWorkspace() {
@@ -718,17 +815,75 @@ export function App() {
               <RefreshCw size={15} />
               Atualizar status
             </button>
+            <div className="git-tools">
+              <label>
+                Mensagem de commit
+                <input
+                  value={commitMessage}
+                  onChange={(event) => setCommitMessage(event.target.value)}
+                  placeholder="feat: ..."
+                />
+              </label>
+              <div className="split-actions">
+                <button className="text-button" onClick={suggestCommitMessage} type="button">
+                  Sugerir
+                </button>
+                <button className="primary-button" onClick={() => void createCommit()} type="button">
+                  Commit
+                </button>
+              </div>
+              <label>
+                Nova branch
+                <input
+                  value={branchName}
+                  onChange={(event) => setBranchName(event.target.value)}
+                  placeholder="feature/nome"
+                />
+              </label>
+              <button className="text-button" onClick={() => void createBranch()} type="button">
+                Criar branch
+              </button>
+              <button className="text-button" onClick={() => void createPullRequestUrl()} type="button">
+                Gerar URL de PR
+              </button>
+              {prUrl && (
+                <a className="external-link" href={prUrl} rel="noreferrer" target="_blank">
+                  Abrir Pull Request
+                </a>
+              )}
+            </div>
+            <div className="branch-list">
+              {gitBranches.map((branch) => (
+                <button
+                  className={branch.current ? 'branch-button active' : 'branch-button'}
+                  key={branch.name}
+                  onClick={() => void checkoutBranch(branch.name)}
+                  type="button"
+                >
+                  {branch.name}
+                </button>
+              ))}
+            </div>
             {gitFiles.length === 0 && <div className="empty-state">Nenhuma mudanca Git.</div>}
             {gitFiles.map((file) => (
-              <button
-                className="list-row button-row"
-                key={file.path}
-                onClick={() => void openDiff(file.path)}
-                type="button"
-              >
-                <span className="status-pill">{file.status || '??'}</span>
-                {file.path}
-              </button>
+              <div className="git-file-row" key={file.path}>
+                <button
+                  className="list-row button-row"
+                  onClick={() => void openDiff(file.path)}
+                  type="button"
+                >
+                  <span className="status-pill">{file.status || '??'}</span>
+                  {file.path}
+                </button>
+                <div className="split-actions">
+                  <button className="text-button" onClick={() => void stageFile(file.path)} type="button">
+                    Stage
+                  </button>
+                  <button className="text-button" onClick={() => void unstageFile(file.path)} type="button">
+                    Unstage
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         )}

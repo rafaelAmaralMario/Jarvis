@@ -13,6 +13,11 @@ export interface GitFileStatus {
   status: string;
 }
 
+export interface GitBranch {
+  name: string;
+  current: boolean;
+}
+
 export interface MarkdownNote {
   path: string;
   title: string;
@@ -126,6 +131,34 @@ export async function getGitStatus(workspacePath?: string): Promise<GitFileStatu
 
 export async function getGitDiff(workspacePath: string | undefined, filePath: string): Promise<string> {
   return invoke<string>('git_diff', { workspacePath, filePath });
+}
+
+export async function stageGitFile(workspacePath: string, filePath: string): Promise<void> {
+  return invoke<void>('git_stage', { workspacePath, filePath });
+}
+
+export async function unstageGitFile(workspacePath: string, filePath: string): Promise<void> {
+  return invoke<void>('git_unstage', { workspacePath, filePath });
+}
+
+export async function commitGit(workspacePath: string, message: string): Promise<void> {
+  return invoke<void>('git_commit', { workspacePath, message });
+}
+
+export async function listGitBranches(workspacePath: string): Promise<GitBranch[]> {
+  return invoke<GitBranch[]>('git_branches', { workspacePath });
+}
+
+export async function checkoutGitBranch(workspacePath: string, branch: string): Promise<void> {
+  return invoke<void>('git_checkout_branch', { workspacePath, branch });
+}
+
+export async function createGitBranch(workspacePath: string, branch: string): Promise<void> {
+  return invoke<void>('git_create_branch', { workspacePath, branch });
+}
+
+export async function getGithubPrUrl(workspacePath: string): Promise<string> {
+  return invoke<string>('github_pr_url', { workspacePath });
 }
 
 export async function validatePath(path: string): Promise<boolean> {

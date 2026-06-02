@@ -348,6 +348,70 @@ button {
   line-height: 1.4;
 }
 
+.git-tools,
+.git-file-row,
+.branch-list {
+  display: grid;
+  gap: 8px;
+}
+
+.git-tools {
+  padding: 10px;
+  border: 1px solid #2b3340;
+  border-radius: 6px;
+  background: #11161d;
+}
+
+.git-tools label {
+  display: grid;
+  gap: 6px;
+  color: #aeb7c5;
+  font-size: 12px;
+}
+
+.git-tools input {
+  width: 100%;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid #303846;
+  border-radius: 6px;
+  background: #101317;
+  color: #e7ebf2;
+}
+
+.split-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.branch-list {
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+}
+
+.branch-button,
+.external-link {
+  min-height: 28px;
+  padding: 5px 8px;
+  border: 1px solid #303846;
+  border-radius: 6px;
+  background: #101317;
+  color: #aeb7c5;
+  font-size: 12px;
+  text-align: center;
+  text-decoration: none;
+}
+
+.branch-button.active {
+  border-color: #75d3b5;
+  color: #75d3b5;
+}
+
+.git-file-row {
+  padding-bottom: 8px;
+  border-bottom: 1px solid #202630;
+}
+
 .plugin-card {
   padding: 10px;
   border: 1px solid #2b3340;
