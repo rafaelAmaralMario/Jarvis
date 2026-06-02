@@ -682,6 +682,55 @@ button {
   grid-column: 1 / -1;
 }
 
+.context-input {
+  display: grid;
+  gap: 6px;
+  color: #aeb7c5;
+  font-size: 12px;
+}
+
+.context-input input,
+.context-input textarea {
+  width: 100%;
+  border: 1px solid #303846;
+  border-radius: 6px;
+  background: #101317;
+  color: #e7ebf2;
+}
+
+.context-input input {
+  height: 32px;
+  padding: 0 9px;
+}
+
+.context-input textarea {
+  min-height: 72px;
+  padding: 9px;
+  resize: vertical;
+}
+
+.context-card {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid #2b3340;
+  border-radius: 6px;
+  background: #11161d;
+}
+
+.context-card strong {
+  color: #e7ebf2;
+  font-size: 12px;
+}
+
+.context-card span,
+.context-card p {
+  margin: 0;
+  color: #8f9bab;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .chat-messages {
   display: flex;
   flex-direction: column;

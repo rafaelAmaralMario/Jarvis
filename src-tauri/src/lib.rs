@@ -39,6 +39,7 @@ pub fn run() {
             commands::list_local_plugin_manifests,
             commands::validate_path,
             commands::list_markdown_notes,
+            commands::write_markdown_note,
             commands::load_secure_settings,
             commands::save_secure_settings,
         ])

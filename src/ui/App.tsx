@@ -52,6 +52,7 @@ import {
   stageGitFile,
   unstageGitFile,
   validatePath,
+  writeMarkdownNote,
   writeTextFile,
   type GitBranch as GitBranchInfo,
   type GitFileStatus,
@@ -75,6 +76,8 @@ type AuditEvent = {
   target: string;
   result: string;
 };
+type MemoryEntry = { id: string; content: string; createdAt: string };
+type ContextResult = { id: string; title: string; source: string; score: number; preview: string };
 type ModalState =
   | { type: 'create-file'; title: string }
   | { type: 'create-folder'; title: string }
@@ -153,6 +156,10 @@ export function App() {
   const [tabs, setTabs] = useState<EditorTab[]>([welcomeTab]);
   const [activeTabPath, setActiveTabPath] = useState(welcomeTab.path);
   const [notes, setNotes] = useState<MarkdownNote[]>([]);
+  const [memoryEntries, setMemoryEntries] = useState<MemoryEntry[]>([]);
+  const [memoryInput, setMemoryInput] = useState('');
+  const [contextQuery, setContextQuery] = useState('');
+  const [contextResults, setContextResults] = useState<ContextResult[]>([]);
   const [localPlugins, setLocalPlugins] = useState<LocalPluginManifest[]>([]);
   const [enabledPlugins, setEnabledPlugins] = useState<string[]>(loadEnabledPlugins);
   const [chatInput, setChatInput] = useState('');
@@ -201,6 +208,7 @@ export function App() {
 
     setMessages(loadWorkspaceMessages(workspacePath));
     setAuditEvents(loadWorkspaceAudit(workspacePath));
+    setMemoryEntries(loadWorkspaceMemory(workspacePath));
     void refreshLocalPlugins(workspacePath);
   }, [workspacePath]);
 
@@ -215,6 +223,12 @@ export function App() {
       localStorage.setItem(auditKey(workspacePath), JSON.stringify(auditEvents));
     }
   }, [auditEvents, workspacePath]);
+
+  useEffect(() => {
+    if (workspacePath) {
+      localStorage.setItem(memoryKey(workspacePath), JSON.stringify(memoryEntries));
+    }
+  }, [memoryEntries, workspacePath]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -637,6 +651,47 @@ export function App() {
     const markdownNotes = await listMarkdownNotes(settings.vaultPath);
     setNotes(markdownNotes);
     addLog(`${markdownNotes.length} notas Markdown carregadas`, 'ok');
+    addAudit('Context Engine', 'read-workspace', settings.vaultPath, 'Notas indexadas');
+  }
+
+  function addMemory() {
+    const content = memoryInput.trim();
+    if (!content) {
+      return;
+    }
+
+    setMemoryEntries((current) => [
+      { id: crypto.randomUUID(), content, createdAt: new Date().toLocaleString() },
+      ...current,
+    ]);
+    setMemoryInput('');
+    addAudit('Memory Engine', 'read-workspace', workspacePath, 'Memoria adicionada');
+  }
+
+  function runContextSearch() {
+    const results = searchContext(contextQuery, notes, memoryEntries);
+    setContextResults(results);
+    addLog(`${results.length} itens de contexto encontrados`, 'ok');
+  }
+
+  async function writeMemoryToObsidian() {
+    if (!settings.vaultPath.trim() || !memoryInput.trim()) {
+      addLog('Informe o vault e o conteudo da nota', 'warn');
+      return;
+    }
+
+    try {
+      const path = await writeMarkdownNote(
+        settings.vaultPath,
+        `Jarvis ${new Date().toISOString().slice(0, 10)}`,
+        memoryInput,
+      );
+      addLog(`Nota criada no Obsidian: ${path}`, 'ok');
+      addAudit('Obsidian Writer', 'write-workspace', path, 'Nota Markdown criada');
+      await loadObsidianNotes();
+    } catch (error) {
+      addLog(String(error), 'warn');
+    }
   }
 
   async function persistSecureApiKey(value = secureApiKey) {
@@ -1074,6 +1129,50 @@ export function App() {
         )}
         {activeView === 'context' && (
           <div className="panel-list">
+            <label className="context-input">
+              Buscar contexto
+              <input
+                value={contextQuery}
+                onChange={(event) => setContextQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') runContextSearch();
+                }}
+                placeholder="termo, decisao, arquivo..."
+              />
+            </label>
+            <button className="primary-button" onClick={runContextSearch} type="button">
+              Buscar memoria
+            </button>
+            <label className="context-input">
+              Nova memoria
+              <textarea
+                value={memoryInput}
+                onChange={(event) => setMemoryInput(event.target.value)}
+                placeholder="Registre uma decisao, regra ou contexto importante..."
+              />
+            </label>
+            <div className="split-actions">
+              <button className="text-button" onClick={addMemory} type="button">
+                Salvar local
+              </button>
+              <button className="text-button" onClick={() => void writeMemoryToObsidian()} type="button">
+                Enviar ao Obsidian
+              </button>
+            </div>
+            {contextResults.map((result) => (
+              <article className="context-card" key={result.id}>
+                <strong>{result.title}</strong>
+                <span>{result.source} | score {result.score}</span>
+                <p>{result.preview}</p>
+              </article>
+            ))}
+            {memoryEntries.map((entry) => (
+              <article className="context-card" key={entry.id}>
+                <strong>Memoria local</strong>
+                <span>{entry.createdAt}</span>
+                <p>{entry.content}</p>
+              </article>
+            ))}
             {notes.length === 0 && <div className="empty-state">Nenhuma nota carregada.</div>}
             {notes.map((note) => (
               <div className="list-row" key={note.path}>
@@ -1435,6 +1534,80 @@ function loadWorkspaceAudit(workspacePath: string): AuditEvent[] {
   } catch {
     return [];
   }
+}
+
+function memoryKey(workspacePath: string) {
+  return `jarvis.memory.${workspacePath}`;
+}
+
+function loadWorkspaceMemory(workspacePath: string): MemoryEntry[] {
+  const stored = localStorage.getItem(memoryKey(workspacePath));
+  if (!stored) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return [];
+  }
+}
+
+function searchContext(
+  query: string,
+  notes: MarkdownNote[],
+  memories: MemoryEntry[],
+): ContextResult[] {
+  const queryTokens = tokenize(query);
+  if (queryTokens.length === 0) {
+    return [];
+  }
+
+  const noteResults = notes.map((note) => scoreContextItem(
+    `note:${note.path}`,
+    note.title,
+    'Obsidian',
+    `${note.title} ${note.content}`,
+  ));
+  const memoryResults = memories.map((memory) => scoreContextItem(
+    `memory:${memory.id}`,
+    'Memoria local',
+    memory.createdAt,
+    memory.content,
+  ));
+
+  return [...noteResults, ...memoryResults]
+    .filter((result) => result.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 12);
+
+  function scoreContextItem(
+    id: string,
+    title: string,
+    source: string,
+    content: string,
+  ): ContextResult {
+    const contentTokens = tokenize(content);
+    const score = queryTokens.reduce(
+      (total, token) => total + contentTokens.filter((item) => item === token).length,
+      0,
+    );
+
+    return {
+      id,
+      title,
+      source,
+      score,
+      preview: content.slice(0, 180),
+    };
+  }
+}
+
+function tokenize(value: string) {
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 2);
 }
 
 function loadEnabledPlugins(): string[] {

@@ -27,6 +27,7 @@ pub struct GitFileStatus {
 pub struct MarkdownNote {
     path: String,
     title: String,
+    content: String,
 }
 
 #[derive(Serialize)]
@@ -404,6 +405,24 @@ pub fn list_markdown_notes(vault_path: String) -> Result<Vec<MarkdownNote>, Stri
 }
 
 #[tauri::command]
+pub fn write_markdown_note(
+    vault_path: String,
+    title: String,
+    content: String,
+) -> Result<String, String> {
+    let root = canonicalize_existing(&vault_path)?;
+    let file_name = sanitize_note_title(&title)?;
+    let target = root.join(format!("{file_name}.md"));
+    ensure_inside_workspace(&root, &target)?;
+    if target.exists() {
+        return Err("Note already exists".to_string());
+    }
+
+    fs::write(&target, content).map_err(|error| error.to_string())?;
+    Ok(target.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 pub fn load_secure_settings() -> Result<SecureSettings, String> {
     storage::load_secure_settings()
 }
@@ -434,7 +453,9 @@ fn collect_markdown_notes(path: &Path, notes: &mut Vec<MarkdownNote>) -> Result<
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string();
+            let content = fs::read_to_string(&entry_path).unwrap_or_default();
             notes.push(MarkdownNote {
+                content,
                 title,
                 path: entry_path.to_string_lossy().to_string(),
             });
@@ -703,4 +724,23 @@ fn validate_entry_name(name: &str) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn sanitize_note_title(title: &str) -> Result<String, String> {
+    let sanitized: String = title
+        .trim()
+        .chars()
+        .filter(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | ' ')
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join("-");
+
+    if sanitized.is_empty() {
+        return Err("Note title cannot be empty".to_string());
+    }
+
+    Ok(sanitized)
 }
