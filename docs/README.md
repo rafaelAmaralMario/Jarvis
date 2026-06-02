@@ -8,6 +8,7 @@ Esta pasta contem as definicoes do projeto antes e durante o desenvolvimento.
 - [Backlog de Issues](backlog-issues.md)
 - [MVP](mvp.md)
 - [Melhorias Futuras](melhorias-futuras.md)
+- [Roadmap para Versao Final](roadmap-versao-final.md)
 
 ## Arquitetura e Qualidade
 

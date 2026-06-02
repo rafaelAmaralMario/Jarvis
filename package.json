@@ -10,9 +10,11 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@monaco-editor/react": "^4.7.0",
+    "@monaco-editor/react": "4.7.0",
     "@tauri-apps/api": "2.11.0",
-    "monaco-editor": "^0.55.1",
+    "@tauri-apps/plugin-dialog": "2.7.1",
+    "lucide-react": "1.17.0",
+    "monaco-editor": "0.55.1",
     "react": "19.2.1",
     "react-dom": "19.2.1"
   },

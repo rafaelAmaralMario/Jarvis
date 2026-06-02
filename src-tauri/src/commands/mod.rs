@@ -25,6 +25,12 @@ pub struct MarkdownNote {
     title: String,
 }
 
+#[derive(Serialize)]
+pub struct FileContent {
+    path: String,
+    content: String,
+}
+
 pub fn register() {}
 
 #[tauri::command]
@@ -61,6 +67,93 @@ pub fn list_workspace_entries(path: Option<String>) -> Result<Vec<WorkspaceEntry
 
     result.sort_by(|left, right| left.kind.cmp(&right.kind).then(left.name.cmp(&right.name)));
     Ok(result)
+}
+
+#[tauri::command]
+pub fn read_text_file(workspace_path: String, file_path: String) -> Result<FileContent, String> {
+    let workspace = canonicalize_existing(&workspace_path)?;
+    let target = canonicalize_existing(&file_path)?;
+    ensure_inside_workspace(&workspace, &target)?;
+
+    if !target.is_file() {
+        return Err("Path is not a file".to_string());
+    }
+
+    let content = fs::read_to_string(&target).map_err(|error| error.to_string())?;
+    Ok(FileContent {
+        path: target.to_string_lossy().to_string(),
+        content,
+    })
+}
+
+#[tauri::command]
+pub fn write_text_file(
+    workspace_path: String,
+    file_path: String,
+    content: String,
+) -> Result<(), String> {
+    let workspace = canonicalize_existing(&workspace_path)?;
+    let target = canonicalize_existing(&file_path)?;
+    ensure_inside_workspace(&workspace, &target)?;
+
+    if !target.is_file() {
+        return Err("Path is not a file".to_string());
+    }
+
+    fs::write(target, content).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn create_file(workspace_path: String, parent_path: String, name: String) -> Result<(), String> {
+    let workspace = canonicalize_existing(&workspace_path)?;
+    let parent = canonicalize_existing(&parent_path)?;
+    ensure_inside_workspace(&workspace, &parent)?;
+    validate_entry_name(&name)?;
+
+    let target = parent.join(name);
+    ensure_inside_workspace(&workspace, &target)?;
+    if target.exists() {
+        return Err("File already exists".to_string());
+    }
+
+    fs::write(target, "").map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn create_folder(
+    workspace_path: String,
+    parent_path: String,
+    name: String,
+) -> Result<(), String> {
+    let workspace = canonicalize_existing(&workspace_path)?;
+    let parent = canonicalize_existing(&parent_path)?;
+    ensure_inside_workspace(&workspace, &parent)?;
+    validate_entry_name(&name)?;
+
+    let target = parent.join(name);
+    ensure_inside_workspace(&workspace, &target)?;
+    if target.exists() {
+        return Err("Folder already exists".to_string());
+    }
+
+    fs::create_dir(target).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn delete_entry(workspace_path: String, entry_path: String) -> Result<(), String> {
+    let workspace = canonicalize_existing(&workspace_path)?;
+    let target = canonicalize_existing(&entry_path)?;
+    ensure_inside_workspace(&workspace, &target)?;
+
+    if target == workspace {
+        return Err("Cannot remove the workspace root".to_string());
+    }
+
+    if target.is_dir() {
+        fs::remove_dir_all(target).map_err(|error| error.to_string())
+    } else {
+        fs::remove_file(target).map_err(|error| error.to_string())
+    }
 }
 
 #[tauri::command]
@@ -151,5 +244,32 @@ fn collect_markdown_notes(path: &Path, notes: &mut Vec<MarkdownNote>) -> Result<
     }
 
     notes.sort_by(|left, right| left.title.cmp(&right.title));
+    Ok(())
+}
+
+fn canonicalize_existing(path: &str) -> Result<PathBuf, String> {
+    PathBuf::from(path)
+        .canonicalize()
+        .map_err(|error| error.to_string())
+}
+
+fn ensure_inside_workspace(workspace: &Path, target: &Path) -> Result<(), String> {
+    if target.starts_with(workspace) {
+        Ok(())
+    } else {
+        Err("Path is outside the active workspace".to_string())
+    }
+}
+
+fn validate_entry_name(name: &str) -> Result<(), String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("Name cannot be empty".to_string());
+    }
+
+    if trimmed.contains('/') || trimmed.contains('\\') || trimmed == "." || trimmed == ".." {
+        return Err("Name must be a single file or folder name".to_string());
+    }
+
     Ok(())
 }

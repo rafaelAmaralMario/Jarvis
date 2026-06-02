@@ -47,6 +47,7 @@ Documentos de definicao antes do desenvolvimento:
 
 - [docs/arquitetura.md](docs/arquitetura.md)
 - [docs/estrutura-de-pastas.md](docs/estrutura-de-pastas.md)
+- [docs/roadmap-versao-final.md](docs/roadmap-versao-final.md)
 - [docs/interface-layout.md](docs/interface-layout.md)
 - [docs/seguranca-permissoes.md](docs/seguranca-permissoes.md)
 - [docs/plugins.md](docs/plugins.md)

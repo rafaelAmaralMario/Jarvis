@@ -15,9 +15,15 @@ pub fn run() {
     commands::register();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::default_workspace_path,
             commands::list_workspace_entries,
+            commands::read_text_file,
+            commands::write_text_file,
+            commands::create_file,
+            commands::create_folder,
+            commands::delete_entry,
             commands::git_status,
             commands::git_diff,
             commands::validate_path,

@@ -36,6 +36,29 @@ button {
   cursor: pointer;
 }
 
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(117, 211, 181, 0);
+  }
+
+  50% {
+    box-shadow: 0 0 18px rgba(117, 211, 181, 0.18);
+  }
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 52px minmax(240px, 300px) minmax(480px, 1fr) minmax(300px, 380px);
@@ -72,6 +95,11 @@ button {
   color: #aeb7c5;
   font-size: 12px;
   font-weight: 800;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    background 160ms ease;
 }
 
 .activity-logo {
@@ -81,6 +109,14 @@ button {
 .activity-button.active {
   border-color: #75d3b5;
   color: #75d3b5;
+  animation: pulse-soft 2.6s ease-in-out infinite;
+}
+
+.activity-button:hover,
+.icon-button:hover,
+.primary-button:hover,
+.text-button:hover {
+  transform: translateY(-1px);
 }
 
 .sidebar,
@@ -115,6 +151,39 @@ button {
   gap: 8px;
   padding: 12px;
   overflow: auto;
+  animation: panel-in 180ms ease both;
+}
+
+.toolbar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 0;
+  height: 32px;
+  border: 1px solid #303846;
+  border-radius: 6px;
+  background: #101317;
+  color: #aeb7c5;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    background 160ms ease;
+}
+
+.icon-button:hover {
+  border-color: #75d3b5;
+  color: #75d3b5;
+}
+
+.icon-button.danger:hover {
+  border-color: #e06c75;
+  color: #e06c75;
 }
 
 .workspace-path,
@@ -140,11 +209,20 @@ button {
   color: #c4ccd8;
   font-size: 13px;
   text-align: left;
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
 }
 
 .list-row:hover,
 .button-row:hover {
   background: #202630;
+}
+
+.button-row.selected {
+  background: #243042;
+  color: #f4f7fb;
 }
 
 .status-pill,
@@ -185,11 +263,19 @@ button {
 
 .primary-button,
 .text-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-height: 32px;
   border: 1px solid #3b4554;
   border-radius: 6px;
   background: #223044;
   color: #f4f7fb;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
 }
 
 .text-button {
@@ -197,11 +283,24 @@ button {
   color: #aeb7c5;
 }
 
+.with-icon {
+  gap: 8px;
+}
+
 .plugin-card {
   padding: 10px;
   border: 1px solid #2b3340;
   border-radius: 6px;
   background: #11161d;
+  animation: panel-in 180ms ease both;
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.plugin-card:hover {
+  border-color: #3d4a5c;
+  transform: translateY(-1px);
 }
 
 .plugin-card div {
@@ -255,6 +354,10 @@ button {
   background: #15191f;
 }
 
+.editor-tabs {
+  position: relative;
+}
+
 .tab,
 .bottom-tab {
   display: inline-flex;
@@ -266,6 +369,30 @@ button {
   background: transparent;
   color: #8f9bab;
   font-size: 12px;
+}
+
+.tab-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 1px solid #303846;
+  border-radius: 6px;
+  background: #101317;
+  color: #aeb7c5;
+  font-size: 12px;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.tab-action:hover {
+  border-color: #75d3b5;
+  color: #75d3b5;
+  transform: translateY(-1px);
 }
 
 .tab.active,
@@ -341,6 +468,7 @@ button {
   border: 1px solid #2b3340;
   border-radius: 6px;
   background: #11161d;
+  animation: panel-in 180ms ease both;
 }
 
 .chat-message.user {
@@ -373,4 +501,3 @@ button {
   resize: vertical;
   padding: 10px;
 }
-

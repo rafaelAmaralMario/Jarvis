@@ -1,16 +1,39 @@
 import { useEffect, useMemo, useState } from 'react';
 import Editor from '@monaco-editor/react';
+import {
+  Bot,
+  Boxes,
+  CheckCircle2,
+  Code2,
+  File,
+  FilePlus2,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  GitBranch,
+  RefreshCw,
+  Save,
+  Settings,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 
 import { appMetadata } from '../application';
 import { defaultModelId, models } from '../application/model-registry';
 import { mockTextProvider } from '../infrastructure/mock-provider';
 import {
+  createFile,
+  createFolder,
+  deleteEntry,
   getDefaultWorkspacePath,
   getGitDiff,
   getGitStatus,
   listMarkdownNotes,
   listWorkspaceEntries,
+  readTextFile,
+  selectWorkspaceFolder,
   validatePath,
+  writeTextFile,
   type GitFileStatus,
   type MarkdownNote,
   type WorkspaceEntry,
@@ -25,6 +48,7 @@ type ActionLog = { id: string; message: string; status: 'ok' | 'warn' };
 interface SettingsState {
   selectedModelId: string;
   vaultPath: string;
+  workspacePath: string;
   theme: 'dark' | 'light';
 }
 
@@ -33,6 +57,7 @@ const settingsKey = 'jarvis.settings.v1';
 const defaultSettings: SettingsState = {
   selectedModelId: defaultModelId,
   vaultPath: '',
+  workspacePath: '',
   theme: 'dark',
 };
 
@@ -55,9 +80,13 @@ export function App() {
   const [settings, setSettings] = useState<SettingsState>(loadSettings);
   const [workspacePath, setWorkspacePath] = useState('');
   const [files, setFiles] = useState<WorkspaceEntry[]>([]);
+  const [selectedEntry, setSelectedEntry] = useState<WorkspaceEntry | null>(null);
   const [gitFiles, setGitFiles] = useState<GitFileStatus[]>([]);
   const [selectedGitFile, setSelectedGitFile] = useState<string>('');
   const [diff, setDiff] = useState('');
+  const [activeFilePath, setActiveFilePath] = useState('welcome.ts');
+  const [activeFileContent, setActiveFileContent] = useState(sampleCode);
+  const [activeLanguage, setActiveLanguage] = useState('typescript');
   const [notes, setNotes] = useState<MarkdownNote[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -78,8 +107,9 @@ export function App() {
   }, []);
 
   async function initializeWorkspace() {
-    const path = await getDefaultWorkspacePath();
+    const path = settings.workspacePath || (await getDefaultWorkspacePath());
     setWorkspacePath(path);
+    setSettings((current) => ({ ...current, workspacePath: path }));
     await refreshWorkspace(path);
   }
 
@@ -90,7 +120,8 @@ export function App() {
     ]);
     setFiles(workspaceEntries);
     setGitFiles(status);
-    addLog('Workspace atualizado', 'ok');
+    setSelectedEntry(null);
+    addLog(`Workspace atualizado: ${path}`, 'ok');
   }
 
   function addLog(message: string, status: ActionLog['status'] = 'ok') {
@@ -121,6 +152,108 @@ export function App() {
     addLog(`Diff carregado: ${filePath}`, 'ok');
   }
 
+  async function chooseWorkspace() {
+    const selected = await selectWorkspaceFolder();
+    if (!selected) {
+      return;
+    }
+
+    setWorkspacePath(selected);
+    setSettings((current) => ({ ...current, workspacePath: selected }));
+    await refreshWorkspace(selected);
+  }
+
+  async function openWorkspaceFile(file: WorkspaceEntry) {
+    setSelectedEntry(file);
+    if (file.kind === 'directory') {
+      return;
+    }
+
+    try {
+      const result = await readTextFile(workspacePath, file.path);
+      setActiveFilePath(result.path);
+      setActiveFileContent(result.content);
+      setActiveLanguage(languageFromPath(result.path));
+      addLog(`Arquivo aberto: ${file.name}`, 'ok');
+    } catch (error) {
+      addLog(String(error), 'warn');
+    }
+  }
+
+  async function createWorkspaceFile() {
+    const name = window.prompt('Nome do novo arquivo');
+    if (!name) {
+      return;
+    }
+
+    try {
+      await createFile(workspacePath, parentForNewEntry(), name);
+      await refreshWorkspace();
+      addLog(`Arquivo criado: ${name}`, 'ok');
+    } catch (error) {
+      addLog(String(error), 'warn');
+    }
+  }
+
+  async function createWorkspaceFolder() {
+    const name = window.prompt('Nome da nova pasta');
+    if (!name) {
+      return;
+    }
+
+    try {
+      await createFolder(workspacePath, parentForNewEntry(), name);
+      await refreshWorkspace();
+      addLog(`Pasta criada: ${name}`, 'ok');
+    } catch (error) {
+      addLog(String(error), 'warn');
+    }
+  }
+
+  async function deleteSelectedEntry() {
+    if (!selectedEntry) {
+      addLog('Selecione um arquivo ou pasta para remover', 'warn');
+      return;
+    }
+
+    const confirmed = window.confirm(`Remover "${selectedEntry.name}"?`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteEntry(workspacePath, selectedEntry.path);
+      if (activeFilePath === selectedEntry.path) {
+        setActiveFilePath('welcome.ts');
+        setActiveFileContent(sampleCode);
+        setActiveLanguage('typescript');
+      }
+      await refreshWorkspace();
+      addLog(`Removido: ${selectedEntry.name}`, 'ok');
+    } catch (error) {
+      addLog(String(error), 'warn');
+    }
+  }
+
+  async function saveActiveFile() {
+    if (activeFilePath === 'welcome.ts') {
+      addLog('Abra um arquivo do workspace antes de salvar', 'warn');
+      return;
+    }
+
+    try {
+      await writeTextFile(workspacePath, activeFilePath, activeFileContent);
+      await refreshWorkspace();
+      addLog(`Arquivo salvo: ${shortPath(activeFilePath)}`, 'ok');
+    } catch (error) {
+      addLog(String(error), 'warn');
+    }
+  }
+
+  function parentForNewEntry() {
+    return selectedEntry?.kind === 'directory' ? selectedEntry.path : workspacePath;
+  }
+
   async function loadObsidianNotes() {
     if (!settings.vaultPath.trim()) {
       addLog('Informe o caminho do vault do Obsidian', 'warn');
@@ -146,7 +279,9 @@ export function App() {
   return (
     <main className={`app-shell theme-${settings.theme}`}>
       <aside className="activity-bar" aria-label="Navegacao principal">
-        <span className="activity-logo">J</span>
+        <span className="activity-logo">
+          <Sparkles size={17} />
+        </span>
         {activityItems.map((item) => (
           <button
             className={activeView === item.id ? 'activity-button active' : 'activity-button'}
@@ -155,7 +290,7 @@ export function App() {
             title={item.label}
             type="button"
           >
-            {item.icon}
+            <item.Icon size={17} />
           </button>
         ))}
       </aside>
@@ -164,18 +299,41 @@ export function App() {
         <header className="panel-header">{sidebarTitle[activeView]}</header>
         {activeView === 'files' && (
           <div className="panel-list">
+            <div className="toolbar">
+              <button className="icon-button" onClick={() => void chooseWorkspace()} title="Abrir pasta" type="button">
+                <FolderOpen size={16} />
+              </button>
+              <button className="icon-button" onClick={() => void createWorkspaceFile()} title="Criar arquivo" type="button">
+                <FilePlus2 size={16} />
+              </button>
+              <button className="icon-button" onClick={() => void createWorkspaceFolder()} title="Criar pasta" type="button">
+                <FolderPlus size={16} />
+              </button>
+              <button className="icon-button danger" onClick={() => void deleteSelectedEntry()} title="Remover selecionado" type="button">
+                <Trash2 size={16} />
+              </button>
+            <button className="icon-button" onClick={() => void refreshWorkspace()} title="Atualizar" type="button">
+                <RefreshCw size={16} />
+              </button>
+            </div>
             <div className="workspace-path">{workspacePath}</div>
             {files.map((file) => (
-              <div className="list-row" key={file.path}>
-                <span>{file.kind === 'directory' ? '[]' : '{}'}</span>
+              <button
+                className={selectedEntry?.path === file.path ? 'list-row button-row selected' : 'list-row button-row'}
+                key={file.path}
+                onClick={() => void openWorkspaceFile(file)}
+                type="button"
+              >
+                {file.kind === 'directory' ? <Folder size={15} /> : <File size={15} />}
                 {file.name}
-              </div>
+              </button>
             ))}
           </div>
         )}
         {activeView === 'git' && (
           <div className="panel-list">
-            <button className="text-button" onClick={() => void refreshWorkspace()} type="button">
+            <button className="text-button with-icon" onClick={() => void refreshWorkspace()} type="button">
+              <RefreshCw size={15} />
               Atualizar status
             </button>
             {gitFiles.length === 0 && <div className="empty-state">Nenhuma mudanca Git.</div>}
@@ -194,6 +352,14 @@ export function App() {
         )}
         {activeView === 'settings' && (
           <div className="settings-panel">
+            <label>
+              Projeto atual
+              <input value={workspacePath} readOnly />
+            </label>
+            <button className="primary-button with-icon" onClick={() => void chooseWorkspace()} type="button">
+              <FolderOpen size={15} />
+              Selecionar pasta do projeto
+            </button>
             <label>
               Modelo padrao
               <select
@@ -285,15 +451,20 @@ export function App() {
           <div className="model-badge">{selectedModel.name}</div>
         </div>
         <div className="editor-tabs">
-          <span className="tab active">welcome.ts</span>
+          <span className="tab active">{shortPath(activeFilePath)}</span>
           <span className="tab">proposal.diff</span>
+          <button className="tab-action" onClick={() => void saveActiveFile()} title="Salvar arquivo" type="button">
+            <Save size={15} />
+            Salvar
+          </button>
         </div>
         <div className="editor-frame">
           <Editor
-            defaultLanguage="typescript"
+            language={activeLanguage}
             height="100%"
             theme={settings.theme === 'dark' ? 'vs-dark' : 'light'}
-            value={sampleCode}
+            value={activeFileContent}
+            onChange={(value) => setActiveFileContent(value ?? '')}
             options={{ minimap: { enabled: false }, fontSize: 14, readOnly: false }}
           />
         </div>
@@ -325,6 +496,7 @@ export function App() {
               <strong>Proposta de alteracao mockada</strong>
               <p>Adicionar provider mockado mantendo contrato substituivel.</p>
               <button className="primary-button" onClick={acceptProposal} type="button">
+                <CheckCircle2 size={15} />
                 Aceitar proposta
               </button>
               {proposalAccepted && <span className="accepted">Proposta aceita.</span>}
@@ -355,7 +527,8 @@ export function App() {
             onChange={(event) => setChatInput(event.target.value)}
             placeholder="Peca algo ao JARVIS..."
           />
-          <button className="primary-button" onClick={() => void sendMessage()} type="button">
+          <button className="primary-button with-icon" onClick={() => void sendMessage()} type="button">
+            <Sparkles size={15} />
             Enviar
           </button>
         </div>
@@ -364,13 +537,13 @@ export function App() {
   );
 }
 
-const activityItems: Array<{ id: ActivityView; label: string; icon: string }> = [
-  { id: 'files', label: 'Arquivos', icon: 'F' },
-  { id: 'git', label: 'Git', icon: 'G' },
-  { id: 'settings', label: 'Configuracoes', icon: 'S' },
-  { id: 'plugins', label: 'Plugins', icon: 'P' },
-  { id: 'context', label: 'Contexto', icon: 'C' },
-  { id: 'agents', label: 'Agentes', icon: 'A' },
+const activityItems: Array<{ id: ActivityView; label: string; Icon: typeof Folder }> = [
+  { id: 'files', label: 'Arquivos', Icon: Folder },
+  { id: 'git', label: 'Git', Icon: GitBranch },
+  { id: 'settings', label: 'Configuracoes', Icon: Settings },
+  { id: 'plugins', label: 'Plugins', Icon: Boxes },
+  { id: 'context', label: 'Contexto', Icon: Code2 },
+  { id: 'agents', label: 'Agentes', Icon: Bot },
 ];
 
 const sidebarTitle: Record<ActivityView, string> = {
@@ -399,3 +572,23 @@ export const provider: TextModelProvider = {
   },
 };
 `;
+
+function shortPath(path: string) {
+  return path.split(/[\\/]/).pop() || path;
+}
+
+function languageFromPath(path: string) {
+  const extension = path.split('.').pop()?.toLowerCase();
+  const languageByExtension: Record<string, string> = {
+    css: 'css',
+    html: 'html',
+    js: 'javascript',
+    json: 'json',
+    md: 'markdown',
+    rs: 'rust',
+    ts: 'typescript',
+    tsx: 'typescript',
+  };
+
+  return extension ? (languageByExtension[extension] ?? 'plaintext') : 'plaintext';
+}
