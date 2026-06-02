@@ -7,6 +7,10 @@ Objetivo: definir como o projeto sera conduzido em issues, branches, PRs e relea
 
 A unidade principal de trabalho e a GitHub Issue.
 
+O acompanhamento visual do MVP fica no GitHub Project:
+
+- [JARVIS MVP](https://github.com/users/rafaelAmaralMario/projects/2)
+
 Cada issue deve ter:
 
 - Objetivo.
@@ -68,4 +72,3 @@ Enquanto o projeto estiver em MVP:
 - Releases podem ser tags simples.
 - Changelog pode ser gerado a partir de issues/PRs.
 - Builds empacotados entram em fase posterior.
-

@@ -33,6 +33,7 @@ Especificacao inicial do projeto:
 Planejamento inicial de issues:
 
 - [docs/backlog-issues.md](docs/backlog-issues.md)
+- [GitHub Project - JARVIS MVP](https://github.com/users/rafaelAmaralMario/projects/2)
 
 Script para criar as issues no GitHub quando o GitHub CLI estiver instalado/autenticado:
 
