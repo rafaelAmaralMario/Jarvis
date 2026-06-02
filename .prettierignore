@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+.vite/
+target/
+src-tauri/target/
+coverage/
+.jarvis/
+data/
+indexes/
+embeddings/
