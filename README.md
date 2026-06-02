@@ -41,6 +41,7 @@ Padroes iniciais de codigo e arquitetura:
 Documentos de definicao antes do desenvolvimento:
 
 - [docs/arquitetura.md](docs/arquitetura.md)
+- [docs/estrutura-de-pastas.md](docs/estrutura-de-pastas.md)
 - [docs/interface-layout.md](docs/interface-layout.md)
 - [docs/seguranca-permissoes.md](docs/seguranca-permissoes.md)
 - [docs/plugins.md](docs/plugins.md)

@@ -1,3 +1,5 @@
+import { appMetadata } from '../application';
+
 export function App() {
   return (
     <main className="app-shell">
@@ -6,18 +8,15 @@ export function App() {
       </aside>
 
       <section className="sidebar" aria-label="Explorador">
-        <header className="panel-header">JARVIS</header>
+        <header className="panel-header">{appMetadata.name}</header>
         <div className="sidebar-empty">Workspace ainda nao aberto</div>
       </section>
 
       <section className="editor-area" aria-label="Editor">
         <div className="editor-welcome">
           <p className="eyebrow">IDE nativa para IA</p>
-          <h1>JARVIS</h1>
-          <p>
-            Base desktop iniciada com Tauri, Vite e TypeScript. A partir daqui,
-            cada integracao entra por contratos separados e substituiveis.
-          </p>
+          <h1>{appMetadata.name}</h1>
+          <p>{appMetadata.description}</p>
         </div>
       </section>
 
@@ -28,4 +27,3 @@ export function App() {
     </main>
   );
 }
-
