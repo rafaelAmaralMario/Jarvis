@@ -476,16 +476,31 @@ export function App() {
   }
 
   async function selectAndApplyWorkspace() {
-    const selected = await selectWorkspaceFolder();
-    if (!selected) {
-      return;
-    }
+    try {
+      const selected = await selectWorkspaceFolder();
+      if (!selected) {
+        addLog('Selecao de projeto cancelada', 'ok');
+        return;
+      }
 
-    setWorkspacePath(selected);
-    setSettings((current) => ({ ...current, workspacePath: selected }));
-    setTabs([welcomeTab]);
-    setActiveTabPath(welcomeTab.path);
-    await refreshWorkspace(selected);
+      const exists = await validatePath(selected);
+      if (!exists) {
+        addLog(`Projeto nao encontrado: ${selected}`, 'warn');
+        return;
+      }
+
+      setWorkspacePath(selected);
+      setSettings((current) => ({ ...current, workspacePath: selected }));
+      setSelectedEntry(null);
+      setExpandedFolders(new Set());
+      setTabs([welcomeTab]);
+      setActiveTabPath(welcomeTab.path);
+      await refreshWorkspace(selected);
+      addAudit('Workspace', 'read-workspace', selected, 'Projeto aberto');
+    } catch (error) {
+      addLog(`Nao foi possivel abrir projeto: ${formatError(error)}`, 'warn');
+      addAudit('Workspace', 'read-workspace', workspacePath || 'sem workspace', 'Falha ao abrir projeto');
+    }
   }
 
   async function openWorkspaceFile(file: WorkspaceEntry) {
@@ -1648,6 +1663,14 @@ function tokenize(value: string) {
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((token) => token.length > 2);
+}
+
+function formatError(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
 }
 
 function loadEnabledPlugins(): string[] {
