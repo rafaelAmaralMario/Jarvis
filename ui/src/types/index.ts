@@ -74,6 +74,17 @@ export interface JarvisBridge {
   terminalCloseAll(): Promise<boolean>;
   terminalList(): Promise<string[]>;
 
+  networkGet(url: string, headers?: Record<string, string>): Promise<{ statusCode: number; body: string }>;
+  networkPost(url: string, body: string, contentType?: string, headers?: Record<string, string>): Promise<{ statusCode: number; body: string }>;
+  networkOAuthStart(provider: string): Promise<string>;
+  networkOAuthComplete(provider: string, code: string): Promise<string>;
+  networkGetStoredToken(provider: string): Promise<string>;
+  networkClearToken(provider: string): Promise<boolean>;
+  networkStoreApiKey(service: string, key: string): Promise<boolean>;
+  networkGetApiKey(service: string): Promise<string>;
+  networkDeleteApiKey(service: string): Promise<boolean>;
+  networkListApiKeys(): Promise<{ service: string; key: string }[]>;
+
   onEvent(event: string, callback: (data: unknown) => void): void;
   offEvent(event: string, callback: (data: unknown) => void): void;
 }
@@ -282,4 +293,4 @@ export interface EditorTabInfo {
 }
 
 export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'settings';
-export type SettingsTab = 'general' | 'models' | 'assistant' | 'orchestration' | 'agents';
+export type SettingsTab = 'general' | 'models' | 'assistant' | 'orchestration' | 'agents' | 'api-keys';

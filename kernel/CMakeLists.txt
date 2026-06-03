@@ -24,6 +24,7 @@ set(KERNEL_SRC
     src/persistence/backup_manager.cpp
     src/editor/editor_manager.cpp
     src/terminal/terminal_manager.cpp
+    src/network/network_manager.cpp
 )
 
 qt_add_executable(jarvis

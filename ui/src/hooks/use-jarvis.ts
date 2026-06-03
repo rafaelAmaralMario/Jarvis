@@ -140,6 +140,17 @@ function createBridge(): JarvisBridge {
     terminalCloseAll: () => send('terminalCloseAll') as Promise<boolean>,
     terminalList: () => send('terminalList') as Promise<string[]>,
 
+    networkGet: (url, headers) => send('networkGet', url, headers) as Promise<{ statusCode: number; body: string }>,
+    networkPost: (url, body, contentType, headers) => send('networkPost', url, body, contentType, headers) as Promise<{ statusCode: number; body: string }>,
+    networkOAuthStart: (provider) => send('networkOAuthStart', provider) as Promise<string>,
+    networkOAuthComplete: (provider, code) => send('networkOAuthComplete', provider, code) as Promise<string>,
+    networkGetStoredToken: (provider) => send('networkGetStoredToken', provider) as Promise<string>,
+    networkClearToken: (provider) => send('networkClearToken', provider) as Promise<boolean>,
+    networkStoreApiKey: (service, key) => send('networkStoreApiKey', service, key) as Promise<boolean>,
+    networkGetApiKey: (service) => send('networkGetApiKey', service) as Promise<string>,
+    networkDeleteApiKey: (service) => send('networkDeleteApiKey', service) as Promise<boolean>,
+    networkListApiKeys: () => send('networkListApiKeys') as Promise<{ service: string; key: string }[]>,
+
     onEvent: (event, cb) => {
       if (!callbacks.has(event)) callbacks.set(event, new Set());
       callbacks.get(event)!.add(cb);

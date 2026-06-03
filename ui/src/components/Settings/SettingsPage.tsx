@@ -4,6 +4,7 @@ import type { SettingsTab } from '@/types';
 import { ModelsPanel } from './ModelsPanel';
 import { AgentsPanel } from './AgentsPanel';
 import { OrchestrationPanel } from './OrchestrationPanel';
+import { ApiKeyManager } from './ApiKeyManager';
 
 const TABS: { id: SettingsTab; label: string; icon: string; count?: number }[] = [
   { id: 'general', label: 'Geral', icon: '📋' },
@@ -11,6 +12,7 @@ const TABS: { id: SettingsTab; label: string; icon: string; count?: number }[] =
   { id: 'assistant', label: 'Assistente', icon: '🧠' },
   { id: 'orchestration', label: 'Orquestração', icon: '🔀' },
   { id: 'agents', label: 'Agents', icon: '🤖', count: 2 },
+  { id: 'api-keys', label: 'API Keys', icon: '🔑' },
 ];
 
 const spring = { type: 'spring' as const, stiffness: 300, damping: 30 };
@@ -84,6 +86,7 @@ export function SettingsPage() {
                   <p>Assistant preferences coming soon.</p>
                 </div>
               )}
+              {activeTab === 'api-keys' && <ApiKeyManager />}
             </motion.div>
           </AnimatePresence>
         </div>

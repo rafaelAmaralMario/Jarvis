@@ -28,6 +28,7 @@
 #include "jarvis/workspace/workspace_manager.h"
 #include "jarvis/editor/editor_manager.h"
 #include "jarvis/terminal/terminal_manager.h"
+#include "jarvis/network/network_manager.h"
 #include "jarvis/persistence/database.h"
 #include "jarvis/persistence/migration_runner.h"
 
@@ -39,6 +40,7 @@ using namespace jarvis::knowledge;
 using namespace jarvis::workspace;
 using namespace jarvis::editor;
 using namespace jarvis::terminal;
+using namespace jarvis::network;
 
 // ---------------------------------------------------------------------------
 // JSON serialization helpers
@@ -378,6 +380,20 @@ int main(int argc, char* argv[]) {
         INSERT OR IGNORE INTO editor_settings (key, value) VALUES ('autoSave', 'true');
         INSERT OR IGNORE INTO editor_settings (key, value) VALUES ('autoSaveDelay', '2000');
     )");
+    migrationRunner->addMigration(8, "api-keys", R"(
+        CREATE TABLE IF NOT EXISTS oauth_tokens (
+            provider TEXT PRIMARY KEY,
+            token TEXT NOT NULL,
+            refresh_token TEXT,
+            expires_at TEXT,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );
+        CREATE TABLE IF NOT EXISTS api_keys (
+            service TEXT PRIMARY KEY,
+            key_encrypted TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );
+    )");
 
     if (!migrationRunner->runPending()) {
         qCritical() << "Migration run failed";
@@ -392,6 +408,7 @@ int main(int argc, char* argv[]) {
     auto* workspaceManager = createWorkspaceManager(db);
     auto* editorManager = createEditorService();
     auto* terminalManager = createTerminalManager();
+    auto* networkManager = createNetworkManager(db);
 
     serviceLocator.registerService("persistence-db", db);
     serviceLocator.registerService("persistence-migrations", migrationRunner);
@@ -402,6 +419,7 @@ int main(int argc, char* argv[]) {
     serviceLocator.registerService("workspace", workspaceManager);
     serviceLocator.registerService("editor", editorManager);
     serviceLocator.registerService("terminal", terminalManager);
+    serviceLocator.registerService("network", networkManager);
 
     // ---- Load modules ----
     QString modulesDir = qApp->applicationDirPath() + "/modules";
@@ -1187,7 +1205,130 @@ int main(int argc, char* argv[]) {
         }
     });
 
-    qDebug() << "Registered" << 63 << "bridge handlers";
+    // --- Network handlers ---
+    bridge.registerHandler("networkGet", [networkManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 1) return QJsonObject{{"statusCode", 0}, {"body", ""}};
+        try {
+            std::map<std::string, std::string> headers;
+            if (args.size() > 1) {
+                QVariantMap hdr = args[1].toMap();
+                for (auto it = hdr.begin(); it != hdr.end(); ++it)
+                    headers[it.key().toStdString()] = it.value().toString().toStdString();
+            }
+            auto resp = networkManager->get(args[0].toString().toStdString(), headers);
+            QJsonObject obj;
+            obj["statusCode"] = resp.statusCode;
+            obj["body"] = QString::fromStdString(resp.body);
+            return obj;
+        } catch (...) {
+            return QJsonObject{{"statusCode", -1}, {"body", "ERROR"}};
+        }
+    });
+
+    bridge.registerHandler("networkPost", [networkManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 2) return QJsonObject{{"statusCode", 0}, {"body", ""}};
+        try {
+            std::map<std::string, std::string> headers;
+            if (args.size() > 3) {
+                QVariantMap hdr = args[3].toMap();
+                for (auto it = hdr.begin(); it != hdr.end(); ++it)
+                    headers[it.key().toStdString()] = it.value().toString().toStdString();
+            }
+            std::string contentType = args.size() > 2 ? args[2].toString().toStdString() : "application/json";
+            auto resp = networkManager->post(args[0].toString().toStdString(), args[1].toString().toStdString(), contentType, headers);
+            QJsonObject obj;
+            obj["statusCode"] = resp.statusCode;
+            obj["body"] = QString::fromStdString(resp.body);
+            return obj;
+        } catch (...) {
+            return QJsonObject{{"statusCode", -1}, {"body", "ERROR"}};
+        }
+    });
+
+    bridge.registerHandler("networkOAuthStart", [networkManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 1) return QVariant();
+        try {
+            return QString::fromStdString(networkManager->startOAuth(args[0].toString().toStdString()));
+        } catch (...) {
+            return QVariant();
+        }
+    });
+
+    bridge.registerHandler("networkOAuthComplete", [networkManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 2) return QVariant();
+        try {
+            return QString::fromStdString(networkManager->completeOAuth(args[0].toString().toStdString(), args[1].toString().toStdString()));
+        } catch (...) {
+            return QVariant();
+        }
+    });
+
+    bridge.registerHandler("networkGetStoredToken", [networkManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 1) return QVariant();
+        try {
+            return QString::fromStdString(networkManager->getStoredToken(args[0].toString().toStdString()));
+        } catch (...) {
+            return QVariant();
+        }
+    });
+
+    bridge.registerHandler("networkClearToken", [networkManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 1) return false;
+        try {
+            return networkManager->clearToken(args[0].toString().toStdString());
+        } catch (...) {
+            return false;
+        }
+    });
+
+    bridge.registerHandler("networkStoreApiKey", [networkManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 2) return false;
+        try {
+            return networkManager->storeApiKey(args[0].toString().toStdString(), args[1].toString().toStdString());
+        } catch (...) {
+            return false;
+        }
+    });
+
+    bridge.registerHandler("networkGetApiKey", [networkManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 1) return QVariant();
+        try {
+            return QString::fromStdString(networkManager->getApiKey(args[0].toString().toStdString()));
+        } catch (...) {
+            return QVariant();
+        }
+    });
+
+    bridge.registerHandler("networkDeleteApiKey", [networkManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 1) return false;
+        try {
+            return networkManager->deleteApiKey(args[0].toString().toStdString());
+        } catch (...) {
+            return false;
+        }
+    });
+
+    bridge.registerHandler("networkListApiKeys", [networkManager](const QVariantList&) -> QVariant {
+        try {
+            auto keys = networkManager->listApiKeys();
+            QJsonArray arr;
+            for (const auto& [service, key] : keys) {
+                QJsonObject obj;
+                obj["service"] = QString::fromStdString(service);
+                QString masked = QString::fromStdString(key);
+                if (masked.length() > 8) {
+                    masked = masked.left(4) + QString("*").repeated(masked.length() - 8) + masked.right(4);
+                }
+                obj["key"] = masked;
+                arr.append(obj);
+            }
+            return arr;
+        } catch (...) {
+            return QJsonArray();
+        }
+    });
+
+    qDebug() << "Registered" << 76 << "bridge handlers";
 
     // ---- Load web UI ----
     QString webuiPath = qApp->applicationDirPath() + "/webui/index.html";
@@ -1234,6 +1375,7 @@ int main(int argc, char* argv[]) {
     delete workspaceManager;
     delete editorManager;
     delete terminalManager;
+    delete networkManager;
     delete migrationRunner;
     delete db;
 
