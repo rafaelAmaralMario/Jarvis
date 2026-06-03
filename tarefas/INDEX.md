@@ -20,12 +20,12 @@
 | 008 | Módulo Conhecimento (notas estilo Obsidian) | ✅ |
 | 009 | Módulo Workspace (gerenciamento de arquivos) | ✅ |
 | 010 | Módulo Persistência (SQLite repositories) | ✅ |
+| 012 | Sync Server completo (auth, sync, broadcast) | ✅ |
 
 ### 📋 A Fazer
 
 | # | Tarefa | Status | Prioridade |
 |---|--------|--------|------------|
-| 012 | Sync Server completo (auth, sync, broadcast) | ⬜ | 🟡 Média |
 | 013 | Testes Integrados (Catch2 + React Testing Library) | ⬜ | 🟢 Baixa |
 | 014 | CI/CD (GitHub Actions, builds automatizados) | ⬜ | 🟢 Baixa |
 
