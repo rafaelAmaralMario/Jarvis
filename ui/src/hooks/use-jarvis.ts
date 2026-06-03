@@ -133,6 +133,13 @@ function createBridge(): JarvisBridge {
     editorUpdateSettings: (key, value) => send('editorUpdateSettings', key, value) as Promise<boolean>,
     createFileWithPath: (fullPath) => send('createFileWithPath', fullPath) as Promise<boolean>,
 
+    terminalCreate: () => send('terminalCreate') as Promise<string>,
+    terminalWrite: (id, data) => send('terminalWrite', id, data) as Promise<boolean>,
+    terminalResize: (id, cols, rows) => send('terminalResize', id, cols, rows) as Promise<boolean>,
+    terminalClose: (id) => send('terminalClose', id) as Promise<boolean>,
+    terminalCloseAll: () => send('terminalCloseAll') as Promise<boolean>,
+    terminalList: () => send('terminalList') as Promise<string[]>,
+
     onEvent: (event, cb) => {
       if (!callbacks.has(event)) callbacks.set(event, new Set());
       callbacks.get(event)!.add(cb);

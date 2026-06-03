@@ -27,6 +27,7 @@
 #include "jarvis/knowledge/knowledge_manager.h"
 #include "jarvis/workspace/workspace_manager.h"
 #include "jarvis/editor/editor_manager.h"
+#include "jarvis/terminal/terminal_manager.h"
 #include "jarvis/persistence/database.h"
 #include "jarvis/persistence/migration_runner.h"
 
@@ -37,6 +38,7 @@ using namespace jarvis::ai;
 using namespace jarvis::knowledge;
 using namespace jarvis::workspace;
 using namespace jarvis::editor;
+using namespace jarvis::terminal;
 
 // ---------------------------------------------------------------------------
 // JSON serialization helpers
@@ -389,6 +391,7 @@ int main(int argc, char* argv[]) {
     auto* knowledgeManager = createKnowledgeManager(db);
     auto* workspaceManager = createWorkspaceManager(db);
     auto* editorManager = createEditorService();
+    auto* terminalManager = createTerminalManager();
 
     serviceLocator.registerService("persistence-db", db);
     serviceLocator.registerService("persistence-migrations", migrationRunner);
@@ -398,6 +401,7 @@ int main(int argc, char* argv[]) {
     serviceLocator.registerService("knowledge", knowledgeManager);
     serviceLocator.registerService("workspace", workspaceManager);
     serviceLocator.registerService("editor", editorManager);
+    serviceLocator.registerService("terminal", terminalManager);
 
     // ---- Load modules ----
     QString modulesDir = qApp->applicationDirPath() + "/modules";
@@ -1109,7 +1113,81 @@ int main(int argc, char* argv[]) {
         }
     });
 
-    qDebug() << "Registered" << 56 << "bridge handlers";
+    // --- Terminal handlers ---
+    terminalManager->setOutputCallback([&bridge](const std::string& id, const std::string& data) {
+        bridge.emitEvent("terminal-output", QVariantMap{
+            {"id", QString::fromStdString(id)},
+            {"data", QString::fromStdString(data)}
+        });
+    });
+
+    terminalManager->setExitCallback([&bridge](const std::string& id, int exitCode) {
+        bridge.emitEvent("terminal-exit", QVariantMap{
+            {"id", QString::fromStdString(id)},
+            {"exitCode", exitCode}
+        });
+    });
+
+    bridge.registerHandler("terminalCreate", [terminalManager](const QVariantList&) -> QVariant {
+        try {
+            return QString::fromStdString(terminalManager->create());
+        } catch (...) {
+            return QVariant();
+        }
+    });
+
+    bridge.registerHandler("terminalWrite", [terminalManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 2) return false;
+        try {
+            terminalManager->write(args[0].toString().toStdString(), args[1].toString().toStdString());
+            return true;
+        } catch (...) {
+            return false;
+        }
+    });
+
+    bridge.registerHandler("terminalResize", [terminalManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 3) return false;
+        try {
+            terminalManager->resize(args[0].toString().toStdString(), args[1].toInt(), args[2].toInt());
+            return true;
+        } catch (...) {
+            return false;
+        }
+    });
+
+    bridge.registerHandler("terminalClose", [terminalManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 1) return false;
+        try {
+            terminalManager->close(args[0].toString().toStdString());
+            return true;
+        } catch (...) {
+            return false;
+        }
+    });
+
+    bridge.registerHandler("terminalList", [terminalManager](const QVariantList&) -> QVariant {
+        try {
+            auto list = terminalManager->list();
+            QJsonArray arr;
+            for (const auto& id : list)
+                arr.append(QString::fromStdString(id));
+            return arr;
+        } catch (...) {
+            return QJsonArray();
+        }
+    });
+
+    bridge.registerHandler("terminalCloseAll", [terminalManager](const QVariantList&) -> QVariant {
+        try {
+            terminalManager->closeAll();
+            return true;
+        } catch (...) {
+            return false;
+        }
+    });
+
+    qDebug() << "Registered" << 63 << "bridge handlers";
 
     // ---- Load web UI ----
     QString webuiPath = qApp->applicationDirPath() + "/webui/index.html";
@@ -1155,6 +1233,7 @@ int main(int argc, char* argv[]) {
     delete knowledgeManager;
     delete workspaceManager;
     delete editorManager;
+    delete terminalManager;
     delete migrationRunner;
     delete db;
 

@@ -67,6 +67,13 @@ export interface JarvisBridge {
   editorUpdateSettings(key: string, value: string): Promise<boolean>;
   createFileWithPath(fullPath: string): Promise<boolean>;
 
+  terminalCreate(): Promise<string>;
+  terminalWrite(id: string, data: string): Promise<boolean>;
+  terminalResize(id: string, cols: number, rows: number): Promise<boolean>;
+  terminalClose(id: string): Promise<boolean>;
+  terminalCloseAll(): Promise<boolean>;
+  terminalList(): Promise<string[]>;
+
   onEvent(event: string, callback: (data: unknown) => void): void;
   offEvent(event: string, callback: (data: unknown) => void): void;
 }

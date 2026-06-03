@@ -23,6 +23,7 @@ set(KERNEL_SRC
     src/persistence/query_builder.cpp
     src/persistence/backup_manager.cpp
     src/editor/editor_manager.cpp
+    src/terminal/terminal_manager.cpp
 )
 
 qt_add_executable(jarvis
