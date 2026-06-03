@@ -64,11 +64,16 @@ if(BUILD_TESTING)
     add_executable(kernel-tests
         tests/test_service_locator.cpp
         tests/test_module_loader.cpp
+        tests/test_database.cpp
+        tests/test_migration_runner.cpp
+        tests/test_knowledge.cpp
+        tests/test_workspace.cpp
     )
 
     target_link_libraries(kernel-tests PRIVATE
         Catch2::Catch2WithMain
         Qt6::Core
+        Qt6::Sql
     )
 
     include(CTest)

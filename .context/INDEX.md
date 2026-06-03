@@ -23,6 +23,7 @@
 | 006 | Módulo Conhecimento (Obsidian-like) | 2026-06-03T12:55:00-03:00 | active | — | — | context-generator |
 | 007 | Módulo Persistência (SQLite) | 2026-06-03T15:30:00-03:00 | active | — | — | — |
 | 008 | Sync Server Completo | 2026-06-03T16:30:00-03:00 | active | — | — | — |
+| 009 | Testes Integrados (Vitest + C++) | 2026-06-03T13:50:00-03:00 | active | — | — | — |
 
 > **Nota:** Ao adicionar novo contexto, insira uma nova linha na tabela acima e crie o arquivo correspondente em `.context/YYYY-MM-DD-NNN-titulo.md`.
 >
