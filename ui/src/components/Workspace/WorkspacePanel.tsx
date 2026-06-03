@@ -7,6 +7,10 @@ import { FileTabs } from './FileTabs';
 
 const spring = { type: 'spring' as const, stiffness: 300, damping: 30 };
 
+interface WorkspacePanelProps {
+  onOpenInEditor?: (path: string) => void;
+}
+
 interface OpenTab {
   path: string;
   name: string;
@@ -14,7 +18,7 @@ interface OpenTab {
   changed: boolean;
 }
 
-export function WorkspacePanel() {
+export function WorkspacePanel({ onOpenInEditor }: WorkspacePanelProps) {
   const bridge = useJarvis();
   const [roots, setRoots] = useState<string[]>([]);
   const [tree, setTree] = useState<FileEntry[]>([]);
@@ -99,7 +103,13 @@ export function WorkspacePanel() {
   async function handleSelectFile(path: string) {
     setSelectedPath(path);
 
-    // Check if already open
+    // Open in editor view
+    if (onOpenInEditor) {
+      onOpenInEditor(path);
+      return;
+    }
+
+    // Fallback: open inline
     const existing = openTabs.find(t => t.path === path);
     if (existing) {
       setActiveTab(path);
@@ -151,7 +161,11 @@ export function WorkspacePanel() {
     const name = prompt('File name:');
     if (!name) return;
     try {
-      await bridge.createFile(name, parentDir);
+      if (name.includes('/')) {
+        await bridge.createFileWithPath(parentDir + '/' + name);
+      } else {
+        await bridge.createFile(name, parentDir);
+      }
       await loadWorkspace();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -163,6 +177,15 @@ export function WorkspacePanel() {
     if (!name) return;
     try {
       await bridge.createDirectory(name, parentDir);
+      await loadWorkspace();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleCreateFileWithPath(fullPath: string) {
+    try {
+      await bridge.createFileWithPath(fullPath);
       await loadWorkspace();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -270,6 +293,7 @@ export function WorkspacePanel() {
                     onCreateFolder={handleCreateFolder}
                     onRename={handleRename}
                     selectedPath={selectedPath}
+                    onCreateFileWithPath={handleCreateFileWithPath}
                   />
                 )}
               </div>

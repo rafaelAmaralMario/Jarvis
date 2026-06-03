@@ -1,18 +1,27 @@
-import { lazy } from 'react';
+import { lazy, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ActivityView } from '@/types';
 
 const SettingsPage = lazy(() => import('@/components/Settings/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const KnowledgePanel = lazy(() => import('@/components/Knowledge/KnowledgePanel').then(m => ({ default: m.KnowledgePanel })));
 const WorkspacePanel = lazy(() => import('@/components/Workspace/WorkspacePanel').then(m => ({ default: m.WorkspacePanel })));
+const EditorPanel = lazy(() => import('@/components/Editor/EditorPanel').then(m => ({ default: m.EditorPanel })));
 
 interface MainAreaProps {
   activeView: ActivityView;
+  onViewChange: (view: ActivityView) => void;
 }
 
 const spring = { type: 'spring' as const, stiffness: 300, damping: 25 };
 
-export function MainArea({ activeView }: MainAreaProps) {
+export function MainArea({ activeView, onViewChange }: MainAreaProps) {
+  const [fileToOpen, setFileToOpen] = useState<string | undefined>();
+
+  const handleOpenInEditor = useCallback((path: string) => {
+    setFileToOpen(path);
+    onViewChange('editor');
+  }, [onViewChange]);
+
   if (activeView === 'settings') {
     return <SettingsPage />;
   }
@@ -22,7 +31,11 @@ export function MainArea({ activeView }: MainAreaProps) {
   }
 
   if (activeView === 'ide') {
-    return <WorkspacePanel />;
+    return <WorkspacePanel onOpenInEditor={handleOpenInEditor} />;
+  }
+
+  if (activeView === 'editor') {
+    return <EditorPanel fileToOpen={fileToOpen} />;
   }
 
   if (activeView === 'ai') {

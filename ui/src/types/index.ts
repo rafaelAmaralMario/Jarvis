@@ -57,6 +57,13 @@ export interface JarvisBridge {
   getRecentFiles(limit?: number): Promise<FileEntry[]>;
   getProjectInfo(rootPath: string): Promise<Project>;
 
+  editorOpenFile(path: string): Promise<EditorTabInfo | null>;
+  editorSaveFile(path: string, content: string): Promise<boolean>;
+  editorCloseFile(path: string): Promise<boolean>;
+  editorGetOpenFiles(): Promise<EditorTabInfo[]>;
+  editorDetectLanguage(filename: string): Promise<string>;
+  createFileWithPath(fullPath: string): Promise<boolean>;
+
   onEvent(event: string, callback: (data: unknown) => void): void;
   offEvent(event: string, callback: (data: unknown) => void): void;
 }
@@ -254,5 +261,14 @@ export interface AgentResult {
   latencyMs: number;
 }
 
-export type ActivityView = 'knowledge' | 'ide' | 'ai' | 'automation' | 'settings';
+export interface EditorTabInfo {
+  path: string;
+  language: string;
+  content?: string;
+  size: number;
+  lastModified: number;
+  isDirty: boolean;
+}
+
+export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'settings';
 export type SettingsTab = 'general' | 'models' | 'assistant' | 'orchestration' | 'agents';

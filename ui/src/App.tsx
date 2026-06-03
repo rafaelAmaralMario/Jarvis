@@ -27,7 +27,7 @@ export function App() {
           activeView={activeView}
           isOpen={true}
         />
-        <MainArea activeView={activeView} />
+        <MainArea activeView={activeView} onViewChange={setActiveView} />
         <AiPanel />
       </div>
       <StatusBar

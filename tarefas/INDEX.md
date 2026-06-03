@@ -22,12 +22,14 @@
 | 010 | Módulo Persistência (SQLite repositories) | ✅ |
 | 012 | Sync Server completo (auth, sync, broadcast) | ✅ |
 
-### 📋 A Fazer
+| 013 | Testes Integrados (Catch2 + React Testing Library) | ✅ |
+| 014 | CI/CD (GitHub Actions, builds automatizados) | ✅ |
 
-| # | Tarefa | Status | Prioridade |
-|---|--------|--------|------------|
-| 013 | Testes Integrados (Catch2 + React Testing Library) | ⬜ | 🟢 Baixa |
-| 014 | CI/CD (GitHub Actions, builds automatizados) | ⬜ | 🟢 Baixa |
+### 🔄 Em Andamento
+
+| # | Tarefa | Status |
+|---|--------|--------|
+| 015 | Módulo Editor — Fase 1 (Monaco, abas, atalhos) | 🔄 |
 
 ---
 
@@ -56,9 +58,12 @@ tarefas/
 │   ├── 008-modulo-conhecimento.md
 │   ├── 009-modulo-workspace.md
 │   ├── 010-modulo-persistencia.md
-│   └── 011-ai-engine-integracao.md
+│   ├── 011-ai-engine-integracao.md
+│   ├── 012-sync-server.md
+│   ├── 013-testes-integrados.md
+│   └── 014-deploy-ci-cd.md
+├── 02-em-andamento/
+│   └── 015-modulo-editor-fase1.md
 └── 03-a-fazer/
-    ├── 012-sync-server.md
-    ├── 013-testes-integrados.md
-    └── 014-deploy-ci-cd.md
+    └── (nenhuma — todas concluídas)
 ```

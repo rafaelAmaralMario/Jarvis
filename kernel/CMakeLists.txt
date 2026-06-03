@@ -22,6 +22,7 @@ set(KERNEL_SRC
     src/persistence/repository.cpp
     src/persistence/query_builder.cpp
     src/persistence/backup_manager.cpp
+    src/editor/editor_manager.cpp
 )
 
 qt_add_executable(jarvis
@@ -68,6 +69,11 @@ if(BUILD_TESTING)
         tests/test_migration_runner.cpp
         tests/test_knowledge.cpp
         tests/test_workspace.cpp
+        tests/test_editor.cpp
+    )
+
+    target_include_directories(kernel-tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
 
     target_link_libraries(kernel-tests PRIVATE

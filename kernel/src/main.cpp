@@ -13,6 +13,8 @@
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlError>
+#include <filesystem>
+#include <fstream>
 
 #include "jarvis/core/module_loader.h"
 #include "jarvis/core/service_locator.h"
@@ -23,6 +25,7 @@
 #include "jarvis/ai/orchestration_manager.h"
 #include "jarvis/knowledge/knowledge_manager.h"
 #include "jarvis/workspace/workspace_manager.h"
+#include "jarvis/editor/editor_manager.h"
 #include "jarvis/persistence/database.h"
 #include "jarvis/persistence/migration_runner.h"
 
@@ -32,6 +35,7 @@ using namespace jarvis::bridge;
 using namespace jarvis::ai;
 using namespace jarvis::knowledge;
 using namespace jarvis::workspace;
+using namespace jarvis::editor;
 
 // ---------------------------------------------------------------------------
 // JSON serialization helpers
@@ -372,6 +376,7 @@ int main(int argc, char* argv[]) {
     auto* orchestrationManager = createOrchestrationManager(modelsManager, agentsManager, dbPath.toStdString());
     auto* knowledgeManager = createKnowledgeManager(db);
     auto* workspaceManager = createWorkspaceManager(db);
+    auto* editorManager = createEditorService();
 
     serviceLocator.registerService("persistence-db", db);
     serviceLocator.registerService("persistence-migrations", migrationRunner);
@@ -380,6 +385,7 @@ int main(int argc, char* argv[]) {
     serviceLocator.registerService("ai-orchestration", orchestrationManager);
     serviceLocator.registerService("knowledge", knowledgeManager);
     serviceLocator.registerService("workspace", workspaceManager);
+    serviceLocator.registerService("editor", editorManager);
 
     // ---- Load modules ----
     QString modulesDir = qApp->applicationDirPath() + "/modules";
@@ -758,7 +764,37 @@ int main(int argc, char* argv[]) {
     bridge.registerHandler("createFile", [workspaceManager](const QVariantList& args) -> QVariant {
         if (args.size() < 2) return false;
         try {
-            return workspaceManager->createFile(args[0].toString().toStdString(), args[1].toString().toStdString());
+            std::string name = args[0].toString().toStdString();
+            std::string parentDir = args[1].toString().toStdString();
+
+            // Support batch creation: "folder/file.txt" creates folder then file
+            auto slashPos = name.find('/');
+            if (slashPos != std::string::npos) {
+                std::string dirs = name.substr(0, slashPos);
+                std::string fileName = name.substr(slashPos + 1);
+                workspaceManager->createDirectory(dirs, parentDir);
+                std::string fullDir = parentDir + "/" + dirs;
+                return workspaceManager->createFile(fileName, fullDir);
+            }
+
+            return workspaceManager->createFile(name, parentDir);
+        } catch (...) { return false; }
+    });
+
+    bridge.registerHandler("createFileWithPath", [workspaceManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 1) return false;
+        try {
+            std::string fullPath = args[0].toString().toStdString();
+            namespace fs = std::filesystem;
+            fs::path p(fullPath);
+            auto parent = p.parent_path();
+            if (!parent.empty()) {
+                fs::create_directories(parent);
+            }
+            std::ofstream file(p);
+            if (!file.is_open()) return false;
+            file.close();
+            return true;
         } catch (...) { return false; }
     });
 
@@ -945,7 +981,72 @@ int main(int argc, char* argv[]) {
         }
     });
 
-    qDebug() << "Registered" << 48 << "bridge handlers";
+    // --- Editor handlers ---
+    bridge.registerHandler("editorOpenFile", [editorManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 1) return QVariant();
+        try {
+            auto result = editorManager->openFile(args[0].toString().toStdString());
+            if (!result) return QVariant();
+            QJsonObject obj;
+            obj["path"] = QString::fromStdString(result->path);
+            obj["language"] = QString::fromStdString(result->language);
+            obj["content"] = QString::fromStdString(result->content);
+            obj["size"] = result->size;
+            obj["lastModified"] = result->lastModified;
+            obj["isDirty"] = result->isDirty;
+            return obj;
+        } catch (...) {
+            return QVariant();
+        }
+    });
+
+    bridge.registerHandler("editorSaveFile", [editorManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 2) return false;
+        try {
+            return editorManager->saveFile(args[0].toString().toStdString(), args[1].toString().toStdString());
+        } catch (...) {
+            return false;
+        }
+    });
+
+    bridge.registerHandler("editorCloseFile", [editorManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 1) return false;
+        try {
+            return editorManager->closeFile(args[0].toString().toStdString());
+        } catch (...) {
+            return false;
+        }
+    });
+
+    bridge.registerHandler("editorGetOpenFiles", [editorManager](const QVariantList&) -> QVariant {
+        try {
+            auto files = editorManager->getOpenFiles();
+            QJsonArray arr;
+            for (const auto& f : files) {
+                QJsonObject obj;
+                obj["path"] = QString::fromStdString(f.path);
+                obj["language"] = QString::fromStdString(f.language);
+                obj["size"] = f.size;
+                obj["lastModified"] = f.lastModified;
+                obj["isDirty"] = f.isDirty;
+                arr.append(obj);
+            }
+            return arr;
+        } catch (...) {
+            return QJsonArray();
+        }
+    });
+
+    bridge.registerHandler("editorDetectLanguage", [editorManager](const QVariantList& args) -> QVariant {
+        if (args.size() < 1) return "plaintext";
+        try {
+            return QString::fromStdString(editorManager->detectLanguage(args[0].toString().toStdString()));
+        } catch (...) {
+            return "plaintext";
+        }
+    });
+
+    qDebug() << "Registered" << 53 << "bridge handlers";
 
     // ---- Load web UI ----
     QString webuiPath = qApp->applicationDirPath() + "/webui/index.html";
@@ -990,6 +1091,7 @@ int main(int argc, char* argv[]) {
     delete orchestrationManager;
     delete knowledgeManager;
     delete workspaceManager;
+    delete editorManager;
     delete migrationRunner;
     delete db;
 

@@ -3,7 +3,7 @@ import type {
   JarvisBridge, ModuleInfo, Note, SearchResult, FileEntry,
   ModelInfo, ModelDetail, ModelMetadata, Agent, CreateAgentDTO,
   OrchestrationConfig, AgentTrace, CreateNoteDTO,
-  Backlink, GraphData, FolderEntry, Project
+  Backlink, GraphData, FolderEntry, Project, EditorTabInfo
 } from '@/types';
 
 declare global {
@@ -122,6 +122,13 @@ function createBridge(): JarvisBridge {
     movePath: (path, targetDir) => send('movePath', path, targetDir) as Promise<boolean>,
     getRecentFiles: (limit) => send('getRecentFiles', limit) as Promise<FileEntry[]>,
     getProjectInfo: (rootPath) => send('getProjectInfo', rootPath) as Promise<Project>,
+
+    editorOpenFile: (path) => send('editorOpenFile', path) as Promise<EditorTabInfo | null>,
+    editorSaveFile: (path, content) => send('editorSaveFile', path, content) as Promise<boolean>,
+    editorCloseFile: (path) => send('editorCloseFile', path) as Promise<boolean>,
+    editorGetOpenFiles: () => send('editorGetOpenFiles') as Promise<EditorTabInfo[]>,
+    editorDetectLanguage: (filename) => send('editorDetectLanguage', filename) as Promise<string>,
+    createFileWithPath: (fullPath) => send('createFileWithPath', fullPath) as Promise<boolean>,
 
     onEvent: (event, cb) => {
       if (!callbacks.has(event)) callbacks.set(event, new Set());

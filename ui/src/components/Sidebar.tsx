@@ -10,6 +10,7 @@ interface SidebarProps {
 const viewTitles: Record<ActivityView, string> = {
   knowledge: 'Conhecimento',
   ide: 'IDE',
+  editor: 'Editor',
   ai: 'Assistente IA',
   automation: 'Automação',
   settings: 'Configurações',
