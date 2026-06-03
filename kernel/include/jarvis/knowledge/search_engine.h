@@ -2,6 +2,7 @@
 #define JARVIS_KNOWLEDGE_SEARCH_ENGINE_H
 
 #include "jarvis/knowledge/note.h"
+#include "jarvis/persistence/database.h"
 #include <string>
 #include <vector>
 
@@ -18,7 +19,7 @@ public:
 };
 
 // Factory function
-ISearchEngine* createSearchEngine(const std::string& dbPath);
+ISearchEngine* createSearchEngine(jarvis::persistence::IDatabase* db);
 
 } // namespace jarvis::knowledge
 

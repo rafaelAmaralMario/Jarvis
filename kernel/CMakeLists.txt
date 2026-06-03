@@ -17,6 +17,11 @@ set(KERNEL_SRC
     src/workspace/workspace_manager.cpp
     src/workspace/file_watcher.cpp
     src/workspace/file_utils.cpp
+    src/persistence/database.cpp
+    src/persistence/migration_runner.cpp
+    src/persistence/repository.cpp
+    src/persistence/query_builder.cpp
+    src/persistence/backup_manager.cpp
 )
 
 qt_add_executable(jarvis

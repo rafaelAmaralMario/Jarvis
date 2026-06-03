@@ -23,8 +23,11 @@
 #include "jarvis/ai/orchestration_manager.h"
 #include "jarvis/knowledge/knowledge_manager.h"
 #include "jarvis/workspace/workspace_manager.h"
+#include "jarvis/persistence/database.h"
+#include "jarvis/persistence/migration_runner.h"
 
 using namespace jarvis::core;
+using namespace jarvis::persistence;
 using namespace jarvis::bridge;
 using namespace jarvis::ai;
 using namespace jarvis::knowledge;
@@ -305,12 +308,73 @@ int main(int argc, char* argv[]) {
     QString dbPath = dbDir + "/jarvis-ai.db";
     qDebug() << "AI database:" << dbPath;
 
+    // ---- Initialize persistence layer ----
+    auto* db = createDatabase();
+    if (!db->open(dbPath.toStdString())) {
+        qCritical() << "Failed to open database:" << dbPath;
+        return 1;
+    }
+
+    // Register all migrations
+    auto* migrationRunner = createMigrationRunner(db);
+    migrationRunner->addMigration(1, "core", R"(
+        CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')));
+        CREATE TABLE IF NOT EXISTS extension_registry (id TEXT PRIMARY KEY, name TEXT NOT NULL, version TEXT NOT NULL DEFAULT '0.1.0', enabled INTEGER NOT NULL DEFAULT 1, description TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')));
+        CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, module TEXT NOT NULL, action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')));
+        CREATE INDEX IF NOT EXISTS idx_audit_module ON audit_log(module);
+        CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);
+    )");
+    migrationRunner->addMigration(2, "permissions", R"(
+        CREATE TABLE IF NOT EXISTS permissions (module_id TEXT NOT NULL, permission TEXT NOT NULL, granted INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), PRIMARY KEY (module_id, permission));
+        CREATE INDEX IF NOT EXISTS idx_permissions_module ON permissions(module_id);
+    )");
+    migrationRunner->addMigration(3, "extensions", R"(
+        CREATE TABLE IF NOT EXISTS extensions (id TEXT PRIMARY KEY, name TEXT NOT NULL, version TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, description TEXT NOT NULL DEFAULT '', entry_point TEXT NOT NULL DEFAULT '', permissions TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')));
+    )");
+    migrationRunner->addMigration(4, "models-agents", R"(
+        CREATE TABLE IF NOT EXISTS model_metadata (model_name TEXT PRIMARY KEY, specialty TEXT NOT NULL DEFAULT 'general' CHECK (specialty IN ('chat','code','reasoning','embedding','vision','general')), notes TEXT NOT NULL DEFAULT '', color TEXT NOT NULL DEFAULT '#6b7280', icon TEXT NOT NULL DEFAULT '🤖', created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')));
+        CREATE TABLE IF NOT EXISTS agents (id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))), name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', model TEXT NOT NULL, system_prompt TEXT NOT NULL DEFAULT '', temperature REAL NOT NULL DEFAULT 0.7 CHECK (temperature >= 0.0 AND temperature <= 2.0), max_tokens INTEGER NOT NULL DEFAULT 2048 CHECK (max_tokens > 0), specialty TEXT NOT NULL DEFAULT 'general', tools TEXT NOT NULL DEFAULT '[]', is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0,1)), can_orchestrate INTEGER NOT NULL DEFAULT 1 CHECK (can_orchestrate IN (0,1)), priority INTEGER NOT NULL DEFAULT 5 CHECK (priority >= 0 AND priority <= 10), created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')));
+        CREATE TABLE IF NOT EXISTS orchestration_config (id INTEGER PRIMARY KEY CHECK (id = 1), enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0,1)), orchestrator_model TEXT NOT NULL DEFAULT '', critic_enabled INTEGER NOT NULL DEFAULT 1 CHECK (critic_enabled IN (0,1)), critic_temperature REAL NOT NULL DEFAULT 0.1 CHECK (critic_temperature >= 0.0 AND critic_temperature <= 2.0), max_agents_per_query INTEGER NOT NULL DEFAULT 3 CHECK (max_agents_per_query > 0), show_trace INTEGER NOT NULL DEFAULT 1 CHECK (show_trace IN (0,1)), updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')));
+        CREATE TABLE IF NOT EXISTS agent_conversations (id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))), agent_id TEXT REFERENCES agents(id) ON DELETE SET NULL, title TEXT NOT NULL DEFAULT 'New conversation', model TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')));
+        CREATE TABLE IF NOT EXISTS conversation_messages (id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))), conversation_id TEXT NOT NULL REFERENCES agent_conversations(id) ON DELETE CASCADE, role TEXT NOT NULL CHECK (role IN ('user','assistant','system')), content TEXT NOT NULL, agent_id TEXT REFERENCES agents(id), model TEXT, tokens_used INTEGER DEFAULT 0, latency_ms INTEGER DEFAULT 0, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')));
+        CREATE INDEX IF NOT EXISTS idx_agents_default ON agents(is_default) WHERE is_default = 1;
+        CREATE INDEX IF NOT EXISTS idx_agents_orchestrate ON agents(can_orchestrate) WHERE can_orchestrate = 1;
+        CREATE INDEX IF NOT EXISTS idx_conv_agent ON agent_conversations(agent_id);
+        CREATE INDEX IF NOT EXISTS idx_messages_conv ON conversation_messages(conversation_id, created_at);
+        INSERT OR IGNORE INTO orchestration_config (id, enabled) VALUES (1, 1);
+    )");
+    migrationRunner->addMigration(5, "knowledge", R"(
+        CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))), title TEXT NOT NULL, content TEXT NOT NULL DEFAULT '', folder TEXT NOT NULL DEFAULT '/', tags TEXT NOT NULL DEFAULT '', metadata TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')));
+        CREATE TABLE IF NOT EXISTS note_links (source_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE, target_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE, link_type TEXT NOT NULL DEFAULT 'wikilink', context TEXT NOT NULL DEFAULT '', PRIMARY KEY (source_id, target_id));
+        CREATE TABLE IF NOT EXISTS note_tags (note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE, tag TEXT NOT NULL, PRIMARY KEY (note_id, tag));
+        CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(title, content, tags, content='notes', content_rowid='rowid', tokenize='porter unicode61');
+        CREATE INDEX IF NOT EXISTS idx_notes_folder ON notes(folder);
+        CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_note_links_source ON note_links(source_id);
+        CREATE INDEX IF NOT EXISTS idx_note_links_target ON note_links(target_id);
+        CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag);
+    )");
+    migrationRunner->addMigration(6, "workspace", R"(
+        CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))), name TEXT NOT NULL DEFAULT 'workspace', created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), last_opened TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')));
+        CREATE TABLE IF NOT EXISTS workspace_folders (workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, path TEXT NOT NULL, PRIMARY KEY (workspace_id, path));
+        CREATE TABLE IF NOT EXISTS recent_files (path TEXT PRIMARY KEY, name TEXT NOT NULL, last_opened TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), open_count INTEGER NOT NULL DEFAULT 1);
+        CREATE INDEX IF NOT EXISTS idx_recent_files_opened ON recent_files(last_opened DESC);
+    )");
+
+    if (!migrationRunner->runPending()) {
+        qCritical() << "Migration run failed";
+        return 1;
+    }
+    qDebug() << "Database schema version:" << migrationRunner->currentVersion();
+
     auto* modelsManager = createModelsManager(dbPath.toStdString());
     auto* agentsManager = createAgentsManager(dbPath.toStdString());
     auto* orchestrationManager = createOrchestrationManager(modelsManager, agentsManager, dbPath.toStdString());
-    auto* knowledgeManager = createKnowledgeManager(dbPath.toStdString());
-    auto* workspaceManager = createWorkspaceManager(dbPath.toStdString());
+    auto* knowledgeManager = createKnowledgeManager(db);
+    auto* workspaceManager = createWorkspaceManager(db);
 
+    serviceLocator.registerService("persistence-db", db);
+    serviceLocator.registerService("persistence-migrations", migrationRunner);
     serviceLocator.registerService("ai-models", modelsManager);
     serviceLocator.registerService("ai-agents", agentsManager);
     serviceLocator.registerService("ai-orchestration", orchestrationManager);
@@ -926,6 +990,8 @@ int main(int argc, char* argv[]) {
     delete orchestrationManager;
     delete knowledgeManager;
     delete workspaceManager;
+    delete migrationRunner;
+    delete db;
 
     return result;
 }

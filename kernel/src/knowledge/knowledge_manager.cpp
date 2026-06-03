@@ -1,5 +1,4 @@
 #include "jarvis/knowledge/knowledge_manager.h"
-#include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QSqlRecord>
@@ -27,7 +26,6 @@ static std::vector<std::string> extractWikilinks(const std::string& content) {
     while (it.hasNext()) {
         auto match = it.next();
         QString target = match.captured(1).trimmed();
-        // Handle alias [[target|alias]]
         int pipe = target.indexOf('|');
         if (pipe >= 0) target = target.left(pipe);
         links.push_back(target.trimmed().toStdString());
@@ -95,7 +93,6 @@ static std::string stripFrontMatter(const std::string& content) {
     auto end = content.find("---", 3);
     if (end == std::string::npos) return content;
     auto rest = content.substr(end + 3);
-    // Strip leading whitespace
     auto start = rest.find_first_not_of(" \t\r\n");
     return (start == std::string::npos) ? "" : rest.substr(start);
 }
@@ -121,10 +118,10 @@ static std::string buildFrontMatter(const Note& note) {
 
 class KnowledgeManager : public IKnowledgeManager {
 public:
-    explicit KnowledgeManager(const std::string& dbPath)
-        : dbPath_(dbPath)
+    explicit KnowledgeManager(persistence::IDatabase* db)
+        : db_(db)
     {
-        initDb();
+        rebuildFtsIfEmpty();
     }
 
     // ---- Note CRUD ----
@@ -138,12 +135,10 @@ public:
         note.metadata = dto.metadata;
         note.createdAt = now();
         note.updatedAt = note.createdAt;
-
-        // Parse wikilinks from content and store resolved content
         note.content = dto.content;
         std::string tagsStr = joinTags(note.tags);
 
-        QSqlQuery q(QSqlDatabase::database("knowledge"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.prepare(R"(
             INSERT INTO notes (id, title, content, folder, tags, metadata, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -162,17 +157,13 @@ public:
                 q.lastError().text().toStdString());
         }
 
-        // Register wikilinks
         updateWikilinks(note.id, note.content);
-
-        // Register tags
         updateTags(note.id, note.tags);
-
         return note;
     }
 
     Note getNote(const std::string& id) override {
-        QSqlQuery q(QSqlDatabase::database("knowledge"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.prepare("SELECT id, title, content, folder, tags, metadata, created_at, updated_at FROM notes WHERE id = ?");
         q.addBindValue(QString::fromStdString(id));
         if (!q.exec() || !q.next()) {
@@ -183,7 +174,7 @@ public:
 
     std::vector<Note> listNotes(const std::string& folder) override {
         std::vector<Note> result;
-        QSqlQuery q(QSqlDatabase::database("knowledge"));
+        QSqlQuery q(db_->qSqlDatabase());
 
         if (folder.empty()) {
             q.prepare("SELECT id, title, content, folder, tags, metadata, created_at, updated_at FROM notes ORDER BY updated_at DESC");
@@ -210,7 +201,7 @@ public:
         std::string meta = dto.metadata.empty() ? existing.metadata : dto.metadata;
         std::string updatedAt = now();
 
-        QSqlQuery q(QSqlDatabase::database("knowledge"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.prepare(R"(
             UPDATE notes SET title = ?, content = ?, folder = ?, tags = ?, metadata = ?, updated_at = ?
             WHERE id = ?
@@ -228,18 +219,15 @@ public:
                 q.lastError().text().toStdString());
         }
 
-        // Update wikilinks if content changed
         if (content != existing.content)
             updateWikilinks(id, content);
-
-        // Update tags
         updateTags(id, tags);
 
         return getNote(id);
     }
 
     bool deleteNote(const std::string& id) override {
-        QSqlQuery q(QSqlDatabase::database("knowledge"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.prepare("DELETE FROM notes WHERE id = ?");
         q.addBindValue(QString::fromStdString(id));
         return q.exec() && q.numRowsAffected() > 0;
@@ -249,12 +237,11 @@ public:
 
     std::vector<FolderEntry> getFolders() override {
         std::set<std::string> folderSet;
-        QSqlQuery q(QSqlDatabase::database("knowledge"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.exec("SELECT DISTINCT folder FROM notes ORDER BY folder");
         while (q.next()) {
             std::string path = q.value(0).toString().toStdString();
             folderSet.insert(path);
-            // Also add parent paths
             auto pos = path.find_last_of('/');
             while (pos != std::string::npos && pos > 0) {
                 folderSet.insert(path.substr(0, pos));
@@ -268,7 +255,7 @@ public:
             fe.path = f;
             fe.name = f.substr(f.find_last_of('/') + 1);
             if (fe.name.empty()) fe.name = "root";
-            QSqlQuery cq(QSqlDatabase::database("knowledge"));
+            QSqlQuery cq(db_->qSqlDatabase());
             cq.prepare("SELECT COUNT(*) FROM notes WHERE folder = ? OR folder LIKE ?");
             cq.addBindValue(QString::fromStdString(f));
             cq.addBindValue(QString::fromStdString(f + "/%"));
@@ -280,7 +267,7 @@ public:
     }
 
     bool moveNote(const std::string& id, const std::string& targetFolder) override {
-        QSqlQuery q(QSqlDatabase::database("knowledge"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.prepare("UPDATE notes SET folder = ?, updated_at = ? WHERE id = ?");
         q.addBindValue(QString::fromStdString(normalizeFolder(targetFolder)));
         q.addBindValue(QString::fromStdString(now()));
@@ -292,7 +279,7 @@ public:
 
     std::vector<Backlink> getBacklinks(const std::string& noteId) override {
         std::vector<Backlink> result;
-        QSqlQuery q(QSqlDatabase::database("knowledge"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.prepare(R"(
             SELECT n.id, n.title, l.context
             FROM note_links l
@@ -323,8 +310,7 @@ public:
         GraphData graph;
         std::set<std::string> addedNodes;
 
-        // Add all notes as nodes
-        QSqlQuery nq(QSqlDatabase::database("knowledge"));
+        QSqlQuery nq(db_->qSqlDatabase());
         nq.exec("SELECT id, title, folder, tags FROM notes");
         while (nq.next()) {
             GraphNode node;
@@ -338,8 +324,7 @@ public:
                     node.tags.push_back(p.trimmed().toStdString());
             }
 
-            // Count links
-            QSqlQuery lcq(QSqlDatabase::database("knowledge"));
+            QSqlQuery lcq(db_->qSqlDatabase());
             lcq.prepare("SELECT COUNT(*) FROM note_links WHERE source_id = ? OR target_id = ?");
             lcq.addBindValue(QString::fromStdString(node.id));
             lcq.addBindValue(QString::fromStdString(node.id));
@@ -350,8 +335,7 @@ public:
             addedNodes.insert(graph.nodes.back().id);
         }
 
-        // Add edges
-        QSqlQuery eq(QSqlDatabase::database("knowledge"));
+        QSqlQuery eq(db_->qSqlDatabase());
         eq.exec("SELECT source_id, target_id, link_type FROM note_links");
         while (eq.next()) {
             GraphEdge edge;
@@ -408,7 +392,7 @@ public:
         std::vector<SearchResult> results;
         if (query.empty()) return results;
 
-        QSqlQuery q(QSqlDatabase::database("knowledge"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.prepare(R"(
             SELECT n.id, n.title, snippet(notes_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
                    rank
@@ -435,70 +419,14 @@ public:
     }
 
 private:
-    std::string dbPath_;
+    persistence::IDatabase* db_;
 
-    void initDb() {
-        QString connName = "knowledge";
-        QSqlDatabase db;
-        if (QSqlDatabase::contains(connName)) {
-            db = QSqlDatabase::database(connName);
-        } else {
-            db = QSqlDatabase::addDatabase("QSQLITE", connName);
-        }
-        db.setDatabaseName(QString::fromStdString(dbPath_));
-        if (!db.isOpen()) db.open();
-        if (db.isOpen()) {
-            QSqlQuery q(db);
-            q.exec(R"(
-                CREATE TABLE IF NOT EXISTS notes (
-                    id TEXT PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    content TEXT NOT NULL DEFAULT '',
-                    folder TEXT NOT NULL DEFAULT '/',
-                    tags TEXT NOT NULL DEFAULT '',
-                    metadata TEXT NOT NULL DEFAULT '{}',
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                )
-            )");
-            q.exec(R"(
-                CREATE TABLE IF NOT EXISTS note_links (
-                    source_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-                    target_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-                    link_type TEXT NOT NULL DEFAULT 'wikilink',
-                    context TEXT NOT NULL DEFAULT '',
-                    PRIMARY KEY (source_id, target_id)
-                )
-            )");
-            q.exec(R"(
-                CREATE TABLE IF NOT EXISTS note_tags (
-                    note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-                    tag TEXT NOT NULL,
-                    PRIMARY KEY (note_id, tag)
-                )
-            )");
-            // FTS5 table (cannot be in a regular CREATE TABLE)
-            q.exec(R"(
-                CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
-                    title, content, tags,
-                    content='notes',
-                    content_rowid='rowid',
-                    tokenize='porter unicode61'
-                )
-            )");
-            // Indexes
-            q.exec("CREATE INDEX IF NOT EXISTS idx_notes_folder ON notes(folder)");
-            q.exec("CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at DESC)");
-            q.exec("CREATE INDEX IF NOT EXISTS idx_note_links_source ON note_links(source_id)");
-            q.exec("CREATE INDEX IF NOT EXISTS idx_note_links_target ON note_links(target_id)");
-            q.exec("CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag)");
-
-            // Rebuild FTS index if empty
-            QSqlQuery cq(db);
-            cq.exec("SELECT COUNT(*) FROM notes_fts");
-            if (cq.next() && cq.value(0).toInt() == 0) {
-                q.exec("INSERT INTO notes_fts(notes_fts, rowid, title, content, tags) SELECT rowid, title, content, tags FROM notes");
-            }
+    void rebuildFtsIfEmpty() {
+        QSqlQuery cq(db_->qSqlDatabase());
+        cq.exec("SELECT COUNT(*) FROM notes_fts");
+        if (cq.next() && cq.value(0).toInt() == 0) {
+            QSqlQuery q(db_->qSqlDatabase());
+            q.exec("INSERT INTO notes_fts(notes_fts, rowid, title, content, tags) SELECT rowid, title, content, tags FROM notes");
         }
     }
 
@@ -525,22 +453,19 @@ private:
     void updateWikilinks(const std::string& noteId, const std::string& content) {
         auto links = extractWikilinks(content);
 
-        // Delete existing links from this note
-        QSqlQuery delQ(QSqlDatabase::database("knowledge"));
+        QSqlQuery delQ(db_->qSqlDatabase());
         delQ.prepare("DELETE FROM note_links WHERE source_id = ?");
         delQ.addBindValue(QString::fromStdString(noteId));
         delQ.exec();
 
         for (const auto& linkTitle : links) {
-            // Find target note by title
-            QSqlQuery findQ(QSqlDatabase::database("knowledge"));
+            QSqlQuery findQ(db_->qSqlDatabase());
             findQ.prepare("SELECT id FROM notes WHERE title = ?");
             findQ.addBindValue(QString::fromStdString(linkTitle));
             std::string targetId;
             if (findQ.exec() && findQ.next()) {
                 targetId = findQ.value(0).toString().toStdString();
             } else {
-                // Target doesn't exist yet — create a placeholder
                 CreateNoteDTO placeholder;
                 placeholder.title = linkTitle;
                 placeholder.content = "_Broken link_";
@@ -550,7 +475,7 @@ private:
 
             std::string ctx = extractContextSnippet(content, linkTitle);
 
-            QSqlQuery insQ(QSqlDatabase::database("knowledge"));
+            QSqlQuery insQ(db_->qSqlDatabase());
             insQ.prepare("INSERT OR IGNORE INTO note_links (source_id, target_id, link_type, context) VALUES (?, ?, 'wikilink', ?)");
             insQ.addBindValue(QString::fromStdString(noteId));
             insQ.addBindValue(QString::fromStdString(targetId));
@@ -560,14 +485,14 @@ private:
     }
 
     void updateTags(const std::string& noteId, const std::vector<std::string>& tags) {
-        QSqlQuery delQ(QSqlDatabase::database("knowledge"));
+        QSqlQuery delQ(db_->qSqlDatabase());
         delQ.prepare("DELETE FROM note_tags WHERE note_id = ?");
         delQ.addBindValue(QString::fromStdString(noteId));
         delQ.exec();
 
         for (const auto& tag : tags) {
             if (tag.empty()) continue;
-            QSqlQuery insQ(QSqlDatabase::database("knowledge"));
+            QSqlQuery insQ(db_->qSqlDatabase());
             insQ.prepare("INSERT OR IGNORE INTO note_tags (note_id, tag) VALUES (?, ?)");
             insQ.addBindValue(QString::fromStdString(noteId));
             insQ.addBindValue(QString::fromStdString(tag));
@@ -576,7 +501,6 @@ private:
     }
 
     static std::string generateId() {
-        // Simple UUID v4-like
         static const char hex[] = "0123456789abcdef";
         std::string id(32, '0');
         for (int i = 0; i < 32; ++i) {
@@ -611,7 +535,6 @@ private:
     }
 
     static std::string escapeFtsQuery(const std::string& query) {
-        // Escape special FTS5 characters and wrap each word
         std::string escaped;
         for (char c : query) {
             if (c == '"' || c == '*' || c == '^' || c == '(' || c == ')' ||
@@ -626,8 +549,8 @@ private:
     }
 };
 
-IKnowledgeManager* createKnowledgeManager(const std::string& dbPath) {
-    return new KnowledgeManager(dbPath);
+IKnowledgeManager* createKnowledgeManager(persistence::IDatabase* db) {
+    return new KnowledgeManager(db);
 }
 
 } // namespace jarvis::knowledge

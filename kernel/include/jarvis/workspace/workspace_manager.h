@@ -4,6 +4,7 @@
 #include "jarvis/workspace/file_utils.h"
 #include "jarvis/workspace/file_watcher.h"
 #include "jarvis/workspace/project.h"
+#include "jarvis/persistence/database.h"
 #include <string>
 #include <vector>
 #include <functional>
@@ -49,7 +50,7 @@ public:
 };
 
 // Factory function
-IWorkspaceManager* createWorkspaceManager(const std::string& dbPath);
+IWorkspaceManager* createWorkspaceManager(jarvis::persistence::IDatabase* db);
 
 } // namespace jarvis::workspace
 

@@ -3,23 +3,20 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QDateTime>
-#include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QTextStream>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <algorithm>
 
 namespace jarvis::workspace {
 
 class WorkspaceManager : public IWorkspaceManager {
 public:
-    explicit WorkspaceManager(const std::string& dbPath)
-        : dbPath_(dbPath)
+    explicit WorkspaceManager(persistence::IDatabase* db)
+        : db_(db)
         , watcher_(createFileWatcher())
     {
-        initDb();
         watcher_->setEventCallback([this](const FileEvent& event) {
             if (fileEventCb_) fileEventCb_(event);
         });
@@ -36,8 +33,6 @@ public:
         if (!dir.exists()) return false;
 
         std::string normalized = QDir::cleanPath(dir.absolutePath()).toStdString();
-
-        // Check if already a root
         auto roots = getRoots();
         if (std::find(roots.begin(), roots.end(), normalized) != roots.end())
             return true;
@@ -51,27 +46,19 @@ public:
 
         std::string normalized = QDir::cleanPath(dir.absolutePath()).toStdString();
 
-        QSqlQuery q(QSqlDatabase::database("workspace"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.prepare("INSERT OR IGNORE INTO workspaces (id, name) VALUES (?, ?)");
         q.addBindValue(QString::fromStdString(normalized));
         q.addBindValue(dir.dirName());
-
-        // Get or create workspace
         if (!q.exec()) return false;
 
-        // Add folder
         q.prepare("INSERT OR IGNORE INTO workspace_folders (workspace_id, path) VALUES (?, ?)");
         q.addBindValue(QString::fromStdString(normalized));
         q.addBindValue(QString::fromStdString(normalized));
-
         if (!q.exec()) return false;
 
-        // Watch the root
         watcher_->watchPath(normalized);
-
-        // Scan existing files
         scanDirectory(normalized);
-
         return true;
     }
 
@@ -79,7 +66,7 @@ public:
         std::string normalized = QDir::cleanPath(QString::fromStdString(path)).toStdString();
         watcher_->unwatchPath(normalized);
 
-        QSqlQuery q(QSqlDatabase::database("workspace"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.prepare("DELETE FROM workspace_folders WHERE workspace_id = ?");
         q.addBindValue(QString::fromStdString(normalized));
         q.exec();
@@ -91,7 +78,7 @@ public:
 
     std::vector<std::string> getRoots() const override {
         std::vector<std::string> roots;
-        QSqlQuery q(QSqlDatabase::database("workspace"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.exec("SELECT DISTINCT path FROM workspace_folders ORDER BY path");
         while (q.next())
             roots.push_back(q.value(0).toString().toStdString());
@@ -207,7 +194,7 @@ public:
 
     std::vector<FileEntry> getRecentFiles(int limit) override {
         std::vector<FileEntry> entries;
-        QSqlQuery q(QSqlDatabase::database("workspace"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.prepare("SELECT path, name, last_opened FROM recent_files ORDER BY last_opened DESC LIMIT ?");
         q.addBindValue(limit);
         if (q.exec()) {
@@ -229,7 +216,7 @@ public:
         QFileInfo fi(QString::fromStdString(path));
         if (!fi.exists()) return;
 
-        QSqlQuery q(QSqlDatabase::database("workspace"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.prepare(R"(
             INSERT INTO recent_files (path, name, last_opened, open_count)
             VALUES (?, ?, ?, 1)
@@ -261,10 +248,8 @@ public:
         QDir dir(QString::fromStdString(rootPath));
         proj.name = dir.dirName().toStdString();
 
-        // Detect project type
         if (dir.exists("CMakeLists.txt")) {
             proj.type = "cpp";
-            // Read version from CMakeLists.txt
             QFile cmake(dir.absoluteFilePath("CMakeLists.txt"));
             if (cmake.open(QIODevice::ReadOnly | QIODevice::Text)) {
                 QTextStream in(&cmake);
@@ -300,54 +285,14 @@ public:
     }
 
 private:
-    std::string dbPath_;
+    persistence::IDatabase* db_;
     IFileWatcher* watcher_;
     FileEventCallback fileEventCb_;
-
-    void initDb() {
-        QString connName = "workspace";
-        QSqlDatabase db;
-        if (QSqlDatabase::contains(connName)) {
-            db = QSqlDatabase::database(connName);
-        } else {
-            db = QSqlDatabase::addDatabase("QSQLITE", connName);
-        }
-        db.setDatabaseName(QString::fromStdString(dbPath_));
-        if (!db.isOpen()) db.open();
-        if (db.isOpen()) {
-            QSqlQuery q(db);
-            q.exec(R"(
-                CREATE TABLE IF NOT EXISTS workspaces (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL DEFAULT 'workspace',
-                    created_at TEXT NOT NULL,
-                    last_opened TEXT NOT NULL
-                )
-            )");
-            q.exec(R"(
-                CREATE TABLE IF NOT EXISTS workspace_folders (
-                    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-                    path TEXT NOT NULL,
-                    PRIMARY KEY (workspace_id, path)
-                )
-            )");
-            q.exec(R"(
-                CREATE TABLE IF NOT EXISTS recent_files (
-                    path TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    last_opened TEXT NOT NULL,
-                    open_count INTEGER NOT NULL DEFAULT 1
-                )
-            )");
-            q.exec("CREATE INDEX IF NOT EXISTS idx_recent_files_opened ON recent_files(last_opened DESC)");
-        }
-    }
 
     void scanDirectory(const std::string& dirPath) {
         QDir dir(QString::fromStdString(dirPath));
         if (!dir.exists()) return;
 
-        // Watch subdirectories
         for (const auto& fi : dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot)) {
             watcher_->watchPath(fi.absoluteFilePath().toStdString());
             scanDirectory(fi.absoluteFilePath().toStdString());
@@ -355,8 +300,8 @@ private:
     }
 };
 
-IWorkspaceManager* createWorkspaceManager(const std::string& dbPath) {
-    return new WorkspaceManager(dbPath);
+IWorkspaceManager* createWorkspaceManager(persistence::IDatabase* db) {
+    return new WorkspaceManager(db);
 }
 
 } // namespace jarvis::workspace

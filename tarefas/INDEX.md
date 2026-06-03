@@ -19,12 +19,12 @@
 | 011 | AI Engine Integration (plug models/agents no chat) | ✅ |
 | 008 | Módulo Conhecimento (notas estilo Obsidian) | ✅ |
 | 009 | Módulo Workspace (gerenciamento de arquivos) | ✅ |
+| 010 | Módulo Persistência (SQLite repositories) | ✅ |
 
 ### 📋 A Fazer
 
 | # | Tarefa | Status | Prioridade |
 |---|--------|--------|------------|
-| 010 | Módulo Persistência (SQLite repositories) | ⬜ | 🟡 Média |
 | 012 | Sync Server completo (auth, sync, broadcast) | ⬜ | 🟡 Média |
 | 013 | Testes Integrados (Catch2 + React Testing Library) | ⬜ | 🟢 Baixa |
 | 014 | CI/CD (GitHub Actions, builds automatizados) | ⬜ | 🟢 Baixa |
@@ -55,9 +55,9 @@ tarefas/
 │   ├── 007-bridge-webchannel.md
 │   ├── 008-modulo-conhecimento.md
 │   ├── 009-modulo-workspace.md
+│   ├── 010-modulo-persistencia.md
 │   └── 011-ai-engine-integracao.md
 └── 03-a-fazer/
-    ├── 010-modulo-persistencia.md
     ├── 012-sync-server.md
     ├── 013-testes-integrados.md
     └── 014-deploy-ci-cd.md

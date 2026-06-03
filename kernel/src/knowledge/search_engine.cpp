@@ -1,5 +1,4 @@
 #include "jarvis/knowledge/search_engine.h"
-#include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QString>
@@ -8,17 +7,15 @@ namespace jarvis::knowledge {
 
 class SearchEngine : public ISearchEngine {
 public:
-    explicit SearchEngine(const std::string& dbPath)
-        : dbPath_(dbPath)
-    {
-        initDb();
-    }
+    explicit SearchEngine(persistence::IDatabase* db)
+        : db_(db)
+    {}
 
     std::vector<SearchResult> search(const std::string& query) override {
         std::vector<SearchResult> results;
         if (query.empty()) return results;
 
-        QSqlQuery q(QSqlDatabase::database("knowledge-search"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.prepare(R"(
             SELECT n.id, n.title, snippet(notes_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
                    rank
@@ -45,10 +42,8 @@ public:
     }
 
     bool rebuildIndex() override {
-        QSqlQuery q(QSqlDatabase::database("knowledge-search"));
-        // Delete all content
+        QSqlQuery q(db_->qSqlDatabase());
         q.exec("INSERT INTO notes_fts(notes_fts) VALUES('rebuild')");
-        // Re-populate
         return q.exec(
             "INSERT INTO notes_fts(notes_fts, rowid, title, content, tags) "
             "SELECT rowid, title, content, tags FROM notes"
@@ -56,7 +51,7 @@ public:
     }
 
     bool addToIndex(const std::string& noteId) override {
-        QSqlQuery q(QSqlDatabase::database("knowledge-search"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.prepare(R"(
             INSERT INTO notes_fts(rowid, title, content, tags)
             SELECT rowid, title, content, tags FROM notes WHERE id = ?
@@ -66,26 +61,14 @@ public:
     }
 
     bool removeFromIndex(const std::string& noteId) override {
-        QSqlQuery q(QSqlDatabase::database("knowledge-search"));
+        QSqlQuery q(db_->qSqlDatabase());
         q.prepare("INSERT INTO notes_fts(notes_fts, rowid) VALUES('delete', (SELECT rowid FROM notes WHERE id = ?))");
         q.addBindValue(QString::fromStdString(noteId));
         return q.exec();
     }
 
 private:
-    std::string dbPath_;
-
-    void initDb() {
-        QString connName = "knowledge-search";
-        QSqlDatabase db;
-        if (QSqlDatabase::contains(connName)) {
-            db = QSqlDatabase::database(connName);
-        } else {
-            db = QSqlDatabase::addDatabase("QSQLITE", connName);
-        }
-        db.setDatabaseName(QString::fromStdString(dbPath_));
-        if (!db.isOpen()) db.open();
-    }
+    persistence::IDatabase* db_;
 
     static std::string escapeQuery(const std::string& query) {
         std::string escaped;
@@ -102,8 +85,8 @@ private:
     }
 };
 
-ISearchEngine* createSearchEngine(const std::string& dbPath) {
-    return new SearchEngine(dbPath);
+ISearchEngine* createSearchEngine(persistence::IDatabase* db) {
+    return new SearchEngine(db);
 }
 
 } // namespace jarvis::knowledge

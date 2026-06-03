@@ -2,6 +2,7 @@
 #define JARVIS_KNOWLEDGE_KNOWLEDGE_MANAGER_H
 
 #include "jarvis/knowledge/note.h"
+#include "jarvis/persistence/database.h"
 #include <string>
 #include <vector>
 #include <functional>
@@ -39,7 +40,7 @@ public:
 };
 
 // Factory function
-IKnowledgeManager* createKnowledgeManager(const std::string& dbPath);
+IKnowledgeManager* createKnowledgeManager(jarvis::persistence::IDatabase* db);
 
 } // namespace jarvis::knowledge
 

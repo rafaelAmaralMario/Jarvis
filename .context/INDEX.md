@@ -21,6 +21,7 @@
 | 004 | Catalogo de Modulos com SOLID | 2026-06-03T11:15:00-03:00 | active | — | — | — |
 | 005 | Skills e Contexto Unificado | 2026-06-03T11:36:00-03:00 | active | — | — | context-generator |
 | 006 | Módulo Conhecimento (Obsidian-like) | 2026-06-03T12:55:00-03:00 | active | — | — | context-generator |
+| 007 | Módulo Persistência (SQLite) | 2026-06-03T15:30:00-03:00 | active | — | — | — |
 
 > **Nota:** Ao adicionar novo contexto, insira uma nova linha na tabela acima e crie o arquivo correspondente em `.context/YYYY-MM-DD-NNN-titulo.md`.
 >
