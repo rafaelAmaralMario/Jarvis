@@ -4,6 +4,8 @@ import { useJarvis } from '@/hooks/use-jarvis';
 import { EditorTabs } from './EditorTabs';
 import { MonacoWrapper } from './MonacoWrapper';
 import { QuickOpen } from './QuickOpen';
+import { CommandPalette } from './CommandPalette';
+import { MarkdownPreview } from './MarkdownPreview';
 import { Breadcrumb } from './Breadcrumb';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { EditorSettingsPanel } from './EditorSettingsPanel';
@@ -30,7 +32,9 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [quickOpenOpen, setQuickOpenOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const [splitMode, setSplitMode] = useState<SplitMode>('single');
   const [rightTab, setRightTab] = useState<string | null>(null);
@@ -45,6 +49,8 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
     lineNumbers: 'on',
     autoSave: true,
     autoSaveDelay: 2000,
+    formatOnSave: false,
+    formatOnSaveMode: 'monaco',
   });
 
   const tabsRef = useRef(tabs);
@@ -65,6 +71,8 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
         lineNumbers: raw.lineNumbers || 'on',
         autoSave: raw.autoSave !== 'false',
         autoSaveDelay: parseInt(raw.autoSaveDelay || '2000', 10),
+        formatOnSave: raw.formatOnSave === 'true',
+        formatOnSaveMode: raw.formatOnSaveMode || 'monaco',
       });
     } catch {}
   }, [bridge]);
@@ -110,18 +118,19 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
     });
   }, [openFile]);
 
-  const saveFile = useCallback(async (path: string) => {
+  const saveFile = useCallback(async (path: string, explicitContent?: string) => {
     const currentTabs = tabsRef.current;
     const tab = currentTabs.get(path);
     if (!tab) return;
 
-    const success = await bridge.editorSaveFile(path, tab.content);
+    const content = explicitContent ?? tab.content;
+    const success = await bridge.editorSaveFile(path, content);
     if (success) {
       setTabs(prev => {
         const next = new Map(prev);
         const t = next.get(path);
         if (t) {
-          next.set(path, { ...t, info: { ...t.info, isDirty: false }, originalContent: t.content });
+          next.set(path, { ...t, info: { ...t.info, isDirty: false }, originalContent: content });
         }
         return next;
       });
@@ -167,8 +176,8 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
     });
   }, []);
 
-  const handleSaveCurrent = useCallback(() => {
-    if (activeTab) saveFile(activeTab);
+  const handleSaveCurrent = useCallback((content?: string) => {
+    if (activeTab) saveFile(activeTab, content);
   }, [activeTab, saveFile]);
 
   const handleCloseCurrent = useCallback(() => {
@@ -235,8 +244,45 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
     onSave: saveFile,
   });
 
+  const triggerCommand = useCallback((commandId: string) => {
+    switch (commandId) {
+      case 'file.save': handleSaveCurrent(); break;
+      case 'file.close': handleCloseCurrent(); break;
+      case 'file.open': setQuickOpenOpen(true); break;
+      case 'editor.find': break;
+      case 'editor.replace': break;
+      case 'editor.split': handleToggleSplit(); break;
+      case 'editor.close-split': if (isSplit) { setSplitMode('single'); setRightTab(null); } break;
+      case 'editor.settings': setSettingsOpen(true); break;
+      case 'view.sidebar': setSidebarOpen(v => !v); break;
+      case 'view.terminal': break;
+      case 'view.assistant': break;
+      case 'view.knowledge': break;
+    }
+  }, [handleSaveCurrent, handleCloseCurrent, handleToggleSplit, isSplit]);
+
+  const commands = [
+    { id: 'file.save', label: 'Salvar', shortcut: 'Ctrl+S', category: 'file' as const, action: () => triggerCommand('file.save') },
+    { id: 'file.close', label: 'Fechar', shortcut: 'Ctrl+W', category: 'file' as const, action: () => triggerCommand('file.close') },
+    { id: 'file.open', label: 'Abrir Arquivo...', shortcut: 'Ctrl+P', category: 'file' as const, action: () => triggerCommand('file.open') },
+    { id: 'editor.find', label: 'Buscar', shortcut: 'Ctrl+F', category: 'editor' as const, action: () => triggerCommand('editor.find') },
+    { id: 'editor.replace', label: 'Buscar e Substituir', shortcut: 'Ctrl+H', category: 'editor' as const, action: () => triggerCommand('editor.replace') },
+    { id: 'editor.split', label: 'Split View', category: 'editor' as const, action: () => triggerCommand('editor.split') },
+    { id: 'editor.close-split', label: 'Fechar Split', category: 'editor' as const, action: () => triggerCommand('editor.close-split') },
+    { id: 'editor.settings', label: 'Abrir Configurações', category: 'editor' as const, action: () => triggerCommand('editor.settings') },
+    { id: 'view.sidebar', label: 'Toggle Sidebar', category: 'view' as const, action: () => triggerCommand('view.sidebar') },
+    { id: 'view.terminal', label: 'Toggle Terminal', shortcut: 'Ctrl+`', category: 'view' as const, action: () => triggerCommand('view.terminal') },
+    { id: 'view.assistant', label: 'Assistente IA', category: 'view' as const, action: () => triggerCommand('view.assistant') },
+    { id: 'view.knowledge', label: 'Conhecimento', category: 'view' as const, action: () => triggerCommand('view.knowledge') },
+  ];
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'p') {
+        e.preventDefault();
+        setCommandPaletteOpen(v => !v);
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
         e.preventDefault();
         setQuickOpenOpen(v => !v);
@@ -268,6 +314,8 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [activeTab, rightTab]);
 
+  const isMd = activeState?.info.language === 'markdown';
+
   const monacoSettings = {
     fontSize: editorSettings.fontSize,
     tabSize: editorSettings.tabSize,
@@ -275,6 +323,7 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
     minimap: editorSettings.minimap,
     lineNumbers: editorSettings.lineNumbers,
     theme: editorSettings.theme,
+    formatOnSave: editorSettings.formatOnSave,
   };
 
   return (
@@ -286,6 +335,12 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
           if (isSplit) openFileInSplit(path, 'right');
           else openFile(path);
         }}
+      />
+
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        commands={commands}
       />
 
       <EditorSettingsPanel
@@ -324,6 +379,19 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
         >
           🔍
         </button>
+        {isMd && (
+          <button
+            onClick={() => setShowPreview(v => !v)}
+            className={`px-1.5 py-0.5 rounded text-xs transition-colors ${
+              showPreview
+                ? 'text-primary bg-primary/10'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/30'
+            }`}
+            title={showPreview ? 'Fechar Preview' : 'Preview Markdown'}
+          >
+            📄
+          </button>
+        )}
         <button
           onClick={() => setSettingsOpen(true)}
           className="px-1.5 py-0.5 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors"
@@ -450,7 +518,7 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
                   path={rightTab || ''}
                   onChange={(val) => rightTab && handleContentChange(rightTab, val)}
                   onCursorChange={(line, col) => setRightCursorPos({ line, col })}
-                  onSave={() => rightTab && saveFile(rightTab)}
+                  onSave={(val) => rightTab && saveFile(rightTab, val)}
                   onClose={handleCloseCurrent}
                   settings={monacoSettings}
                 />
@@ -478,6 +546,28 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
                   Selecione um arquivo
                 </div>
               )}
+            </div>
+          </>
+        ) : showPreview && activeState ? (
+          <>
+            <div className="flex-1 flex flex-col">
+              <MonacoWrapper
+                key={activeTab || ''}
+                value={activeState.content}
+                language={activeState.info.language}
+                path={activeTab || ''}
+                onChange={(val) => activeTab && handleContentChange(activeTab, val)}
+                onCursorChange={(line, col) => setCursorPos({ line, col })}
+                onSave={handleSaveCurrent}
+                onClose={handleCloseCurrent}
+                settings={monacoSettings}
+              />
+            </div>
+            <div className="w-[45%] border-l border-border flex flex-col">
+              <MarkdownPreview
+                content={activeState.content}
+                visible={true}
+              />
             </div>
           </>
         ) : activeState ? (

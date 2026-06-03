@@ -28,6 +28,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.10.5",
     "lucide-react": "^0.510.0",
+    "marked": "^18.0.4",
     "monaco-editor": "^0.55.1",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",

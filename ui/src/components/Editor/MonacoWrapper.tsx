@@ -6,7 +6,7 @@ interface MonacoWrapperProps {
   path: string;
   onChange?: (value: string) => void;
   onCursorChange?: (line: number, col: number) => void;
-  onSave?: () => void;
+  onSave?: (content?: string) => void;
   onClose?: () => void;
   settings?: {
     fontSize: number;
@@ -15,6 +15,7 @@ interface MonacoWrapperProps {
     minimap: boolean;
     lineNumbers: string;
     theme: string;
+    formatOnSave?: boolean;
   };
 }
 
@@ -53,6 +54,11 @@ export function MonacoWrapper({ value, language, path, onChange, onCursorChange,
         automaticLayout: true,
         scrollBeyondLastLine: false,
         padding: { top: 8 },
+        find: {
+          addExtraSpaceOnTop: true,
+          autoFindInSelection: 'never',
+          seedSearchStringFromSelection: 'always',
+        },
       });
 
       editorRef.current = editor;
@@ -74,7 +80,12 @@ export function MonacoWrapper({ value, language, path, onChange, onCursorChange,
         label: 'Salvar',
         keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
         contextMenuGroupId: '1_modification',
-        run: () => onSave?.(),
+        run: () => {
+          if (settings?.formatOnSave) {
+            editor.getAction('editor.action.formatDocument')?.run();
+          }
+          onSave?.(editor.getValue());
+        },
       });
 
       editor.addAction({

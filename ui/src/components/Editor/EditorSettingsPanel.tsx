@@ -16,6 +16,8 @@ interface Settings {
   lineNumbers: string;
   autoSave: boolean;
   autoSaveDelay: number;
+  formatOnSave: boolean;
+  formatOnSaveMode: string;
 }
 
 const defaultSettings: Settings = {
@@ -27,6 +29,8 @@ const defaultSettings: Settings = {
   lineNumbers: 'on',
   autoSave: true,
   autoSaveDelay: 2000,
+  formatOnSave: false,
+  formatOnSaveMode: 'monaco',
 };
 
 export function EditorSettingsPanel({ isOpen, onClose, onSettingsChange }: EditorSettingsPanelProps) {
@@ -45,6 +49,8 @@ export function EditorSettingsPanel({ isOpen, onClose, onSettingsChange }: Edito
           lineNumbers: raw.lineNumbers || 'on',
           autoSave: raw.autoSave !== 'false',
           autoSaveDelay: parseInt(raw.autoSaveDelay || '2000', 10),
+          formatOnSave: raw.formatOnSave === 'true',
+          formatOnSaveMode: raw.formatOnSaveMode || 'monaco',
         });
       });
     }
@@ -187,6 +193,36 @@ export function EditorSettingsPanel({ isOpen, onClose, onSettingsChange }: Edito
             )}
           </div>
         </div>
+
+          <div className="border-t border-border pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-xs text-muted-foreground">Formatar ao salvar</label>
+                <p className="text-[10px] text-muted-foreground/50">Formatar documento automaticamente</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.formatOnSave}
+                  onChange={e => update('formatOnSave', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-accent/40 rounded-full peer peer-checked:bg-primary after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-foreground after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4" />
+              </label>
+            </div>
+            {settings.formatOnSave && (
+              <div className="flex items-center justify-between mt-3">
+                <label className="text-xs text-muted-foreground">Modo</label>
+                <select
+                  value={settings.formatOnSaveMode}
+                  onChange={e => update('formatOnSaveMode', e.target.value)}
+                  className="text-xs bg-accent/20 border border-border rounded px-2 py-1 outline-none"
+                >
+                  <option value="monaco">Monaco Native</option>
+                </select>
+              </div>
+            )}
+          </div>
       </div>
     </div>
   );
