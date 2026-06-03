@@ -62,6 +62,9 @@ export interface JarvisBridge {
   editorCloseFile(path: string): Promise<boolean>;
   editorGetOpenFiles(): Promise<EditorTabInfo[]>;
   editorDetectLanguage(filename: string): Promise<string>;
+  editorSearchFiles(query: string): Promise<FileEntry[]>;
+  editorGetSettings(): Promise<Record<string, string>>;
+  editorUpdateSettings(key: string, value: string): Promise<boolean>;
   createFileWithPath(fullPath: string): Promise<boolean>;
 
   onEvent(event: string, callback: (data: unknown) => void): void;
@@ -144,6 +147,7 @@ export interface FileEntry {
   name: string;
   path: string;
   fullPath?: string;
+  relativePath?: string;
   isDirectory: boolean;
   size?: number;
   modifiedAt?: string;

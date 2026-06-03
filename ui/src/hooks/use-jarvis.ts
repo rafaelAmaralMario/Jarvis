@@ -128,6 +128,9 @@ function createBridge(): JarvisBridge {
     editorCloseFile: (path) => send('editorCloseFile', path) as Promise<boolean>,
     editorGetOpenFiles: () => send('editorGetOpenFiles') as Promise<EditorTabInfo[]>,
     editorDetectLanguage: (filename) => send('editorDetectLanguage', filename) as Promise<string>,
+    editorSearchFiles: (query) => send('editorSearchFiles', query) as Promise<FileEntry[]>,
+    editorGetSettings: () => send('editorGetSettings') as Promise<Record<string, string>>,
+    editorUpdateSettings: (key, value) => send('editorUpdateSettings', key, value) as Promise<boolean>,
     createFileWithPath: (fullPath) => send('createFileWithPath', fullPath) as Promise<boolean>,
 
     onEvent: (event, cb) => {

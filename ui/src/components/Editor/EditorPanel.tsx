@@ -3,6 +3,10 @@ import type { EditorTabInfo } from '@/types';
 import { useJarvis } from '@/hooks/use-jarvis';
 import { EditorTabs } from './EditorTabs';
 import { MonacoWrapper } from './MonacoWrapper';
+import { QuickOpen } from './QuickOpen';
+import { Breadcrumb } from './Breadcrumb';
+import { useAutoSave } from '@/hooks/useAutoSave';
+import { EditorSettingsPanel } from './EditorSettingsPanel';
 
 interface EditorPanelProps {
   fileToOpen?: string;
@@ -14,6 +18,8 @@ interface TabState {
   originalContent: string;
 }
 
+type SplitMode = 'single' | 'left' | 'right' | 'both';
+
 export function EditorPanel({ fileToOpen }: EditorPanelProps) {
   const bridge = useJarvis();
   const [tabs, setTabs] = useState<Map<string, TabState>>(new Map());
@@ -23,9 +29,47 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; path: string } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  const [quickOpenOpen, setQuickOpenOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const [splitMode, setSplitMode] = useState<SplitMode>('single');
+  const [rightTab, setRightTab] = useState<string | null>(null);
+  const [rightCursorPos, setRightCursorPos] = useState({ line: 1, col: 1 });
+
+  const [editorSettings, setEditorSettings] = useState({
+    fontSize: 14,
+    tabSize: 4,
+    wordWrap: 'off',
+    theme: 'vs-dark',
+    minimap: true,
+    lineNumbers: 'on',
+    autoSave: true,
+    autoSaveDelay: 2000,
+  });
+
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
   const activeState = activeTab ? tabs.get(activeTab) : null;
+  const rightState = rightTab ? tabs.get(rightTab) : null;
+  const isSplit = splitMode === 'both';
+
+  const loadSettings = useCallback(async () => {
+    try {
+      const raw = await bridge.editorGetSettings();
+      setEditorSettings({
+        fontSize: parseInt(raw.fontSize || '14', 10),
+        tabSize: parseInt(raw.tabSize || '4', 10),
+        wordWrap: raw.wordWrap || 'off',
+        theme: raw.theme || 'vs-dark',
+        minimap: raw.minimap !== 'false',
+        lineNumbers: raw.lineNumbers || 'on',
+        autoSave: raw.autoSave !== 'false',
+        autoSaveDelay: parseInt(raw.autoSaveDelay || '2000', 10),
+      });
+    } catch {}
+  }, [bridge]);
+
+  useEffect(() => { loadSettings(); }, [loadSettings]);
 
   const openFile = useCallback(async (path: string) => {
     const currentTabs = tabsRef.current;
@@ -56,6 +100,15 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
       openFile(fileToOpen);
     }
   }, [fileToOpen, openFile]);
+
+  const openFileInSplit = useCallback((path: string, side: 'left' | 'right') => {
+    openFile(path).then(() => {
+      if (side === 'right') {
+        setRightTab(path);
+        setSplitMode('both');
+      }
+    });
+  }, [openFile]);
 
   const saveFile = useCallback(async (path: string) => {
     const currentTabs = tabsRef.current;
@@ -91,8 +144,13 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
       next.delete(path);
       return next;
     });
+
+    if (rightTab === path) {
+      setRightTab(null);
+      setSplitMode('single');
+    }
     setConfirmClose(null);
-  }, [bridge]);
+  }, [bridge, rightTab]);
 
   const handleContentChange = useCallback((path: string, content: string) => {
     setTabs(prev => {
@@ -145,11 +203,56 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
         });
         break;
       }
+      case 'open-left': {
+        if (activeTab) setActiveTab(path);
+        else openFile(path);
+        setSplitMode('single');
+        break;
+      }
+      case 'open-right': {
+        openFileInSplit(path, 'right');
+        break;
+      }
     }
-  }, [saveFile, closeFile]);
+  }, [saveFile, closeFile, openFileInSplit, activeTab, openFile]);
+
+  const handleToggleSplit = useCallback(() => {
+    if (isSplit) {
+      setSplitMode('single');
+      setRightTab(null);
+    } else if (activeTab) {
+      setRightTab(activeTab);
+      setSplitMode('both');
+    }
+  }, [isSplit, activeTab]);
+
+  useAutoSave({
+    enabled: editorSettings.autoSave,
+    delay: editorSettings.autoSaveDelay,
+    isDirty: activeState?.info.isDirty || false,
+    content: activeState?.content || '',
+    path: activeTab,
+    onSave: saveFile,
+  });
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        setQuickOpenOpen(v => !v);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === '1') {
+        e.preventDefault();
+        if (rightTab) setActiveTab(rightTab);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === '2') {
+        e.preventDefault();
+        const keys = Array.from(tabsRef.current.keys());
+        if (keys.length > 0 && keys[0] !== activeTab) setActiveTab(keys[0]);
+        return;
+      }
       if (e.key === 'Tab' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         const keys = Array.from(tabsRef.current.keys());
@@ -163,18 +266,71 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [activeTab]);
+  }, [activeTab, rightTab]);
+
+  const monacoSettings = {
+    fontSize: editorSettings.fontSize,
+    tabSize: editorSettings.tabSize,
+    wordWrap: editorSettings.wordWrap,
+    minimap: editorSettings.minimap,
+    lineNumbers: editorSettings.lineNumbers,
+    theme: editorSettings.theme,
+  };
 
   return (
     <div className="h-full flex flex-col bg-background">
-      <div className="flex items-center gap-2 px-3 py-1 border-b border-border bg-card">
+      <QuickOpen
+        isOpen={quickOpenOpen}
+        onClose={() => setQuickOpenOpen(false)}
+        onSelect={(path) => {
+          if (isSplit) openFileInSplit(path, 'right');
+          else openFile(path);
+        }}
+      />
+
+      <EditorSettingsPanel
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onSettingsChange={loadSettings}
+      />
+
+      <div className="flex items-center gap-1 px-2 py-1 border-b border-border bg-card">
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           className="px-1.5 py-0.5 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors"
+          title="Toggle Sidebar"
         >
           ☰
         </button>
-        <span className="text-xs text-muted-foreground font-medium">EDITOR</span>
+        <span className="text-xs text-muted-foreground font-medium ml-1">EDITOR</span>
+
+        <div className="flex-1" />
+
+        <button
+          onClick={handleToggleSplit}
+          className={`px-1.5 py-0.5 rounded text-xs transition-colors ${
+            isSplit
+              ? 'text-primary bg-primary/10'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent/30'
+          }`}
+          title={isSplit ? 'Close Split' : 'Split Editor'}
+        >
+          ||
+        </button>
+        <button
+          onClick={() => setQuickOpenOpen(true)}
+          className="px-1.5 py-0.5 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors"
+          title="Quick Open (Ctrl+P)"
+        >
+          🔍
+        </button>
+        <button
+          onClick={() => setSettingsOpen(true)}
+          className="px-1.5 py-0.5 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors"
+          title="Settings"
+        >
+          ⚙
+        </button>
       </div>
 
       <EditorTabs
@@ -191,6 +347,14 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
         }}
       />
 
+      <Breadcrumb
+        filePath={isSplit ? rightTab : activeTab}
+        onNavigate={(path) => {
+          if (isSplit) openFileInSplit(path, 'right');
+          else openFile(path);
+        }}
+      />
+
       {contextMenu && (
         <>
           <div
@@ -198,7 +362,7 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
             onClick={() => setContextMenu(null)}
           />
           <div
-            className="fixed z-50 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[160px]"
+            className="fixed z-50 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[180px]"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             <button
@@ -225,6 +389,19 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
               className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/30 transition-colors"
             >
               Fechar outros
+            </button>
+            <div className="border-t border-border my-1" />
+            <button
+              onClick={() => handleContextMenuAction('open-left', contextMenu.path)}
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/30 transition-colors"
+            >
+              Abrir no painel esquerdo
+            </button>
+            <button
+              onClick={() => handleContextMenuAction('open-right', contextMenu.path)}
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/30 transition-colors"
+            >
+              Abrir no painel direito
             </button>
           </div>
         </>
@@ -262,7 +439,48 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
       )}
 
       <div className="flex-1 flex overflow-hidden">
-        {activeState ? (
+        {isSplit ? (
+          <>
+            <div className="flex-1 flex flex-col border-r border-border">
+              {rightState ? (
+                <MonacoWrapper
+                  key={rightTab || 'right'}
+                  value={rightState.content}
+                  language={rightState.info.language}
+                  path={rightTab || ''}
+                  onChange={(val) => rightTab && handleContentChange(rightTab, val)}
+                  onCursorChange={(line, col) => setRightCursorPos({ line, col })}
+                  onSave={() => rightTab && saveFile(rightTab)}
+                  onClose={handleCloseCurrent}
+                  settings={monacoSettings}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-muted-foreground text-xs">
+                  Selecione um arquivo
+                </div>
+              )}
+            </div>
+            <div className="flex-1 flex flex-col">
+              {activeState ? (
+                <MonacoWrapper
+                  key={activeTab || 'left'}
+                  value={activeState.content}
+                  language={activeState.info.language}
+                  path={activeTab || ''}
+                  onChange={(val) => activeTab && handleContentChange(activeTab, val)}
+                  onCursorChange={(line, col) => setCursorPos({ line, col })}
+                  onSave={handleSaveCurrent}
+                  onClose={handleCloseCurrent}
+                  settings={monacoSettings}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-muted-foreground text-xs">
+                  Selecione um arquivo
+                </div>
+              )}
+            </div>
+          </>
+        ) : activeState ? (
           <MonacoWrapper
             key={activeTab || ''}
             value={activeState.content}
@@ -272,6 +490,7 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
             onCursorChange={(line, col) => setCursorPos({ line, col })}
             onSave={handleSaveCurrent}
             onClose={handleCloseCurrent}
+            settings={monacoSettings}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -287,13 +506,19 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
       </div>
 
       <div className="flex items-center justify-between px-4 py-1 border-t border-border text-[10px] text-muted-foreground bg-card">
-        <span>
-          {activeState && (
-            <>{activeState.info.language}</>
+        <span className="flex items-center gap-2">
+          {activeState && <>{activeState.info.language}</>}
+          {editorSettings.autoSave && activeState && (
+            <span className="text-[10px] text-green-500/70">auto-save</span>
           )}
         </span>
         <span>
-          {activeState ? `Ln ${cursorPos.line}, Col ${cursorPos.col}` : ''}
+          {isSplit
+            ? `Left: Ln ${cursorPos.line}, Col ${cursorPos.col}  |  Right: Ln ${rightCursorPos.line}, Col ${rightCursorPos.col}`
+            : activeState
+              ? `Ln ${cursorPos.line}, Col ${cursorPos.col}`
+              : ''
+          }
         </span>
       </div>
     </div>

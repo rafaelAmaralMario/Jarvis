@@ -2,6 +2,7 @@
 #include <QWebEngineView>
 #include <QWebChannel>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QTimer>
 #include <QDebug>
@@ -363,6 +364,17 @@ int main(int argc, char* argv[]) {
         CREATE TABLE IF NOT EXISTS workspace_folders (workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, path TEXT NOT NULL, PRIMARY KEY (workspace_id, path));
         CREATE TABLE IF NOT EXISTS recent_files (path TEXT PRIMARY KEY, name TEXT NOT NULL, last_opened TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), open_count INTEGER NOT NULL DEFAULT 1);
         CREATE INDEX IF NOT EXISTS idx_recent_files_opened ON recent_files(last_opened DESC);
+    )");
+    migrationRunner->addMigration(7, "editor", R"(
+        CREATE TABLE IF NOT EXISTS editor_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        INSERT OR IGNORE INTO editor_settings (key, value) VALUES ('fontSize', '14');
+        INSERT OR IGNORE INTO editor_settings (key, value) VALUES ('tabSize', '4');
+        INSERT OR IGNORE INTO editor_settings (key, value) VALUES ('wordWrap', 'off');
+        INSERT OR IGNORE INTO editor_settings (key, value) VALUES ('theme', 'vs-dark');
+        INSERT OR IGNORE INTO editor_settings (key, value) VALUES ('minimap', 'true');
+        INSERT OR IGNORE INTO editor_settings (key, value) VALUES ('lineNumbers', 'on');
+        INSERT OR IGNORE INTO editor_settings (key, value) VALUES ('autoSave', 'true');
+        INSERT OR IGNORE INTO editor_settings (key, value) VALUES ('autoSaveDelay', '2000');
     )");
 
     if (!migrationRunner->runPending()) {
@@ -1046,7 +1058,58 @@ int main(int argc, char* argv[]) {
         }
     });
 
-    qDebug() << "Registered" << 53 << "bridge handlers";
+    bridge.registerHandler("editorSearchFiles", [workspaceManager](const QVariantList& args) -> QVariant {
+        QJsonArray results;
+        try {
+            QString query = args.size() > 0 ? args[0].toString().toLower() : "";
+            auto roots = workspaceManager->getRoots();
+            for (const auto& root : roots) {
+                QDirIterator it(QString::fromStdString(root), QDir::Files, QDirIterator::Subdirectories);
+                while (it.hasNext()) {
+                    it.next();
+                    QFileInfo fi = it.fileInfo();
+                    QString fileName = fi.fileName().toLower();
+                    if (query.isEmpty() || fileName.contains(query)) {
+                        QJsonObject obj;
+                        obj["name"] = fi.fileName();
+                        obj["path"] = fi.absoluteFilePath();
+                        QString relPath = QString::fromStdString(root);
+                        obj["relativePath"] = fi.absoluteFilePath().mid(relPath.length() + 1);
+                        obj["isDirectory"] = false;
+                        obj["size"] = static_cast<qint64>(fi.size());
+                        results.append(obj);
+                    }
+                }
+            }
+        } catch (...) {}
+        return results;
+    });
+
+    bridge.registerHandler("editorGetSettings", [db](const QVariantList&) -> QVariant {
+        QJsonObject settings;
+        try {
+            QSqlQuery q(db->qSqlDatabase());
+            q.exec("SELECT key, value FROM editor_settings");
+            while (q.next())
+                settings[q.value(0).toString()] = q.value(1).toString();
+        } catch (...) {}
+        return settings;
+    });
+
+    bridge.registerHandler("editorUpdateSettings", [db](const QVariantList& args) -> QVariant {
+        if (args.size() < 2) return false;
+        try {
+            QSqlQuery q(db->qSqlDatabase());
+            q.prepare("INSERT OR REPLACE INTO editor_settings (key, value) VALUES (?, ?)");
+            q.addBindValue(args[0].toString());
+            q.addBindValue(args[1].toString());
+            return q.exec();
+        } catch (...) {
+            return false;
+        }
+    });
+
+    qDebug() << "Registered" << 56 << "bridge handlers";
 
     // ---- Load web UI ----
     QString webuiPath = qApp->applicationDirPath() + "/webui/index.html";

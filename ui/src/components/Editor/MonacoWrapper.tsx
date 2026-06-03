@@ -8,9 +8,17 @@ interface MonacoWrapperProps {
   onCursorChange?: (line: number, col: number) => void;
   onSave?: () => void;
   onClose?: () => void;
+  settings?: {
+    fontSize: number;
+    tabSize: number;
+    wordWrap: string;
+    minimap: boolean;
+    lineNumbers: string;
+    theme: string;
+  };
 }
 
-export function MonacoWrapper({ value, language, path, onChange, onCursorChange, onSave, onClose }: MonacoWrapperProps) {
+export function MonacoWrapper({ value, language, path, onChange, onCursorChange, onSave, onClose, settings }: MonacoWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<ReturnType<typeof import('monaco-editor')['editor']['create']> | null>(null);
 
@@ -26,19 +34,19 @@ export function MonacoWrapper({ value, language, path, onChange, onCursorChange,
       const editor = monaco.editor.create(containerRef.current, {
         value,
         language,
-        theme: 'vs-dark',
-        minimap: { enabled: true },
-        lineNumbers: 'on',
+        theme: (settings?.theme as string) || 'vs-dark',
+        minimap: { enabled: settings?.minimap ?? true },
+        lineNumbers: (settings?.lineNumbers as any) || 'on',
         glyphMargin: true,
         folding: true,
         bracketPairColorization: { enabled: true },
         autoIndent: 'advanced',
-        tabSize: 4,
-        wordWrap: 'off',
+        tabSize: settings?.tabSize || 4,
+        wordWrap: (settings?.wordWrap as any) || 'off',
         smoothScrolling: true,
         cursorBlinking: 'smooth',
         cursorStyle: 'line',
-        fontSize: 14,
+        fontSize: settings?.fontSize || 14,
         fontFamily: "'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace",
         renderWhitespace: 'selection',
         contextmenu: true,
@@ -110,6 +118,18 @@ export function MonacoWrapper({ value, language, path, onChange, onCursorChange,
       }
     }
   }, [path]);
+
+  useEffect(() => {
+    const ed = editorRef.current;
+    if (!ed) return;
+    ed.updateOptions({
+      fontSize: settings?.fontSize || 14,
+      tabSize: settings?.tabSize || 4,
+      wordWrap: (settings?.wordWrap as any) || 'off',
+      minimap: { enabled: settings?.minimap ?? true },
+      lineNumbers: (settings?.lineNumbers as any) || 'on',
+    });
+  }, [settings]);
 
   return (
     <div ref={containerRef} className="w-full h-full" />

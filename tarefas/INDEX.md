@@ -29,7 +29,8 @@
 
 | # | Tarefa | Status |
 |---|--------|--------|
-| 015 | Módulo Editor — Fase 1 (Monaco, abas, atalhos) | 🔄 |
+| 015 | Módulo Editor — Fase 1 (Monaco, abas, atalhos) | ✅ |
+| 016 | Módulo Editor — Fase 2 (Split, Quick Open, Settings) | 🔄 |
 
 ---
 
