@@ -1,0 +1,13 @@
+{
+    "id": "jarvis.knowledge",
+    "name": "Conhecimento",
+    "version": "0.1.0",
+    "description": "Sistema de conhecimento estilo Obsidian — notas, grafos, busca",
+    "dependencies": ["jarvis.workspace"],
+    "permissions": [
+        "filesystem.read",
+        "filesystem.write",
+        "knowledge.read",
+        "knowledge.write"
+    ]
+}

@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JARVIS — AI Assistant Home</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0a0c10;
+    color: #e1e4e8;
+  }
+
+  .app { display: flex; height: 100vh; width: 100vw; }
+
+  /* ===== ACTIVITY BAR ===== */
+  .activity-bar {
+    width: 52px; background: #0a0c10; display: flex;
+    flex-direction: column; align-items: center;
+    padding: 8px 0; gap: 4px; border-right: 1px solid #1c1f26;
+    flex-shrink: 0;
+  }
+  .activity-bar .icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 18px; color: #484f58;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+  }
+  .activity-bar .icon:hover {
+    background: #1c1f26; color: #e1e4e8;
+    transform: scale(1.15) rotate(-8deg);
+  }
+  .activity-bar .icon:active { transform: scale(0.9); }
+  .activity-bar .icon.active {
+    background: linear-gradient(135deg, #8957e522, #8957e511);
+    color: #a371f7;
+  }
+  .activity-bar .icon.active::before {
+    content: ''; position: absolute; left: -9px; top: 4px; bottom: 4px;
+    width: 3px; background: #a371f7; border-radius: 0 3px 3px 0;
+    box-shadow: 0 0 8px #a371f766;
+  }
+  .activity-bar .spacer { flex: 1; }
+
+  /* ===== SIDEBAR ===== */
+  .sidebar {
+    width: 240px; background: #0d1117; border-right: 1px solid #1c1f26;
+    display: flex; flex-direction: column; flex-shrink: 0;
+    overflow: hidden;
+  }
+  .sidebar-header {
+    padding: 16px 16px 8px; font-size: 11px; font-weight: 700;
+    color: #484f58; text-transform: uppercase; letter-spacing: 0.8px;
+  }
+  .sidebar-content { flex: 1; overflow-y: auto; padding: 4px 8px; }
+  .sidebar-content::-webkit-scrollbar { width: 6px; }
+  .sidebar-content::-webkit-scrollbar-thumb { background: #1c1f26; border-radius: 3px; }
+
+  .conversation-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 8px; cursor: pointer;
+    font-size: 13px; color: #8b949e;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .conversation-item:hover { background: #1c1f26; color: #e1e4e8; padding-left: 16px; }
+  .conversation-item.active {
+    background: linear-gradient(135deg, #8957e518, #8957e508);
+    color: #a371f7;
+    box-shadow: inset 3px 0 0 #a371f7;
+  }
+  .conversation-item .time {
+    margin-left: auto; font-size: 11px; color: #30363d;
+  }
+  .conversation-item .text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .sidebar-divider {
+    height: 1px; background: #1c1f26; margin: 8px 12px;
+  }
+  .sidebar-label {
+    font-size: 11px; color: #484f58; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 8px 12px 4px;
+  }
+
+  .agent-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-radius: 8px; cursor: pointer;
+    font-size: 12px; color: #8b949e;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .agent-chip:hover { background: #1c1f26; color: #e1e4e8; padding-left: 16px; }
+  .agent-chip .avatar {
+    width: 28px; height: 28px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; background: #1c1f26; flex-shrink: 0;
+  }
+  .agent-chip .name { flex: 1; }
+  .agent-chip .badge {
+    font-size: 10px; background: #1c1f26; padding: 0 6px;
+    border-radius: 6px; line-height: 18px;
+  }
+
+  /* ===== MAIN ===== */
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #0a0c10; }
+
+  /* ===== AI ASSISTANT HOME ===== */
+  .home-content {
+    flex: 1; display: flex; flex-direction: column;
+    animation: homeIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes homeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Header */
+
+  .ai-header {
+    padding: 16px 24px; border-bottom: 1px solid #1c1f26;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0; background: #0d1117;
+  }
+  .ai-header-left { display: flex; align-items: center; gap: 12px; }
+  .ai-header-left .brand {
+    font-size: 16px; font-weight: 700;
+    background: linear-gradient(135deg, #a371f7, #58a6ff);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .ai-header-left .brand-sub {
+    font-size: 12px; color: #484f58;
+    background: #1c1f26; padding: 2px 10px; border-radius: 10px;
+  }
+
+  .ai-header-right { display: flex; align-items: center; gap: 8px; }
+  .model-selector {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 8px;
+    border: 1px solid #1c1f26; cursor: pointer;
+    font-size: 12px; color: #8b949e;
+    transition: all 0.2s;
+  }
+  .model-selector:hover { border-color: #30363d; background: #1c1f26; }
+  .model-selector .dot { width: 6px; height: 6px; border-radius: 50%; background: #3fb950; }
+
+  .agent-selector {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 8px;
+    border: 1px solid #8957e544; cursor: pointer;
+    font-size: 12px; color: #a371f7;
+    background: #8957e511; font-weight: 500;
+    transition: all 0.2s;
+  }
+  .agent-selector:hover { background: #8957e522; border-color: #8957e566; }
+
+  /* Chat area */
+  .chat-area {
+    flex: 1; overflow-y: auto; padding: 24px 32px;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .chat-area::-webkit-scrollbar { width: 8px; }
+  .chat-area::-webkit-scrollbar-track { background: transparent; }
+  .chat-area::-webkit-scrollbar-thumb { background: #1c1f26; border-radius: 4px; }
+
+  /* Welcome */
+  .welcome {
+    text-align: center; padding: 48px 24px 32px;
+    animation: welcomeIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes welcomeIn {
+    from { opacity: 0; transform: translateY(30px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .welcome .w-icon {
+    font-size: 56px; margin-bottom: 16px; display: block;
+    animation: wIconFloat 3s ease-in-out infinite;
+  }
+  @keyframes wIconFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  .welcome h2 {
+    font-size: 22px; font-weight: 700; margin-bottom: 6px;
+    background: linear-gradient(135deg, #a371f7, #58a6ff);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .welcome p { font-size: 14px; color: #484f58; }
+
+  /* Quick actions */
+  .quick-actions {
+    display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+    margin-bottom: 16px;
+    animation: quickIn 0.6s ease 0.3s both;
+  }
+  @keyframes quickIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .quick-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 18px; border-radius: 10px;
+    border: 1px solid #1c1f26; background: #0d1117;
+    color: #8b949e; font-size: 13px; cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .quick-btn:hover {
+    border-color: #30363d; background: #1c1f26;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px #00000044;
+    color: #e1e4e8;
+  }
+  .quick-btn:active { transform: scale(0.96); }
+
+  /* Messages */
+  .message {
+    display: flex; gap: 12px; max-width: 80%;
+    animation: msgIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .message.user { align-self: flex-end; flex-direction: row-reverse; }
+  .message.assistant { align-self: flex-start; }
+  .message .avatar {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+  }
+  .message.user .avatar { background: linear-gradient(135deg, #1f6feb33, #1f6feb22); }
+  .message.assistant .avatar { background: linear-gradient(135deg, #8957e533, #8957e522); }
+  .message .bubble {
+    padding: 12px 16px; border-radius: 12px;
+    font-size: 13px; line-height: 1.6;
+    border: 1px solid #1c1f26;
+  }
+  .message.user .bubble {
+    background: linear-gradient(135deg, #1f6feb22, #1f6feb11);
+    border-color: #1f6feb33;
+    border-bottom-right-radius: 4px;
+  }
+  .message.assistant .bubble {
+    background: linear-gradient(135deg, #0d1117, #11161f);
+    border-color: #1c1f26;
+    border-bottom-left-radius: 4px;
+  }
+  .message .bubble .typing {
+    display: flex; gap: 4px; align-items: center; padding: 4px 0;
+  }
+  .message .bubble .typing span {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #484f58;
+    animation: typingDot 1.4s ease-in-out infinite;
+  }
+  .message .bubble .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .message .bubble .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes typingDot {
+    0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); }
+    30% { opacity: 1; transform: scale(1); }
+  }
+
+  /* Input area */
+  .input-area {
+    padding: 16px 24px 20px; border-top: 1px solid #1c1f26;
+    flex-shrink: 0; background: #0d1117;
+  }
+  .input-bar {
+    display: flex; gap: 8px; align-items: flex-end;
+    max-width: 900px; margin: 0 auto;
+  }
+  .input-bar textarea {
+    flex: 1; padding: 12px 16px; border-radius: 12px;
+    border: 1px solid #1c1f26; background: #0a0c10;
+    color: #e1e4e8; font-size: 13px; font-family: inherit;
+    resize: none; min-height: 48px; max-height: 120px;
+    line-height: 1.5;
+    transition: all 0.25s;
+  }
+  .input-bar textarea:focus {
+    outline: none; border-color: #8957e544;
+    box-shadow: 0 0 0 3px #8957e522, 0 0 16px #8957e511;
+  }
+  .input-bar textarea::placeholder { color: #30363d; }
+  .input-actions {
+    display: flex; gap: 4px; align-items: center;
+  }
+  .input-btn {
+    width: 38px; height: 38px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid #1c1f26; background: #1c1f26;
+    color: #484f58; cursor: pointer; font-size: 16px;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .input-btn:hover { background: #30363d; color: #e1e4e8; }
+  .input-btn.send {
+    background: linear-gradient(135deg, #8957e544, #8957e522);
+    border-color: #8957e544; color: #a371f7;
+  }
+  .input-btn.send:hover {
+    background: linear-gradient(135deg, #8957e566, #8957e544);
+    box-shadow: 0 0 16px #8957e533;
+    transform: scale(1.05);
+  }
+  .input-btn:active { transform: scale(0.9); }
+
+  /* ===== SETTINGS VIEW (hidden by default) ===== */
+  .settings-view {
+    display: none; flex-direction: column; flex: 1;
+    animation: pageIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .settings-view.show { display: flex; }
+  .home-view.hide { display: none; }
+  @keyframes pageIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .settings-sidebar {  /* reuse same style for settings mode */
+    width: 240px; background: #0d1117; border-right: 1px solid #1c1f26;
+    display: flex; flex-direction: column; flex-shrink: 0;
+  }
+  .settings-sidebar .sidebar-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; border-radius: 8px; cursor: pointer;
+    font-size: 13px; color: #8b949e;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    margin: 0 4px;
+  }
+  .settings-sidebar .sidebar-item:hover { background: #1c1f26; color: #e1e4e8; padding-left: 16px; }
+  .settings-sidebar .sidebar-item.active {
+    background: linear-gradient(135deg, #1f6feb18, #1f6feb08);
+    color: #58a6ff; font-weight: 500;
+    box-shadow: inset 3px 0 0 #58a6ff;
+  }
+  .settings-sidebar .sidebar-item .count {
+    margin-left: auto; background: #1c1f26; padding: 0 7px;
+    border-radius: 10px; font-size: 11px; line-height: 20px; color: #484f58;
+  }
+  .settings-sidebar .sidebar-item.active .count {
+    background: #1f6feb33; color: #58a6ff;
+    box-shadow: 0 0 12px #1f6feb33;
+  }
+
+  .settings-main {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+  }
+  .settings-content { padding: 20px 32px; overflow-y: auto; flex: 1; }
+  .settings-content::-webkit-scrollbar { width: 8px; }
+  .settings-content::-webkit-scrollbar-track { background: transparent; }
+  .settings-content::-webkit-scrollbar-thumb { background: #1c1f26; border-radius: 4px; }
+
+  /* ===== SPECIALTY TABS ===== */
+  .tabs-wrapper {
+    position: relative; padding: 20px 32px 0;
+    animation: fadeDown 0.4s ease 0.1s both;
+  }
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .specialty-tabs {
+    display: flex; gap: 4px; padding: 4px;
+    background: #0d1117; border: 1px solid #1c1f26;
+    border-radius: 12px; position: relative;
+    overflow: hidden;
+  }
+  .specialty-tabs::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse at var(--x, 50%) var(--y, 50%), #1f6feb08, transparent 60%);
+    opacity: 0; transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .specialty-tabs:hover::before { opacity: 1; }
+
+  .specialty-tab {
+    padding: 7px 16px; border-radius: 8px; cursor: pointer;
+    font-size: 12px; font-weight: 500; color: #484f58;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    display: flex; align-items: center; gap: 6px;
+    user-select: none; position: relative; z-index: 1;
+    flex: 1; justify-content: center;
+  }
+  .specialty-tab:hover { color: #8b949e; background: #1c1f26; transform: translateY(-1px); }
+  .specialty-tab.active {
+    color: #58a6ff; font-weight: 600;
+    text-shadow: 0 0 20px #1f6feb44;
+  }
+  .specialty-tab .count {
+    font-size: 10px; background: #1c1f26; padding: 0 6px;
+    border-radius: 8px; line-height: 18px; color: #484f58;
+    transition: all 0.3s;
+  }
+  .specialty-tab.active .count {
+    background: #1f6feb33; color: #58a6ff;
+    box-shadow: 0 0 8px #1f6feb33;
+  }
+
+  .tab-indicator {
+    position: absolute; bottom: 4px; left: 4px;
+    height: 28px; border-radius: 7px;
+    background: linear-gradient(135deg, #1f6feb22, #1f6feb11);
+    border: 1px solid #1f6feb33;
+    transition: all 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none; z-index: 0;
+    box-shadow: 0 0 16px #1f6feb22;
+  }
+
+  /* ===== PULL BAR ===== */
+  .pull-bar {
+    display: flex; gap: 8px; margin: 20px 0 24px;
+    animation: fadeDown 0.4s ease 0.2s both;
+  }
+  .pull-bar input {
+    flex: 1; max-width: 420px;
+    padding: 9px 16px; border-radius: 10px;
+    border: 1px solid #1c1f26; background: #0d1117;
+    color: #e1e4e8; font-size: 13px;
+    transition: all 0.3s ease;
+  }
+  .pull-bar input:focus {
+    outline: none; border-color: #58a6ff;
+    box-shadow: 0 0 0 3px #1f6feb22;
+  }
+  .pull-bar input::placeholder { color: #30363d; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 18px; border-radius: 9px; font-size: 13px; font-weight: 500;
+    cursor: pointer; border: 1px solid #1c1f26; background: #1c1f26;
+    color: #e1e4e8;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    white-space: nowrap; position: relative; overflow: hidden;
+  }
+  .btn:hover { background: #30363d; border-color: #30363d; transform: translateY(-1px); box-shadow: 0 4px 12px #00000044; }
+  .btn:active { transform: scale(0.96); }
+  .btn-primary {
+    background: linear-gradient(135deg, #238636, #2ea043);
+    border-color: #2ea04344; color: #fff;
+    box-shadow: 0 0 16px #23863622;
+  }
+  .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 7px; }
+
+  /* ===== MODEL SECTIONS ===== */
+  .model-section {
+    margin-bottom: 28px;
+    animation: sectionIn 0.5s ease both;
+  }
+  .model-section:nth-child(1) { animation-delay: 0.15s; }
+  .model-section:nth-child(2) { animation-delay: 0.25s; }
+  .model-section:nth-child(3) { animation-delay: 0.35s; }
+  .model-section:nth-child(4) { animation-delay: 0.45s; }
+  @keyframes sectionIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .model-section-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 12px; padding-bottom: 10px;
+    border-bottom: 1px solid #1c1f26;
+  }
+  .model-section-header .icon-wrap {
+    width: 28px; height: 28px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .model-section-header .icon-wrap.chat { background: #1f6feb22; }
+  .model-section-header .icon-wrap.code { background: #23863622; }
+  .model-section-header .icon-wrap.reasoning { background: #8957e522; }
+  .model-section-header .icon-wrap.embedding { background: #d2992222; }
+  .model-section-header h3 {
+    font-size: 12px; font-weight: 600; color: #484f58;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .model-section-header .line { flex: 1; height: 1px; background: linear-gradient(90deg, #1c1f26, transparent); }
+
+  .model-grid {
+    display: grid; gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  }
+
+  .model-card {
+    background: linear-gradient(135deg, #0d1117, #0f1319);
+    border: 1px solid #1c1f26; border-radius: 12px;
+    padding: 18px 20px; display: flex; align-items: center; gap: 16px;
+    transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    cursor: default; position: relative; overflow: hidden;
+  }
+  .model-card::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), #ffffff08, transparent 60%);
+    opacity: 0; transition: opacity 0.4s;
+    pointer-events: none;
+  }
+  .model-card:hover::before { opacity: 1; }
+  .model-card:hover {
+    border-color: #30363d;
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 8px 32px #00000066;
+    background: linear-gradient(135deg, #11161f, #131a24);
+  }
+  .model-card.running {
+    border-color: #23863633;
+    background: linear-gradient(135deg, #0d1117, #0f1a12);
+  }
+  .model-card.running::after {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, #3fb95066, transparent);
+    animation: runningGlow 2s ease-in-out infinite;
+  }
+  @keyframes runningGlow {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+
+  .model-icon {
+    width: 46px; height: 46px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; flex-shrink: 0;
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .model-card:hover .model-icon { transform: scale(1.12) rotate(-6deg); }
+  .model-icon.chat { background: linear-gradient(135deg, #1f6feb22, #1f6feb11); }
+  .model-icon.code { background: linear-gradient(135deg, #23863622, #23863611); }
+  .model-icon.embedding { background: linear-gradient(135deg, #d2992222, #d2992211); }
+  .model-card.running .model-icon.chat { box-shadow: 0 0 16px #1f6feb44; }
+
+  .model-info { flex: 1; min-width: 0; }
+  .model-name {
+    font-size: 14px; font-weight: 600;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .model-name .tag {
+    font-size: 10px; padding: 1px 8px; border-radius: 10px;
+    font-weight: 600; text-transform: uppercase;
+  }
+  .tag.chat { background: #1f6feb33; color: #58a6ff; }
+  .tag.code { background: #23863633; color: #3fb950; }
+  .tag.embedding { background: #d2992233; color: #d29922; }
+  .model-meta {
+    font-size: 12px; color: #30363d; margin-top: 3px;
+    display: flex; gap: 10px;
+  }
+  .model-meta strong { color: #484f58; font-weight: 500; }
+  .model-status {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600; flex-shrink: 0;
+  }
+  .status-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    transition: all 0.4s;
+  }
+  .status-dot.running {
+    background: #3fb950;
+    animation: statusPulse 1.5s ease-in-out infinite;
+    box-shadow: 0 0 10px #3fb95066;
+  }
+  .status-dot.stopped { background: #30363d; }
+  @keyframes statusPulse {
+    0%, 100% { box-shadow: 0 0 6px #3fb95044; }
+    50% { box-shadow: 0 0 16px #3fb95099; }
+  }
+
+  .btn-play {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border: 1px solid #1c1f26; background: #1c1f26;
+    transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    font-size: 14px;
+  }
+  .btn-play:hover { transform: scale(1.15); border-color: #30363d; }
+  .btn-play:active { transform: scale(0.9); }
+  .btn-play.play {
+    background: linear-gradient(135deg, #23863622, #23863611);
+    border-color: #23863644; color: #3fb950;
+  }
+  .btn-play.stop {
+    background: linear-gradient(135deg, #f8514922, #f8514911);
+    border-color: #f8514944; color: #f85149;
+  }
+
+  .info-bar {
+    padding: 12px 16px; background: #0d1117;
+    border: 1px solid #1c1f26; border-radius: 10px;
+    font-size: 12px; color: #30363d;
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 8px; animation: fadeUp 0.4s ease 0.5s both;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .info-bar code { color: #58a6ff; background: #1f6feb11; padding: 1px 6px; border-radius: 4px; }
+
+  .empty-state {
+    padding: 32px; text-align: center;
+    border: 1px dashed #1c1f26; border-radius: 12px;
+    background: #0a0c10;
+  }
+  .empty-state .big-icon { font-size: 32px; display: block; margin-bottom: 10px; }
+  .empty-state p { font-size: 13px; color: #30363d; }
+  .empty-state p strong { color: #484f58; }
+
+  .model-card { --mx: 50%; --my: 50%; }
+
+  /* ===== MULTI-AGENT TRACE ===== */
+  .agent-trace {
+    display: flex; gap: 4px; flex-wrap: wrap;
+    margin-top: 10px; padding-top: 8px;
+    border-top: 1px solid #1c1f26;
+  }
+  .agent-trace .trace-item {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 10px; padding: 2px 8px; border-radius: 5px;
+    background: #1c1f26; color: #484f58;
+    animation: traceIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  .agent-trace .trace-item:nth-child(1) { animation-delay: 0.6s; }
+  .agent-trace .trace-item:nth-child(2) { animation-delay: 0.7s; }
+  .agent-trace .trace-item:nth-child(3) { animation-delay: 0.8s; }
+  @keyframes traceIn {
+    from { opacity: 0; transform: translateY(6px) scale(0.9); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .agent-trace .trace-item.code { background: #23863622; color: #3fb950; }
+  .agent-trace .trace-item.reasoning { background: #8957e522; color: #a371f7; }
+  .agent-trace .trace-item.writer { background: #d2992222; color: #d29922; }
+  .agent-trace .trace-item.orchestrator { background: #1f6feb22; color: #58a6ff; }
+  .agent-trace .trace-item .check { font-size: 9px; }
+
+  /* Multi-agent toggle */
+  .ma-toggle {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px 4px 8px; border-radius: 8px;
+    cursor: pointer; font-size: 11px; font-weight: 600;
+    border: 1px solid #8957e544;
+    background: #8957e511; color: #a371f7;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    user-select: none;
+  }
+  .ma-toggle:hover { background: #8957e522; border-color: #8957e566; transform: scale(1.03); }
+  .ma-toggle:active { transform: scale(0.95); }
+  .ma-toggle .switch {
+    width: 22px; height: 12px; border-radius: 6px;
+    background: #8957e544; position: relative;
+    transition: background 0.25s;
+  }
+  .ma-toggle .switch::after {
+    content: ''; position: absolute; top: 1px; left: 10px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #a371f7; transition: all 0.25s;
+    box-shadow: 0 0 4px #a371f766;
+  }
+  .ma-toggle.on .switch { background: #3fb95044; }
+  .ma-toggle.on .switch::after { left: 1px; background: #3fb950; }
+
+  /* Settings header */
+  .settings-header {
+    padding: 14px 24px; border-bottom: 1px solid #1c1f26;
+    display: flex; align-items: center; justify-content: space-between;
+    background: #0d1117; flex-shrink: 0;
+  }
+  .settings-header h1 {
+    font-size: 16px; font-weight: 600;
+    background: linear-gradient(135deg, #e1e4e8, #8b949e);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== ACTIVITY BAR ===== -->
+  <div class="activity-bar">
+    <div class="icon active" id="btnHome" title="AI Assistant" style="font-size:20px;background:#8957e522;color:#a371f7">🧠</div>
+    <div class="icon" title="Explorer">📁</div>
+    <div class="icon" title="Search">🔍</div>
+    <div class="icon" title="Git">⎇</div>
+    <div class="icon" id="btnSettings" title="Settings">⚙️</div>
+    <div class="spacer"></div>
+    <div class="icon" title="User">👤</div>
+  </div>
+
+  <!-- ===== AI ASSISTANT SIDEBAR ===== -->
+  <div class="sidebar" id="homeSidebar">
+    <div class="sidebar-header">Conversations</div>
+    <div class="sidebar-content">
+      <div class="conversation-item active">
+        <span style="font-size:14px">💬</span>
+        <span class="text">JARVIS architecture discussion</span>
+        <span class="time">2m</span>
+      </div>
+      <div class="conversation-item">
+        <span style="font-size:14px">💬</span>
+        <span class="text">Implementar modulo conhecimento</span>
+        <span class="time">1h</span>
+      </div>
+      <div class="conversation-item">
+        <span style="font-size:14px">💬</span>
+        <span class="text">Review do PR #42</span>
+        <span class="time">3h</span>
+      </div>
+      <div class="conversation-item">
+        <span style="font-size:14px">💬</span>
+        <span class="text">Docker strategy planning</span>
+        <span class="time">1d</span>
+      </div>
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-label">Quick Agents</div>
+      <div class="agent-chip">
+        <div class="avatar" style="background:#8957e522">🧠</div>
+        <span class="name">Assistant Geral</span>
+        <span class="badge" style="background:#8957e522;color:#a371f7">default</span>
+      </div>
+      <div class="agent-chip">
+        <div class="avatar" style="background:#23863622">💻</div>
+        <span class="name">Code Expert</span>
+      </div>
+      <div class="agent-chip">
+        <div class="avatar" style="background:#1f6feb22">✍️</div>
+        <span class="name">Revisor PT-BR</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MAIN ===== -->
+  <div class="main">
+
+    <!-- ===== HOME VIEW ===== -->
+    <div class="home-content" id="homeView">
+      <!-- AI Header -->
+      <div class="ai-header">
+        <div class="ai-header-left">
+          <span class="brand">JARVIS</span>
+          <span class="brand-sub">v0.1.0</span>
+        </div>
+        <div class="ai-header-right">
+          <div class="ma-toggle on" title="Multi-Agent Orchestration active">
+            <span class="switch"></span>
+            🔀 Multi-Agent
+          </div>
+          <div class="model-selector">
+            <span class="dot"></span>
+            llama3.2:3b
+            <span style="font-size:10px;margin-left:4px">▼</span>
+          </div>
+          <div class="agent-selector">
+            🧠 Assistant Geral
+            <span style="font-size:10px;margin-left:4px">▼</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Area -->
+      <div class="chat-area">
+        <div class="welcome">
+          <span class="w-icon">🧠</span>
+          <h2>Como posso ajudar?</h2>
+          <p>Assistant Geral • llama3.2:3b • Temperatura 0.7</p>
+        </div>
+
+        <div class="quick-actions">
+          <div class="quick-btn">📝 Resumir documento</div>
+          <div class="quick-btn">💻 Explicar código</div>
+          <div class="quick-btn">📐 Gerar embedding</div>
+          <div class="quick-btn">🧠 Brainstorm</div>
+          <div class="quick-btn" style="border-color:#8957e544;background:#8957e511;color:#a371f7">🔀 Multi-Agent</div>
+        </div>
+
+        <!-- Messages -->
+        <div class="message assistant">
+          <div class="avatar" style="background:linear-gradient(135deg,#8957e533,#8957e522)">🧠</div>
+          <div class="bubble">
+            Olá! Sou o <strong style="color:#a371f7">JARVIS</strong>, seu assistente AI. Estou usando o modelo <strong style="color:#58a6ff">llama3.2:3b</strong> com o agent <strong style="color:#d29922">Assistant Geral</strong>.<br><br>
+            Como posso ajudar hoje?
+          </div>
+        </div>
+
+        <div class="message user">
+          <div class="avatar" style="background:linear-gradient(135deg,#1f6feb33,#1f6feb22)">👤</div>
+          <div class="bubble">
+            Explique a arquitetura do JARVIS em 3 paragrafos
+          </div>
+        </div>
+
+        <div class="message assistant">
+          <div class="avatar" style="background:linear-gradient(135deg,#8957e533,#8957e522)">🧠</div>
+          <div class="bubble">
+            Claro! O JARVIS é um assistente de IA modular construído em <strong style="color:#58a6ff">C++20 + Qt6 WebEngine</strong> com interface React, organizado em <strong style="color:#a371f7">5 camadas (L0-L4)</strong> que separam responsabilidades...
+
+            <div class="agent-trace">
+              <div class="trace-item orchestrator"><span class="check">▸</span> 🧠 Orchestrator roteou</div>
+              <div class="trace-item code"><span class="check">✓</span> 💻 Code Expert consultado</div>
+              <div class="trace-item writer"><span class="check">✓</span> ✍️ Writer formatou</div>
+              <div class="trace-item reasoning"><span class="check">✓</span> 🧠 Critic aprovou</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input Area -->
+      <div class="input-area">
+        <div class="input-bar">
+          <textarea placeholder="Message JARVIS..." rows="1"></textarea>
+          <div class="input-actions">
+            <div class="input-btn" title="Attach file">📎</div>
+            <div class="input-btn send" title="Send">➤</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SETTINGS VIEW ===== -->
+    <div class="settings-view" id="settingsView">
+      <div style="display:flex;flex:1;overflow:hidden">
+        <div class="settings-sidebar" style="width:200px;border-right:1px solid #1c1f26;padding:12px 0">
+          <div class="sidebar-header" style="margin-bottom:4px">Settings</div>
+          <div class="sidebar-item">📋 Geral</div>
+          <div class="sidebar-item active">📦 Models <span class="count">3</span></div>
+          <div class="sidebar-item">🧠 Assistente</div>
+          <div class="sidebar-item">🔀 Orquestração</div>
+          <div class="sidebar-item">🤖 Agents <span class="count">2</span></div>
+        </div>
+        <div class="settings-main">
+          <div class="settings-header">
+            <h1>📦 Models</h1>
+            <span style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:500;background:#23863622;color:#3fb950;display:flex;align-items:center;gap:4px">
+              <span style="width:6px;height:6px;border-radius:50%;background:#3fb950;box-shadow:0 0 6px #3fb95066"></span>
+              Ollama connected
+            </span>
+          </div>
+
+          <div class="tabs-wrapper">
+            <div class="specialty-tabs" id="tabContainer">
+              <div class="tab-indicator" id="tabIndicator" style="width:60px;transform:translateX(4px)"></div>
+              <div class="specialty-tab active" data-tab="0">All <span class="count">3</span></div>
+              <div class="specialty-tab" data-tab="1">💬 Chat <span class="count">1</span></div>
+              <div class="specialty-tab" data-tab="2">💻 Code <span class="count">1</span></div>
+              <div class="specialty-tab" data-tab="3">🧠 Reasoning <span class="count">0</span></div>
+              <div class="specialty-tab" data-tab="4">📐 Embedding <span class="count">1</span></div>
+              <div class="specialty-tab" data-tab="5">👁 Vision <span class="count">0</span></div>
+            </div>
+          </div>
+
+          <div class="settings-content">
+            <div class="pull-bar">
+              <input type="text" placeholder="Pull a model from Ollama registry..." value="deepseek-r1:7b" />
+              <button class="btn btn-primary">⬇ Pull Model</button>
+            </div>
+
+            <div class="model-section">
+              <div class="model-section-header">
+                <div class="icon-wrap chat">💬</div>
+                <h3>Chat</h3>
+                <div class="line"></div>
+              </div>
+              <div class="model-grid">
+                <div class="model-card running">
+                  <div class="model-icon chat">💬</div>
+                  <div class="model-info">
+                    <div class="model-name">llama3.2:3b <span class="tag chat">chat</span></div>
+                    <div class="model-meta"><strong>2.0 GB</strong> • Meta Llama 3.2 3B • modified 2d ago</div>
+                  </div>
+                  <div class="model-status"><span class="status-dot running"></span><span style="color:#3fb950">Running</span></div>
+                  <div style="display:flex;gap:4px">
+                    <div class="btn-play stop" title="Stop">■</div>
+                    <div class="btn-play" style="font-size:13px" title="Settings">⚙</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="model-section">
+              <div class="model-section-header">
+                <div class="icon-wrap code">💻</div>
+                <h3>Code</h3>
+                <div class="line"></div>
+              </div>
+              <div class="model-grid">
+                <div class="model-card">
+                  <div class="model-icon code">💻</div>
+                  <div class="model-info">
+                    <div class="model-name">codellama:7b <span class="tag code">code</span></div>
+                    <div class="model-meta"><strong>3.8 GB</strong> • Code Llama 7B • modified 5d ago</div>
+                  </div>
+                  <div class="model-status"><span class="status-dot stopped"></span><span style="color:#30363d">Stopped</span></div>
+                  <div style="display:flex;gap:4px">
+                    <div class="btn-play play" title="Start">▶</div>
+                    <div class="btn-play" style="font-size:13px" title="Settings">⚙</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="model-section">
+              <div class="model-section-header">
+                <div class="icon-wrap embedding">📐</div>
+                <h3>Embedding</h3>
+                <div class="line"></div>
+              </div>
+              <div class="model-grid">
+                <div class="model-card running">
+                  <div class="model-icon embedding">📐</div>
+                  <div class="model-info">
+                    <div class="model-name">nomic-embed-text <span class="tag embedding">embedding</span></div>
+                    <div class="model-meta"><strong>274 MB</strong> • Nomic Embed Text v1.5 • modified 1w ago</div>
+                  </div>
+                  <div class="model-status"><span class="status-dot running"></span><span style="color:#3fb950">Running</span></div>
+                  <div style="display:flex;gap:4px">
+                    <div class="btn-play stop" title="Stop">■</div>
+                    <div class="btn-play" style="font-size:13px" title="Settings">⚙</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="model-section">
+              <div class="model-section-header">
+                <div class="icon-wrap reasoning">🧠</div>
+                <h3>Reasoning</h3>
+                <div class="line"></div>
+              </div>
+              <div class="empty-state">
+                <span class="big-icon">🧠</span>
+                <p>No reasoning models installed yet.</p>
+                <p style="margin-top:4px">Try pulling <strong>deepseek-r1:7b</strong> or <strong>qwen2.5:7b</strong></p>
+              </div>
+            </div>
+
+            <div class="info-bar">
+              <span style="font-size:15px">⚡</span>
+              <span><strong>Ollama</strong> running at <code>http://localhost:11434</code></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Navigation: Home ↔ Settings
+    document.getElementById('btnHome').addEventListener('click', function() {
+      document.getElementById('homeView').style.display = 'flex';
+      document.getElementById('homeSidebar').style.display = 'flex';
+      document.getElementById('settingsView').classList.remove('show');
+      document.querySelectorAll('.activity-bar .icon').forEach(i => i.classList.remove('active'));
+      this.classList.add('active');
+    });
+    document.getElementById('btnSettings').addEventListener('click', function() {
+      document.getElementById('homeView').style.display = 'none';
+      document.getElementById('homeSidebar').style.display = 'none';
+      document.getElementById('settingsView').classList.add('show');
+      document.querySelectorAll('.activity-bar .icon').forEach(i => i.classList.remove('active'));
+      this.classList.add('active');
+    });
+  </script>
+</body>
+</html>
