@@ -20,7 +20,7 @@ interface OpenTab {
 
 export function WorkspacePanel({ onOpenInEditor }: WorkspacePanelProps) {
   const bridge = useJarvis();
-  const [roots, setRoots] = useState<string[]>([]);
+  const [_roots, setRoots] = useState<string[]>([]);
   const [tree, setTree] = useState<FileEntry[]>([]);
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);

@@ -84,8 +84,7 @@ export function AiPanel() {
 
     setLoading(true);
     try {
-      const targetId = selectedAgentId ?? undefined;
-      const response = await bridge.sendMessage(text, targetId);
+      const response = await bridge.sendMessage(text);
       setLoading(false);
       const assistantMsg: Message = { role: 'assistant', content: response };
       updateMessages(activeConvId, msgs => [...msgs, assistantMsg]);

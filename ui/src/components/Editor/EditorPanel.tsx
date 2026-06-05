@@ -35,6 +35,7 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [repoPath, setRepoPath] = useState('');
 
   const [splitMode, setSplitMode] = useState<SplitMode>('single');
   const [rightTab, setRightTab] = useState<string | null>(null);
@@ -78,6 +79,19 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
   }, [bridge]);
 
   useEffect(() => { loadSettings(); }, [loadSettings]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const roots = await bridge.getRoots();
+        if (roots.length > 0) {
+          const root = roots[0];
+          const isRepo = await bridge.gitIsRepo(root);
+          setRepoPath(isRepo ? root : '');
+        }
+      } catch {}
+    })();
+  }, [bridge]);
 
   const openFile = useCallback(async (path: string) => {
     const currentTabs = tabsRef.current;
@@ -516,6 +530,7 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
                   value={rightState.content}
                   language={rightState.info.language}
                   path={rightTab || ''}
+                  repoPath={repoPath}
                   onChange={(val) => rightTab && handleContentChange(rightTab, val)}
                   onCursorChange={(line, col) => setRightCursorPos({ line, col })}
                   onSave={(val) => rightTab && saveFile(rightTab, val)}
@@ -535,6 +550,7 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
                   value={activeState.content}
                   language={activeState.info.language}
                   path={activeTab || ''}
+                  repoPath={repoPath}
                   onChange={(val) => activeTab && handleContentChange(activeTab, val)}
                   onCursorChange={(line, col) => setCursorPos({ line, col })}
                   onSave={handleSaveCurrent}
@@ -556,6 +572,7 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
                 value={activeState.content}
                 language={activeState.info.language}
                 path={activeTab || ''}
+                repoPath={repoPath}
                 onChange={(val) => activeTab && handleContentChange(activeTab, val)}
                 onCursorChange={(line, col) => setCursorPos({ line, col })}
                 onSave={handleSaveCurrent}
@@ -576,6 +593,7 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
             value={activeState.content}
             language={activeState.info.language}
             path={activeTab || ''}
+            repoPath={repoPath}
             onChange={(val) => activeTab && handleContentChange(activeTab, val)}
             onCursorChange={(line, col) => setCursorPos({ line, col })}
             onSave={handleSaveCurrent}

@@ -3,10 +3,9 @@ import { motion } from 'framer-motion';
 interface StatusBarProps {
   moduleCount: number;
   modelName: string;
-  activeView: string;
 }
 
-export function StatusBar({ moduleCount, modelName, activeView }: StatusBarProps) {
+export function StatusBar({ moduleCount, modelName }: StatusBarProps) {
   return (
     <motion.footer
       initial={{ y: 24 }}

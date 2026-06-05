@@ -4,6 +4,7 @@ interface MonacoWrapperProps {
   value: string;
   language: string;
   path: string;
+  repoPath?: string;
   onChange?: (value: string) => void;
   onCursorChange?: (line: number, col: number) => void;
   onSave?: (content?: string) => void;
@@ -19,7 +20,7 @@ interface MonacoWrapperProps {
   };
 }
 
-export function MonacoWrapper({ value, language, path, onChange, onCursorChange, onSave, onClose, settings }: MonacoWrapperProps) {
+export function MonacoWrapper({ value, language, path, repoPath, onChange, onCursorChange, onSave, onClose, settings }: MonacoWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<ReturnType<typeof import('monaco-editor')['editor']['create']> | null>(null);
 
@@ -141,6 +142,48 @@ export function MonacoWrapper({ value, language, path, onChange, onCursorChange,
       lineNumbers: (settings?.lineNumbers as any) || 'on',
     });
   }, [settings]);
+
+  useEffect(() => {
+    if (!repoPath || !path || !editorRef.current) return;
+
+    let decorIds: string[] = [];
+    let active = true;
+
+    const updateGutter = async () => {
+      if (!active || !editorRef.current) return;
+      try {
+        const monaco = await import('monaco-editor');
+        const jarvis = (window as any).jarvis;
+        if (!jarvis) return;
+
+        const lines = await jarvis.gitDiffGutter(repoPath, path) as any[];
+        if (!active || !editorRef.current) return;
+
+        const decorations = lines.map((l: any) => ({
+          range: new monaco.Range(l.line, 1, l.line, 1),
+          options: {
+            isWholeLine: true,
+            glyphMarginClassName: `git-gutter-${l.type === 'a' ? 'added' : l.type === 'd' ? 'deleted' : 'modified'}`,
+            glyphMarginHoverMessage: {
+              value: l.type === 'a' ? 'Added' : l.type === 'd' ? 'Deleted' : 'Modified',
+            },
+          },
+        }));
+
+        decorIds = editorRef.current.deltaDecorations(decorIds, decorations);
+      } catch {
+        // git not available or not a repo
+      }
+    };
+
+    updateGutter();
+    const interval = setInterval(updateGutter, 5000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [repoPath, path]);
 
   return (
     <div ref={containerRef} className="w-full h-full" />

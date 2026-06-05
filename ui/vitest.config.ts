@@ -9,11 +9,17 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    fs: {
+      allow: ['..'],
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/test-setup.ts',
     css: false,
+    include: ['src/__tests__/**/*.test.{ts,tsx}', '../tests/e2e/**/*.test.{ts,tsx}'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

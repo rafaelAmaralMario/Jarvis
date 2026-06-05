@@ -35,7 +35,6 @@ export function App() {
         <ActivityBar
           activeView={activeView}
           onViewChange={setActiveView}
-          moduleCount={3}
         />
         <Sidebar
           activeView={activeView}
@@ -77,7 +76,6 @@ export function App() {
       <StatusBar
         moduleCount={3}
         modelName="Ollama qwen2.5-coder"
-        activeView={activeView}
       />
     </motion.div>
   );

@@ -1,5 +1,4 @@
-import { motion, AnimatePresence } from 'framer-motion';
-import { useMemo } from 'react';
+import { motion } from 'framer-motion';
 import type { ActivityView } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -8,6 +7,7 @@ const activityItems = [
   { id: 'knowledge' as ActivityView, icon: '📁', label: 'Conhecimento' },
   { id: 'ide' as ActivityView, icon: '📂', label: 'Workspace' },
   { id: 'editor' as ActivityView, icon: '⌨️', label: 'Editor' },
+  { id: 'git' as ActivityView, icon: '⎇', label: 'Git' },
   { id: 'automation' as ActivityView, icon: '⚡', label: 'Automação' },
   { id: 'settings' as ActivityView, icon: '⚙️', label: 'Configurações' },
 ];
@@ -15,7 +15,6 @@ const activityItems = [
 interface ActivityBarProps {
   activeView: ActivityView;
   onViewChange: (view: ActivityView) => void;
-  moduleCount: number;
 }
 
 export function ActivityBar({ activeView, onViewChange }: ActivityBarProps) {

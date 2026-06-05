@@ -1,6 +1,8 @@
-import { lazy, useState, useCallback } from 'react';
+import { lazy, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ActivityView } from '@/types';
+import { useJarvis } from '@/hooks/use-jarvis';
+import { GitPanel } from '@/components/Git/GitPanel';
 
 const SettingsPage = lazy(() => import('@/components/Settings/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const KnowledgePanel = lazy(() => import('@/components/Knowledge/KnowledgePanel').then(m => ({ default: m.KnowledgePanel })));
@@ -15,12 +17,37 @@ interface MainAreaProps {
 const spring = { type: 'spring' as const, stiffness: 300, damping: 25 };
 
 export function MainArea({ activeView, onViewChange }: MainAreaProps) {
+  const jarvis = useJarvis();
   const [fileToOpen, setFileToOpen] = useState<string | undefined>();
+  const [gitRepoPath, setGitRepoPath] = useState('');
 
-  const handleOpenInEditor = useCallback((path: string) => {
-    setFileToOpen(path);
-    onViewChange('editor');
-  }, [onViewChange]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const roots = await jarvis.getRoots();
+        if (roots.length > 0) {
+          const isRepo = await jarvis.gitIsRepo(roots[0]);
+          setGitRepoPath(isRepo ? roots[0] : '');
+        }
+      } catch {}
+    })();
+  }, []);
+
+  if (activeView === 'git' && gitRepoPath) {
+    return <GitPanel repoPath={gitRepoPath} />;
+  }
+
+  if (activeView === 'git' && !gitRepoPath) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-muted-foreground">
+        <div className="text-center">
+          <p className="text-4xl mb-3">⎇</p>
+          <p className="text-sm">No git repository in current workspace</p>
+          <p className="text-xs mt-1">Open a git repo in the Workspace view first</p>
+        </div>
+      </div>
+    );
+  }
 
   if (activeView === 'settings') {
     return <SettingsPage />;
@@ -69,4 +96,9 @@ export function MainArea({ activeView, onViewChange }: MainAreaProps) {
   }
 
   return null;
+
+  function handleOpenInEditor(path: string) {
+    setFileToOpen(path);
+    onViewChange('editor');
+  }
 }

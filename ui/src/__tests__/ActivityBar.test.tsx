@@ -9,7 +9,7 @@ describe('ActivityBar', () => {
 
     expect(screen.getByTitle('Assistente IA')).toBeInTheDocument();
     expect(screen.getByTitle('Conhecimento')).toBeInTheDocument();
-    expect(screen.getByTitle('IDE')).toBeInTheDocument();
+    expect(screen.getByTitle('Workspace')).toBeInTheDocument();
     expect(screen.getByTitle('Automação')).toBeInTheDocument();
     expect(screen.getByTitle('Configurações')).toBeInTheDocument();
   });

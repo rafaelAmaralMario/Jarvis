@@ -15,16 +15,18 @@
 
 | ID | Contexto | Timestamp | Status | Supersedes | Superseded by | Skill |
 |----|----------|-----------|--------|------------|---------------|-------|
-| 001 | Fundacao do Projeto | 2026-06-03T10:54:00-03:00 | active | — | — | — |
-| 002 | Estrutura do Novo Projeto | 2026-06-03T10:55:00-03:00 | active | — | — | — |
+| 001 | Fundacao do Projeto | 2026-06-03T10:54:00-03:00 | superseded | — | 003 | — |
+| 002 | Estrutura do Novo Projeto | 2026-06-03T10:55:00-03:00 | superseded | — | 003 | — |
 | 003 | UI Hibrida: C++ + React (WebEngine) | 2026-06-03T11:05:00-03:00 | active | 001, 002 | — | — |
 | 004 | Catalogo de Modulos com SOLID | 2026-06-03T11:15:00-03:00 | active | — | — | — |
 | 005 | Skills e Contexto Unificado | 2026-06-03T11:36:00-03:00 | active | — | — | context-generator |
-| 006 | Módulo Conhecimento (Obsidian-like) | 2026-06-03T12:55:00-03:00 | active | — | — | context-generator |
-| 007 | Módulo Persistência (SQLite) | 2026-06-03T15:30:00-03:00 | active | — | — | — |
+| 006 | Modulo Conhecimento (Obsidian-like) | 2026-06-03T12:55:00-03:00 | active | — | — | context-generator |
+| 007 | Modulo Persistencia (SQLite) | 2026-06-03T15:30:00-03:00 | active | — | — | — |
 | 008 | Sync Server Completo | 2026-06-03T16:30:00-03:00 | active | — | — | — |
 | 009 | Testes Integrados (Vitest + C++) | 2026-06-03T13:50:00-03:00 | active | — | — | — |
 | 010 | CI/CD — GitHub Actions | 2026-06-03T14:00:00-03:00 | active | — | — | — |
+| 011 | Build bem-sucedido + Bridge funcional | 2026-06-05T10:30:00-03:00 | superseded | 007, 009 | 012 | customize-opencode |
+| 012 | Migração Qt C++ → Python + pywebview | 2026-06-05T13:50:00-03:00 | active | 011 | — | context-generator |
 
 > **Nota:** Ao adicionar novo contexto, insira uma nova linha na tabela acima e crie o arquivo correspondente em `.context/YYYY-MM-DD-NNN-titulo.md`.
 >

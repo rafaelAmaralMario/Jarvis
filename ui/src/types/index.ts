@@ -85,6 +85,24 @@ export interface JarvisBridge {
   networkDeleteApiKey(service: string): Promise<boolean>;
   networkListApiKeys(): Promise<{ service: string; key: string }[]>;
 
+  gitStatus(repoPath: string): Promise<GitStatusEntry[]>;
+  gitDiff(repoPath: string, filePath: string): Promise<string>;
+  gitDiffGutter(repoPath: string, filePath: string): Promise<GitGutterLine[]>;
+  gitStage(repoPath: string, filePath: string): Promise<boolean>;
+  gitUnstage(repoPath: string, filePath: string): Promise<boolean>;
+  gitStageAll(repoPath: string): Promise<boolean>;
+  gitCommit(repoPath: string, message: string): Promise<boolean>;
+  gitBranches(repoPath: string): Promise<GitBranch[]>;
+  gitCheckout(repoPath: string, branch: string): Promise<boolean>;
+  gitCreateBranch(repoPath: string, branch: string): Promise<boolean>;
+  gitDeleteBranch(repoPath: string, branch: string): Promise<boolean>;
+  gitPush(repoPath: string, remote?: string, branch?: string): Promise<boolean>;
+  gitPull(repoPath: string, remote?: string, branch?: string): Promise<boolean>;
+  gitLog(repoPath: string, count?: number): Promise<GitLogEntry[]>;
+  gitIsRepo(repoPath: string): Promise<boolean>;
+  gitCurrentBranch(repoPath: string): Promise<string>;
+  gitSetCredentials(repoPath: string, username: string, token: string): Promise<boolean>;
+
   onEvent(event: string, callback: (data: unknown) => void): void;
   offEvent(event: string, callback: (data: unknown) => void): void;
 }
@@ -283,6 +301,31 @@ export interface AgentResult {
   latencyMs: number;
 }
 
+export interface GitStatusEntry {
+  path: string;
+  status: string;
+  staged: boolean;
+  isUntracked: boolean;
+}
+
+export interface GitBranch {
+  name: string;
+  isCurrent: boolean;
+}
+
+export interface GitLogEntry {
+  hash: string;
+  author: string;
+  email: string;
+  message: string;
+  date: string;
+}
+
+export interface GitGutterLine {
+  line: number;
+  type: 'a' | 'm' | 'd';
+}
+
 export interface EditorTabInfo {
   path: string;
   language: string;
@@ -292,5 +335,5 @@ export interface EditorTabInfo {
   isDirty: boolean;
 }
 
-export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'settings';
+export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'settings' | 'git';
 export type SettingsTab = 'general' | 'models' | 'assistant' | 'orchestration' | 'agents' | 'api-keys';

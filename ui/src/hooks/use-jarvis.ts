@@ -1,9 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type {
   JarvisBridge, ModuleInfo, Note, SearchResult, FileEntry,
-  ModelInfo, ModelDetail, ModelMetadata, Agent, CreateAgentDTO,
-  OrchestrationConfig, AgentTrace, CreateNoteDTO,
-  Backlink, GraphData, FolderEntry, Project, EditorTabInfo
+  ModelInfo, ModelDetail, Agent,
+  OrchestrationConfig, AgentTrace,
+  Backlink, GraphData, FolderEntry, Project, EditorTabInfo,
+  GitStatusEntry, GitBranch, GitLogEntry, GitGutterLine
 } from '@/types';
 
 declare global {
@@ -35,7 +36,7 @@ function createBridge(): JarvisBridge {
       if (window.qt?.webChannelTransport) {
         window.qt.webChannelTransport.send(msg);
       } else if (window.jarvis) {
-        const svc = window.jarvis as Record<string, (...a: unknown[]) => Promise<unknown>>;
+        const svc = window.jarvis as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>;
         if (svc[method]) {
           svc[method](...args).then(resolve).catch(reject);
         }
@@ -85,7 +86,7 @@ function createBridge(): JarvisBridge {
     listDirectory: (path) => send('listDirectory', path) as Promise<FileEntry[]>,
     listFiles: (path) => send('listFiles', path) as Promise<FileEntry[]>,
 
-    sendMessage: (input, onToken) => send('sendMessage', input) as Promise<string>,
+    sendMessage: (input, _onToken) => send('sendMessage', input) as Promise<string>,
     cancelGeneration: () => { void send('cancelGeneration'); },
 
     listModels: () => send('listModels') as Promise<ModelInfo[]>,
@@ -150,6 +151,24 @@ function createBridge(): JarvisBridge {
     networkGetApiKey: (service) => send('networkGetApiKey', service) as Promise<string>,
     networkDeleteApiKey: (service) => send('networkDeleteApiKey', service) as Promise<boolean>,
     networkListApiKeys: () => send('networkListApiKeys') as Promise<{ service: string; key: string }[]>,
+
+    gitStatus: (repoPath) => send('gitStatus', repoPath) as Promise<GitStatusEntry[]>,
+    gitDiff: (repoPath, filePath) => send('gitDiff', repoPath, filePath) as Promise<string>,
+    gitDiffGutter: (repoPath, filePath) => send('gitDiffGutter', repoPath, filePath) as Promise<GitGutterLine[]>,
+    gitStage: (repoPath, filePath) => send('gitStage', repoPath, filePath) as Promise<boolean>,
+    gitUnstage: (repoPath, filePath) => send('gitUnstage', repoPath, filePath) as Promise<boolean>,
+    gitStageAll: (repoPath) => send('gitStageAll', repoPath) as Promise<boolean>,
+    gitCommit: (repoPath, message) => send('gitCommit', repoPath, message) as Promise<boolean>,
+    gitBranches: (repoPath) => send('gitBranches', repoPath) as Promise<GitBranch[]>,
+    gitCheckout: (repoPath, branch) => send('gitCheckout', repoPath, branch) as Promise<boolean>,
+    gitCreateBranch: (repoPath, branch) => send('gitCreateBranch', repoPath, branch) as Promise<boolean>,
+    gitDeleteBranch: (repoPath, branch) => send('gitDeleteBranch', repoPath, branch) as Promise<boolean>,
+    gitPush: (repoPath, remote, branch) => send('gitPush', repoPath, remote, branch) as Promise<boolean>,
+    gitPull: (repoPath, remote, branch) => send('gitPull', repoPath, remote, branch) as Promise<boolean>,
+    gitLog: (repoPath, count) => send('gitLog', repoPath, count) as Promise<GitLogEntry[]>,
+    gitIsRepo: (repoPath) => send('gitIsRepo', repoPath) as Promise<boolean>,
+    gitCurrentBranch: (repoPath) => send('gitCurrentBranch', repoPath) as Promise<string>,
+    gitSetCredentials: (repoPath, username, token) => send('gitSetCredentials', repoPath, username, token) as Promise<boolean>,
 
     onEvent: (event, cb) => {
       if (!callbacks.has(event)) callbacks.set(event, new Set());

@@ -18,7 +18,7 @@ function renderMarkdown(content: string): string {
   });
 
   // Code blocks
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, lang, code) => {
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, _lang, code) => {
     return `<pre style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:8px;overflow-x:auto;font-size:12px;line-height:1.5;margin:8px 0;"><code>${escapeHtml(code)}</code></pre>`;
   });
 

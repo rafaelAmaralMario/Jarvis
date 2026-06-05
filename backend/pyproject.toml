@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jarvis-backend"
+version = "0.1.0"
+description = "JARVIS AI Assistant - Python Backend"
+requires-python = ">=3.11"
+dependencies = [
+    "pywebview>=5,<6",
+    "httpx>=0.28,<1",
+    "websockets>=14,<15",
+    "gitpython>=3.1,<4",
+    "watchdog>=6,<7",
+    "cryptography>=44,<45",
+    "pyte>=0.8,<0.9",
+    "ruamel.yaml>=0.18,<0.19",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "pytest-cov>=6,<7",
+    "ruff>=0.9,<1",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

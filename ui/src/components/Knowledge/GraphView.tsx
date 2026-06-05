@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import type { GraphData, GraphNode } from '@/types';
 import { useJarvis } from '@/hooks/use-jarvis';
 
@@ -125,14 +124,7 @@ export function GraphView({ onSelectNode }: GraphViewProps) {
     const h = rect.height;
     ctx.clearRect(0, 0, w, h);
 
-    // Center the graph
     const nodes = nodesRef.current;
-    if (nodes.length > 0) {
-      const cx = nodes.reduce((s, n) => s + n.x, 0) / nodes.length;
-      const cy = nodes.reduce((s, n) => s + n.y, 0) / nodes.length;
-      const ox = w / 2 - cx;
-      const oy = h / 2 - cy;
-    }
 
     // Draw edges
     ctx.strokeStyle = 'rgba(139, 148, 158, 0.15)';
