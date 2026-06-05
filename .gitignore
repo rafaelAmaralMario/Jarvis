@@ -58,5 +58,14 @@ docker-data/
 server/node_modules/
 server/dist/
 
+# Python
+backend/__pycache__/
+backend/*.egg-info/
+backend/dist/
+backend/build/
+*.pyc
+*.pyo
+__pycache__/
+
 # Mac
 .DS_Store

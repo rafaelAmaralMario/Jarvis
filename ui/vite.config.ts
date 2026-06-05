@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(__dirname, '../kernel/resources/webui'),
+    outDir: path.resolve(__dirname, './dist'),
     emptyOutDir: true,
     sourcemap: true,
   },
