@@ -54,6 +54,12 @@ temp/
 docker-data/
 !docker-compose.yml
 
+# Node
+node_modules/
+ui/node_modules/
+*.tsbuildinfo
+tmp_*
+
 # Server
 server/node_modules/
 server/dist/
@@ -66,6 +72,9 @@ backend/build/
 *.pyc
 *.pyo
 __pycache__/
+
+# Old C++ tests
+tests/
 
 # Mac
 .DS_Store
