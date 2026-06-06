@@ -1,4 +1,6 @@
-# Convencoes C++
+# Convencoes C++ (Historico — Preservado para Referencia)
+
+> **AVISO:** Este documento descreve convencoes do codigo C++ original, que foi migrado para Python. O codigo C++ encontra-se em `.old/old-cpp/` para referencia historica. Toda a base ativa do JARVIS usa Python 3.14 com as convencoes descritas em CONTEXTO-COMPLETO.md.
 
 ## Padrão da Linguagem
 

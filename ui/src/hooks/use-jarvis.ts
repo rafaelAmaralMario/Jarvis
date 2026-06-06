@@ -15,6 +15,9 @@ declare global {
         onmessage: ((message: string) => void) | null;
       };
     };
+    pywebview?: {
+      api: Record<string, (...args: unknown[]) => Promise<unknown>>;
+    };
     jarvis?: JarvisBridge;
   }
 }
@@ -35,14 +38,16 @@ function createBridge(): JarvisBridge {
 
       if (window.qt?.webChannelTransport) {
         window.qt.webChannelTransport.send(msg);
-      } else if (window.jarvis) {
-        const svc = window.jarvis as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>;
-        if (svc[method]) {
-          svc[method](...args).then(resolve).catch(reject);
-        }
-      } else {
-        reject(new Error('No bridge available'));
+        return;
       }
+
+      const api = window.pywebview?.api ?? window.jarvis as unknown as Record<string, (...a: unknown[]) => Promise<unknown>> | undefined;
+      if (api?.[method]) {
+        api[method](...args).then(resolve).catch(reject);
+        return;
+      }
+
+      reject(new Error('No bridge available'));
     });
   }
 

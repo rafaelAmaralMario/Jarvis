@@ -1,13 +1,12 @@
-# Módulo Conhecimento
+# Modulo Conhecimento
 
 ## O que faz
 Sistema de notas Obsidian-like com suporte a Markdown, grafos de conhecimento, busca full-text e backlinks.
 
 ## Arquivos
 ```
-kernel/src/knowledge/knowledge_manager.cpp — CRUD de notas e pastas
-kernel/src/knowledge/search_engine.cpp     — Busca full-text
-kernel/src/knowledge/graph_builder.cpp     — Grafo de conexões
+backend/jarvis/knowledge_manager.py     — CRUD de notas, pastas, FTS5, wikilinks, import/export
+backend/jarvis/graph_builder.py         — Grafo de conexoes entre notas
 
 ui/src/components/Knowledge/KnowledgePanel.tsx
 ui/src/components/Knowledge/NoteEditor.tsx
@@ -20,31 +19,39 @@ ui/src/components/Knowledge/BacklinkPanel.tsx
 ## Funcionalidades
 
 ### Gerenciamento de Notas
-- Criar nota com título e conteúdo Markdown
+- Criar nota com titulo e conteudo Markdown
 - Editar nota com preview em tempo real
 - Organizar em pastas
 - Tags por nota
-- Busca full-text no conteúdo e título
+- Busca full-text no conteudo e titulo (FTS5)
 - Autocomplete de links `[[wikilink]]`
 
 ### Grafos de Conhecimento
-- Mapeamento automático de links entre notas
-- Visualização interativa de grafos
-- Expansão por profundidade
+- Mapeamento automatico de links entre notas
+- Visualizacao interativa de grafos
+- Expansao por profundidade
 - Destaque de notas mais conectadas
 
 ### Backlinks
 - Lista de notas que referenciam a nota atual
-- Navegação bidirecional entre notas
+- Navegacao bidirecional entre notas
 
 ### Busca
-- Busca full-text no conteúdo e título
+- Busca full-text no conteudo e titulo (FTS5)
 - Filtro por pasta
 - Resultados com preview do trecho correspondente
-- Ordenação por relevância
+- Ordenacao por relevancia
+
+### Import/Export
+- Importar notas de arquivos Markdown (.md)
+- Exportar notas para arquivos .md individuais
+- Preservacao de metadados (front matter)
 
 ## Modelo de Dados
 - `knowledge_notes`: id, title, content, folder_id, tags, created_at, updated_at
 - `knowledge_links`: source_id, target_id, type
 - `knowledge_tags`: id, name, color
 - `note_tags`: note_id, tag_id
+
+## Bridge API
+- 12 metodos: `createNote`, `getNote`, `listNotes`, `updateNote`, `deleteNote`, `searchNotes`, `getBacklinks`, `getGraph`, `getFolders`, `moveNote`, `importNote`, `exportNote`

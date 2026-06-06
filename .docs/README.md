@@ -1,7 +1,7 @@
 # .docs — Documentacao do JARVIS
 
 > Este diretorio espelha a documentacao atualizada do projeto JARVIS.
-> Diferente de `docs/` (documentacao historica), o `.docs/` e mantido em sincronia com o estado real do codigo.
+> Stack atual: **Python 3.14 + pywebview 5 + React 19** (migrado de C++17 + Qt 6.8).
 
 ## Estrutura
 
@@ -11,17 +11,17 @@
 ├── 01-arquitetura/                   # Decisoes arquiteturais
 │   ├── 01-visao-geral.md            # Visao geral da arquitetura
 │   ├── 02-sistema-modulos.md        # Sistema de modulos
-│   ├── 03-bridge-protocolo.md       # Protocolo de comunicacao React↔C++
+│   ├── 03-bridge-protocolo.md       # Protocolo de comunicacao React↔Python
 │   └── 04-inicializacao.md          # Fluxo de inicializacao
 ├── 02-tecnologia/                    # Stack e convencoes
-│   ├── 01-stack-decidida.md         # Stack tecnologica
+│   ├── 01-stack-decidida.md         # Stack tecnologica (Python/pywebview)
 │   ├── 02-banco-dados.md            # Banco SQLite
 │   ├── 03-build-deploy.md           # Sistema de build
-│   ├── 04-convencoes-cpp.md         # Convencoes C++
+│   ├── 04-convencoes-cpp.md         # Convencoes C++ (historico)
 │   └── 05-convencoes-react.md       # Convencoes React
 ├── 03-interface/                     # Bridge e UX
 │   ├── 01-paineis-ux.md             # Paineis da interface
-│   └── 02-bridge-api.md             # API completa do bridge
+│   └── 02-bridge-api.md             # API completa do bridge (65+ handlers)
 ├── 04-funcionalidades/               # Features implementadas
 │   ├── 01-kernel.md                 # Kernel / Core
 │   ├── 02-ia-agentes.md             # AI, Modelos, Agentes, Orquestracao

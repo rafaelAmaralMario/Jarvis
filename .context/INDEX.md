@@ -27,6 +27,10 @@
 | 010 | CI/CD — GitHub Actions | 2026-06-03T14:00:00-03:00 | active | — | — | — |
 | 011 | Build bem-sucedido + Bridge funcional | 2026-06-05T10:30:00-03:00 | superseded | 007, 009 | 012 | customize-opencode |
 | 012 | Migração Qt C++ → Python + pywebview | 2026-06-05T13:50:00-03:00 | active | 011 | — | context-generator |
+| 013 | Fase 6 — Bridge Wiring Completa | 2026-06-06T10:10:00-03:00 | active | — | — | context-generator |
+| 014 | Fase 7 — Build + E2E | 2026-06-06T10:30:00-03:00 | active | — | — | context-generator |
+| 015 | Fase 8 — Documentacao | 2026-06-06T10:40:00-03:00 | active | — | — | context-generator |
+| 016 | Fase 9 — Limpeza .oldC++/ | 2026-06-06T10:50:00-03:00 | active | — | — | context-generator |
 
 > **Nota:** Ao adicionar novo contexto, insira uma nova linha na tabela acima e crie o arquivo correspondente em `.context/YYYY-MM-DD-NNN-titulo.md`.
 >

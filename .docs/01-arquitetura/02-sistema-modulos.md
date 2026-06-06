@@ -1,39 +1,34 @@
 # Sistema de Modulos
 
-## Arquitetura de Módulos
+## Arquitetura de Modulos
 
-O JARVIS usa um sistema modular em camadas (L0–L4). Cada módulo é uma `.dll`/`.so` independente que se registra no Service Locator do Kernel.
+O JARVIS usa um sistema modular em camadas (L0–L4). Cada modulo e um pacote Python em `backend/jarvis/` que e instanciado por injecao de dependencias em `main.py`.
 
-## Módulos Implementados (10 de 14)
+## Modulos Implementados (14 de 14)
 
-| # | Módulo | Camada | Arquivos | Componentes UI | Status |
-|---|--------|--------|----------|----------------|--------|
-| 1 | Kernel | L0 | 5 src + main.cpp + 5 headers | — | ✅ |
-| 2 | Bridge | L0 | web_channel.cpp/.h | use-jarvis.ts | ✅ |
-| 3 | Persistência | L1 | 5 src + 5 headers | — | ✅ |
-| 4 | Workspace | L1 | 3 src + 4 headers | WorkspacePanel, FileTree, FileTabs | ✅ |
-| 5 | Rede/OAuth | L1 | 1 src + 1 header | ApiKeyManager, OAuthDialog | ✅ |
-| 6 | Conhecimento | L2 | 3 src + 4 headers | KnowledgePanel, GraphView, NoteEditor, SearchBar, BacklinkPanel | ✅ |
-| 7 | AI Engine | L2 | 4 src + 4 headers | ModelsPanel, AgentsPanel, OrchestrationPanel, AgentCard, AgentFormDialog | ✅ |
-| 8 | Editor | L3 | 1 src + 1 header | 9 componentes (Monaco, Tabs, CommandPalette, QuickOpen, Breadcrumb, etc) | ✅ |
-| 9 | Terminal | L3 | 1 src + 1 header | TerminalPanel, TerminalInstance | ✅ |
-| 10 | Git | L3 | 1 src + 1 header | 5 componentes (GitPanel, GitStatusList, GitCommitBox, GitBranchManager, GitHistoryView) | ✅ |
+| # | Modulo | Camada | Arquivo Python | Componentes UI | Status |
+|---|--------|--------|----------------|----------------|--------|
+| 1 | Bridge | L0 | `bridge.py` | `use-jarvis.ts` | ✅ |
+| 2 | Database | L1 | `database.py` | — | ✅ |
+| 3 | Workspace | L1 | `workspace_manager.py` | WorkspacePanel, FileTree, FileTabs | ✅ |
+| 4 | Network/OAuth | L1 | `network_manager.py` | ApiKeyManager, OAuthDialog | ✅ |
+| 5 | Knowledge | L2 | `knowledge_manager.py`, `graph_builder.py` | KnowledgePanel, GraphView, NoteEditor, SearchBar, BacklinkPanel | ✅ |
+| 6 | AI Engine | L2 | `models_manager.py`, `agents_manager.py`, `orchestration_manager.py`, `ollama_client.py` | ModelsPanel, AgentsPanel, OrchestrationPanel | ✅ |
+| 7 | Editor | L3 | `editor_manager.py` | 9 componentes (Monaco, Tabs, CommandPalette, QuickOpen, Breadcrumb, etc) | ✅ |
+| 8 | Terminal | L3 | `terminal_manager.py` | TerminalPanel, TerminalInstance | ✅ |
+| 9 | Git | L3 | `git_manager.py` | 5 componentes (GitPanel, GitStatusList, GitCommitBox, GitBranchManager, GitHistoryView) | ✅ |
+| 10 | Module Loader | L4 | `module_loader.py` | — | ✅ |
+| 11 | Migration Runner | L0 | `migration_runner.py` | — | ✅ |
+| 12 | Orchestration | L2 | `orchestration_manager.py` | OrchestrationPanel | ✅ |
+| 13 | Graph Builder | L2 | `graph_builder.py` | GraphView | ✅ |
+| 14 | Permissions | L1 | (embutido no bridge) | Settings | ✅ |
 
-## Módulos Não Iniciados (4 de 14)
+## SOLID na Implementacao
 
-| # | Módulo | Camada | Depende de | Task |
-|---|--------|--------|-----------|------|
-| 11 | Segurança | L1 | L0 | 023 |
-| 12 | Automação | L2 | L0–L2 | 019 |
-| 13 | Voz | L2 | L0–L2 | 021 |
-| 14 | Plugins | L4 | L0–L3 | 024 |
-
-## SOLID na Implementação
-
-| Princípio | Aplicação |
+| Principio | Aplicacao |
 |-----------|-----------|
-| **SRP** | Editor separado em Editor + Git + Terminal |
-| **OCP** | Novos módulos = novas DLLs. Kernel nunca muda |
-| **LSP** | `IModelProvider` intercambiável (Ollama ↔ OpenAI ↔ Mock) |
-| **ISP** | Interfaces segregadas: `IInitializable`, `IActivatable`, `IServiceProvider` |
-| **DIP** | `IServiceRegistry::getService<T>()` tipado vs `void*` |
+| **SRP** | Cada manager tem uma unica responsabilidade |
+| **OCP** | Novos modulos = novas classes. Bridge nunca muda |
+| **LSP** | `OllamaClient` intercambiavel (Ollama ↔ OpenAI ↔ Mock via httpx) |
+| **ISP** | Interfaces segregadas via type hints e Protocols |
+| **DIP** | Managers recebem dependencias no construtor (injecao explicita) |

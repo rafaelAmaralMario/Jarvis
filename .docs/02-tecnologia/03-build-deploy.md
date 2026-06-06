@@ -2,113 +2,88 @@
 
 ## Build Local (Windows)
 
-### Pré-requisitos
-- Visual Studio 2022 Community com ferramentas C++
-- Qt 6.8.0 instalado em `C:\Qt\6.8.0\msvc2022_64`
-- CMake 3.30+ (recomendado 3.31.6)
-- Ninja
-- Node.js 20+ (para build da UI)
+### Pre-requisitos
+- Python 3.14+
+- Node.js 20+
+- WebView2 Runtime (ja incluso no Windows 11)
 
-### Comando único
-```bash
-.\build.bat
+### Comando unico
+```powershell
+.\build_rls.bat
 ```
 
-O `build.bat` executa:
-1. `vcvars64.bat` — configura toolchain MSVC
-2. `cmake --preset default` — configura com Ninja + Debug
-3. `cmake --build build/default` — compila tudo
-4. `windeployqt` — copia DLLs Qt para junto do .exe
+O `build_rls.bat` executa:
+1. `npm install` — instala dependencias da UI
+2. `npm run build` — build React com Vite → `backend/jarvis/webui/`
+3. `pip install -e .` — instala o backend Python
 
 ### Build manual passo a passo
-```bash
+```powershell
 # 1. Build da UI
 cd ui
 npm install
-npm run build    # → kernel/resources/webui/
+npm run build    # → ../backend/jarvis/webui/
 
-# 2. Configurar CMake
-cmake -B build/default -G Ninja `
-    -DCMAKE_BUILD_TYPE=Debug `
-    -DCMAKE_PREFIX_PATH=C:/Qt/6.8.0/msvc2022_64
-
-# 3. Compilar
-cmake --build build/default
-
-# 4. Deploy DLLs
-windeployqt --debug --compiler-runtime `
-    -webenginewidgets -webchannel -websockets -sql -positioning `
-    build/default/kernel/jarvis.exe
+# 2. Instalar backend
+cd ../backend
+pip install -e .
 ```
 
 ### Executar
-```bash
-.\build\default\kernel\Debug\jarvis.exe
+```powershell
+python backend/jarvis/main.py
 ```
 
-## CMakePresets.json
+### Modo Desenvolvimento
+```powershell
+# Terminal 1: dev server React
+cd ui && npm run dev
 
-```json
-{
-  "version": 8,
-  "configurePresets": [
-    {
-      "name": "default",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/default",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_PREFIX_PATH": "$env{QT6_DIR}",
-        "BUILD_TESTING": "OFF"
-      }
-    },
-    {
-      "name": "release",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/release",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_PREFIX_PATH": "$env{QT6_DIR}",
-        "BUILD_TESTING": "OFF"
-      }
-    },
-    {
-      "name": "debug",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/debug",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_PREFIX_PATH": "$env{QT6_DIR}",
-        "BUILD_TESTING": "ON"
-      }
-    }
-  ]
-}
+# Terminal 2: backend com --dev aponta para Vite
+python backend/jarvis/main.py --dev
 ```
 
-## Linux (Docker Dev Container)
+## Pip Install
 
-```bash
-docker compose up dev -d
-docker compose exec dev bash
-# Dentro do container:
-cd /workspace
-cmake --preset default
-cmake --build build/default
+O backend usa `pyproject.toml` padrao com setuptools:
+
+```toml
+[project]
+name = "jarvis"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "pywebview>=5,<6",
+    "httpx>=0.28,<1",
+    "cryptography>=44,<45",
+    "pyte>=0.8,<1",
+]
+
+[project.scripts]
+jarvis = "jarvis.main:main"
 ```
 
-## CI/CD (GitHub Actions)
+## Testes
 
-O pipeline está configurado em `.github/workflows/` e inclui:
+```powershell
+cd backend
+python -m pytest      # 260+ testes (unitarios + integracao)
+
+cd ../ui
+npm test              # 145 testes Vitest
+```
+
+## CI/CD (GitHub Actions — Nao Iniciado)
+
+Pipeline planejado:
 - Build em matriz (Windows + Linux)
-- Testes Catch2 + Vitest
-- Lint C++ (clang-tidy) + TypeScript (ESLint)
+- Testes pytest + Vitest
+- Lint Python (ruff) + TypeScript (ESLint)
 
-## Distribuição (Task 027 — Não Iniciada)
+## Distribuicao (Nao Iniciada)
 
 | Plataforma | Formato | Ferramenta |
 |-----------|---------|-----------|
-| Windows | .exe installer | NSIS |
-| Linux | .AppImage | appimagetool |
-| macOS | .dmg | create-dmg |
-| Todas | Auto-update | Qt Updater / Sparkle |
+| Windows | .exe installer | NSIS + PyInstaller |
+| Linux | .AppImage | PyInstaller + appimagetool |
+| macOS | .dmg | PyInstaller + create-dmg |

@@ -1,16 +1,16 @@
 # Banco de Dados SQLite
 
-## Configuração
+## Configuracao
 
 | Item | Valor |
 |------|-------|
-| Engine | SQLite 3.x via Qt QSqlDatabase |
-| Driver | QSQLITE |
-| Modo WAL | Sim |
-| Mutex | Recursivo (QMutex) |
-| Localização | `%APPDATA%\JARVIS\JARVIS\jarvis-ai.db` |
+| Engine | SQLite 3.x nativo (`sqlite3` module) |
+| Modo WAL | Sim (`PRAGMA journal_mode=WAL`) |
+| Thread safety | `threading.RLock` (recursive lock) |
+| Localizacao | `%APPDATA%\JARVIS\jarvis-ai.db` |
 | Schema version | 8 |
 | Tabelas | ~26 |
+| Transacoes | Explicitas (`BEGIN`/`COMMIT`/`ROLLBACK`) |
 
 ## Migrations (8 scripts)
 
@@ -36,25 +36,25 @@ api_keys_001.sql
 ## Tabelas Principais
 
 ### knowledge_notes
-| Coluna | Tipo | Descrição |
+| Coluna | Tipo | Descricao |
 |--------|------|-----------|
-| id | TEXT (UUID) | Identificador único |
-| title | TEXT | Título da nota |
-| content | TEXT | Conteúdo em Markdown |
+| id | TEXT (UUID) | Identificador unico |
+| title | TEXT | Titulo da nota |
+| content | TEXT | Conteudo em Markdown |
 | folder_id | TEXT | Pasta pai |
-| tags | TEXT | Tags separadas por vírgula |
+| tags | TEXT | Tags separadas por virgula |
 | created_at | TEXT | ISO 8601 |
 | updated_at | TEXT | ISO 8601 |
 
 ### knowledge_links
-| Coluna | Tipo | Descrição |
+| Coluna | Tipo | Descricao |
 |--------|------|-----------|
 | source_id | TEXT | Nota de origem |
 | target_id | TEXT | Nota de destino |
 | type | TEXT | Tipo do link |
 
 ### agents
-| Coluna | Tipo | Descrição |
+| Coluna | Tipo | Descricao |
 |--------|------|-----------|
 | id | TEXT (UUID) | Identificador |
 | name | TEXT | Nome do agente |
@@ -64,16 +64,17 @@ api_keys_001.sql
 | is_active | INTEGER | Booleano |
 
 ### orchestration_config
-| Coluna | Tipo | Descrição |
+| Coluna | Tipo | Descricao |
 |--------|------|-----------|
 | id | TEXT | "default" |
 | strategy | TEXT | "sequential" ou "parallel" |
-| max_iterations | INTEGER | Limite de iterações |
+| max_iterations | INTEGER | Limite de iteracoes |
 | timeout_ms | INTEGER | Timeout em ms |
 
-## Notas Técnicas
+## Notas Tecnicas
 
-- `database.cpp` usa `QSqlDatabase::database()` com nome de conexão `"jarvis_main"`
-- Factory `createDatabase()` cria ou abre o banco em `getJarvisDataDir()/jarvis-ai.db`
-- `exec()` no `database.cpp` divide SQL por `;` com `Qt::SkipEmptyParts` e executa cada statement individualmente (necessário porque `QSqlQuery::exec()` só executa 1 statement por vez)
-- Backup nativo via `backup_manager.cpp` usando `sqlite3_backup_*` API
+- `database.py` usa `sqlite3.connect()` com `isolation_level = None` para controle manual de transacoes
+- `RLock` garante seguranca em multiplas threads (pywebview roda eventos em thread separada)
+- WAL mode permite leitura concorrente durante escritas
+- Backup via `VACUUM INTO` ou copia do arquivo (sem `sqlite3_backup_*`)
+- FTS5 habilitado para busca full-text nas notas

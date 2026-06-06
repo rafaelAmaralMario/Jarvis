@@ -1,43 +1,42 @@
 # Kernel — Core do Sistema
 
 ## O que faz
-Gerencia o lifecycle da aplicação: inicialização, carregamento de módulos, service locator, permissões e bridge de comunicação com o frontend.
+Gerencia o lifecycle da aplicacao: inicializacao, injecao de dependencias, bridge de comunicacao com o frontend e carregamento de modulos Python.
 
 ## Arquivos
 ```
-kernel/src/main.cpp              — Entry point (1553 linhas)
-kernel/src/module_loader.cpp     — Descoberta e carga de módulos .dll
-kernel/src/lifecycle.cpp         — Ciclo de vida da aplicação
-kernel/src/service_locator.cpp   — Registro e obtenção de serviços
-kernel/src/permission_manager.cpp— Gerenciamento de permissões
+backend/jarvis/main.py              — Entry point pywebview (70 linhas)
+backend/jarvis/bridge.py            — 65+ metodos window.jarvis.* (490 linhas)
+backend/jarvis/database.py          — SQLite WAL thread-safe (64 linhas)
+backend/jarvis/migration_runner.py  — 8 migrations na inicializacao
+backend/jarvis/module_loader.py     — Descoberta e carga de modulos Python
 ```
 
 ## Funcionalidades
 
-### Inicialização
-- Cria QApplication, inicializa Qt WebEngine
-- Abre/ cria banco SQLite com WAL mode
-- Executa 8 migrations na inicialização
-- Instancia todos os managers (Models, Agents, Orchestration, Knowledge, Workspace, Editor, Terminal, Network, Git)
-- Configura bridge com 89 handlers
-- Carrega UI React no WebEngine
+### Inicializacao
+- Cria/conecta SQLite com WAL mode
+- Executa 8 migrations na inicializacao
+- Instancia todos os managers (Module, Workspace, Network, Knowledge, Graph, Models, Agents, Orchestration, Editor, Git, Terminal)
+- Injeta todos os managers no JARVISBridge
+- Inicia pywebview com js_api registrado
 
 ### Module Loader
-- Descoberta de módulos em `modules/`
-- Carregamento dinâmico de `.dll`/`.so`
-- Inicialização e shutdown em ordem de dependência
-- Verificação de versão da API (`module_api.h`)
+- Descoberta de modulos Python em `modules/`
+- Carregamento dinamico via `importlib.import_module()`
+- Verificacao de interface via type hints / Protocols
+- Inicializacao e shutdown controlados
 
-### Service Locator
-- Singleton thread-safe
-- `registerService<T>()` com shared_ptr
-- `getService<T>()` com retorno tipado
-- Suporte a lazy initialization
+### Bridge (pywebview)
+- 65+ metodos expostos como `window.pywebview.api.jarvis*()`
+- Cada metodo delega para o manager correspondente
+- Serializacao automatica via pywebview (dict/list → JSON)
+- Eventos para o frontend via `window.evaluate_js()`
 
 ### Permission Manager
-- Verificação de permissões por operação
-- Roles e níveis de acesso
-- Integração com UI de configuração
+- Verificacao de permissoes por operacao
+- Roles e niveis de acesso
+- Integracao com UI de configuracao
 
-## 89 Bridge Handlers
-Todos os métodos expostos ao frontend via WebChannel. Ver `03-interface/02-bridge-api.md` para lista completa.
+## 65+ Bridge Methods
+Todos os metodos expostos ao frontend via pywebview js_api. Ver `03-bridge-protocolo.md` para lista completa.

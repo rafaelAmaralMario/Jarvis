@@ -54,6 +54,9 @@ temp/
 docker-data/
 !docker-compose.yml
 
+# Build artifacts
+ui/dist/
+
 # Node
 node_modules/
 ui/node_modules/
@@ -75,6 +78,3 @@ __pycache__/
 
 # Old C++ tests
 tests/
-
-# Mac
-.DS_Store

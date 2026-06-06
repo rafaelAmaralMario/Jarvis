@@ -4,54 +4,49 @@
 
 | Camada | Tecnologia | Versão | Função |
 |--------|-----------|--------|--------|
-| Desktop Framework | Qt | 6.8.0 (LGPL) | Janela principal, WebEngine, WebChannel, SQL, Network, WebSockets |
-| Linguagem Nativa | C++ | 20 | Todo o backend |
+| Desktop Framework | pywebview | 5.x | WebView2 window, Python↔JS bridge |
+| Linguagem Backend | Python | 3.14 | Todo o backend |
+| HTTP Client | httpx | 0.28+ | Chamadas REST (Ollama, APIs) |
+| Criptografia | cryptography | 44+ | API key storage |
+| Terminal PTY | subprocess + pyte | — | Emulação de terminal |
+| Plugin Loader | importlib | — | Descoberta e carga de módulos Python |
 | UI Web | React + TypeScript | 19 + 5.9 | Interface completa |
 | Build Web | Vite | 7 | Bundle da UI |
 | Estilos | Tailwind CSS + Radix UI | 4 | Design system |
 | Animações | Framer Motion | 12 | Transições de painéis |
 | Editor Código | Monaco Editor | 0.55 | Editor profissional |
-| Terminal | xterm.js + QProcess | 5.x | Terminal integrado |
-| Bridge | Qt WebChannel | 6.8 | JSON-RPC adaptado |
-| Banco | SQLite (via Qt Sql) | 3.x | Persistência local |
-| Build Nativo | CMake + Ninja | 3.30+ | Build do C++ |
-| Testes C++ | Catch2 | 3.x | Testes unitários |
-| Testes Web | Vitest | 4.x | Testes React |
-| JSON | nlohmann_json | 3.11+ | Parsing JSON |
+| Terminal UI | xterm.js | 5.x | Terminal integrado |
+| Bridge | pywebview js_api | 5.x | JSON-RPC nativo |
+| Banco | SQLite3 (nativo) | 3.x | Persistência local |
+| Build Python | pip + setuptools | — | Instalação do backend |
+| Testes Python | pytest | 8.x | 260+ testes unitários/integração |
+| Testes Web | Vitest | 4.x | 145 testes React |
 
-## Por que Qt WebEngine + React em vez de QML?
+## Por que Python + pywebview em vez de C++ + Qt?
 
-| Aspecto | QML puro | WebEngine + React |
-|---------|----------|-------------------|
-| Componentes prontos | Qt Quick Controls | shadcn/ui + npm |
-| Animações | PropertyAnimation | Framer Motion |
-| Editor código | Não existe nativo | Monaco Editor |
-| Ecossistema | Pequeno | Gigante |
+| Aspecto | Qt C++ | Python + pywebview |
+|---------|--------|-------------------|
+| Desenvolvimento | Lento (compilação) | Rápido (interpretado) |
+| Bridge | QWebChannel complexo | pywebview js_api nativo |
+| Dependências | CMake, Qt SDK | pip install |
+| Testes | Catch2 (compilação lenta) | pytest (instantâneo) |
 | Curva aprendizado | Alta | Baixa |
-| Performance UI | Nativa | V8 composto |
-| Tamanho binário | ~30MB | ~80MB |
+| Performance | Nativa | Adequada para UI |
+| Tamanho instalação | ~200MB | ~50MB |
+| Manutenção | Complexa | Simples |
 
-## Versões Específicas (package.json)
+## Versões Específicas (pyproject.toml)
 
-```json
-{
-  "react": "^19.0.0",
-  "react-dom": "^19.0.0",
-  "typescript": "~5.9.0",
-  "vite": "^7.0.0",
-  "tailwindcss": "^4.0.0",
-  "@tailwindcss/vite": "^4.0.0",
-  "@radix-ui/react-tabs": "^1.1.0",
-  "@radix-ui/react-dialog": "^1.1.0",
-  "@radix-ui/react-select": "^2.1.0",
-  "@radix-ui/react-dropdown-menu": "^2.1.0",
-  "@radix-ui/react-toggle": "^1.1.0",
-  "@radix-ui/react-scroll-area": "^1.2.0",
-  "@monaco-editor/react": "^4.7.0",
-  "@xterm/xterm": "^5.5.0",
-  "@xterm/addon-fit": "^0.10.0",
-  "framer-motion": "^12.0.0",
-  "lucide-react": "^0.400.0",
-  "marked": "^15.0.0"
-}
+```toml
+[project]
+dependencies = [
+    "pywebview>=5,<6",
+    "httpx>=0.28,<1",
+    "websockets>=14,<15",
+    "cryptography>=44,<45",
+    "pyte>=0.8,<0.9",
+    "ruamel.yaml>=0.18,<0.19",
+]
+[project.optional-dependencies]
+dev = ["pytest>=8,<9", "pytest-cov>=6,<7", "ruff>=0.9,<1"]
 ```

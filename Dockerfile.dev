@@ -3,28 +3,16 @@ FROM ubuntu:24.04 AS base
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
-    cmake \
-    ninja-build \
-    g++-14 \
-    clang-18 \
-    lld-18 \
-    qt6-base-dev \
-    qt6-webengine-dev \
-    qt6-webchannel-dev \
-    libqt6sql6-sqlite \
-    libqt6network6 \
-    nodejs \
-    npm \
-    git \
-    openssh-client \
-    ca-certificates \
-    sqlite3 \
-    curl \
+    python3 python3-pip python3-venv \
+    nodejs npm \
+    git curl \
+    libgtk-3-dev libwebkit2gtk-4.1-dev \
+    libjavascriptcoregtk-4.1-dev libsoup-3.0-dev \
+    openssh-client ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-ENV CC=clang-18
-ENV CXX=clang++-18
-ENV CMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu/cmake/Qt6
+RUN python3 -m venv /venv
+ENV PATH="/venv/bin:$PATH"
 
 WORKDIR /workspace
 

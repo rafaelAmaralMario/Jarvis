@@ -1,11 +1,11 @@
-# Módulo Editor
+# Modulo Editor
 
 ## O que faz
-Editor de código profissional baseado em Monaco Editor com abas, syntax highlighting, split view, quick open, command palette, auto-save e preview Markdown.
+Editor de codigo profissional baseado em Monaco Editor com abas, syntax highlighting, split view, quick open, command palette, auto-save e preview Markdown.
 
 ## Arquivos
 ```
-kernel/src/editor/editor_manager.cpp        — Estado do editor no backend
+backend/jarvis/editor_manager.py         — Estado do editor no backend
 
 ui/src/components/Editor/EditorPanel.tsx    — Container principal
 ui/src/components/Editor/EditorTabs.tsx     — Abas do editor
@@ -20,11 +20,11 @@ ui/src/components/Editor/MarkdownPreview.tsx— Preview de .md
 ## Funcionalidades
 
 ### Abas
-- Múltiplas abas com scroll
+- Multiplas abas com scroll
 - Fechar aba (Ctrl+W)
 - Reordenar abas por drag
-- Indicador de arquivo não salvo (•)
-- Ícone por tipo de arquivo
+- Indicador de arquivo nao salvo (•)
+- Icone por tipo de arquivo
 
 ### Monaco Editor
 - Syntax highlighting para 50+ linguagens
@@ -32,32 +32,32 @@ ui/src/components/Editor/MarkdownPreview.tsx— Preview de .md
 - Search/Replace (Ctrl+F, Ctrl+H)
 - Multi-cursor
 - Code folding
-- Autocomplete básico
+- Autocomplete basico
 
 ### Quick Open (Ctrl+P)
 - Busca fuzzy por nome de arquivo no projeto
-- Preview rápido
-- Navegação por setas
+- Preview rapido
+- Navegacao por setas
 
 ### Command Palette (Ctrl+Shift+P)
-- Busca fuzzy por comandos disponíveis
-- Atalhos de teclado visíveis ao lado
+- Busca fuzzy por comandos disponiveis
+- Atalhos de teclado visiveis ao lado
 - Comandos: salvar, fechar, formatar, etc
 
 ### Breadcrumb
 - Caminho completo do arquivo atual
-- Navegação clicável por segmento
+- Navegacao clicavel por segmento
 - Sincronizado com FileTree
 
 ### Auto-save
-- Salvamento automático após período de inatividade
-- Configurável (intervalo em ms)
+- Salvamento automatico apos periodo de inatividade
+- Configuravel (intervalo em ms)
 - Indicador visual de salvamento
 
 ### Markdown Preview
 - Preview lado a lado para arquivos .md
-- Renderização com `marked`
-- Atualização em tempo real
+- Renderizacao com `marked`
+- Atualizacao em tempo real
 
 ### Editor Settings
 - Tamanho da fonte
@@ -66,3 +66,6 @@ ui/src/components/Editor/MarkdownPreview.tsx— Preview de .md
 - Word wrap
 - Auto-save habilitado/desabilitado
 - Salvo no banco SQLite (tabela editor_settings)
+
+## Bridge API
+- 8 metodos: `editorOpenFile`, `editorSaveFile`, `editorCloseFile`, `editorGetOpenFiles`, `editorDetectLanguage`, `editorSearchFiles`, `editorGetSettings`, `editorUpdateSettings`

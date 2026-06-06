@@ -10,7 +10,7 @@ if %ERRORLEVEL% neq 0 (
 )
 cd ..
 
-echo === Building Python Backend ===
+echo === Installing Python Backend ===
 cd backend
 pip install -e . >nul 2>&1
 if %ERRORLEVEL% neq 0 (
@@ -20,3 +20,4 @@ cd ..
 
 echo === Done ===
 echo Run: python backend/jarvis/main.py
+echo Or dev mode: python backend/jarvis/main.py --dev

@@ -1,66 +1,69 @@
 # Fluxo de Inicializacao
 
-## Sequência de Inicialização
+## Sequencia de Inicializacao
 
 ```
-1. main() inicia
+1. python backend/jarvis/main.py
    │
-2. QApplication app(argc, argv)
+2. ArgumentParser: --dev (porta Vite dev) ou padrao (build)
    │
-3. QWebEngine::initialize()
+3. DatabaseFactory: sqlite3.connect(APPDATA/JARVIS/jarvis-ai.db)
+   │   WAL mode ativado, RLock criado
    │
-4. ServiceLocator::instance() ← singleton
-   │
-5. DatabaseFactory::createDatabase() ← SQLite WAL mode
-   │
-6. MigrationRunner::runPending() ← 8 migrations
+4. MigrationRunner.run_all()
+   │   8 migrations executadas em ordem
    │   core_001 → permissions → extensions → models_agents
    │   → knowledge → workspace → editor → api_keys
    │
-7. Managers são instanciados (todos que dependem de db):
-   │   ModelsManager, AgentsManager, OrchestrationManager
-   │   KnowledgeManager, WorkspaceManager, EditorManager
-   │   TerminalManager, NetworkManager, GitManager
+5. Managers instanciados (injecao de dependencias):
+   │   ModuleLoader(db)
+   │   WorkspaceManager, NetworkManager, KnowledgeManager
+   │   GraphBuilder(KnowledgeManager)
+   │   OllamaClient, ModelsManager(OllamaClient, db)
+   │   AgentsManager(db), OrchestrationManager(db, ModelsManager, OllamaClient, AgentsManager)
+   │   EditorManager(db), GitManager, TerminalManager
    │
-8. Bridge é configurada:
-   │   BridgeHandler registra 89 handlers
-   │   WebEngineBridge conecta QWebChannel ao QWebEngineView
-   │   Script adaptador injetado em DocumentCreation
+6. JARVISBridge instanciado com todos os managers:
+   │   bridge = JARVISBridge(module_loader, ..., terminal_manager)
+   │   65+ metodos expostos via js_api
    │
-9. QWebEngineView carrega webui/index.html
+7. pywebview.start():
+   │   Janela criada (WebView2)
+   │   js_api registrado automaticamente
+   │   URL carregada (build/index.html ou dev server)
    │
-10. React inicia (Vite bundle) no WebEngine:
-    │   main.tsx → App.tsx
-    │   useJarvis() hook conecta ao QWebChannel
-    │   useBridgeEvent() registra listeners
-    │
-11. ActivityBar renderiza 7 icones:
-    │   Assistente | Conhecimento | Workspace | Editor | Git | Config | Terminal
-    │
-12. App aguarda interação do usuário
+8. React inicia no WebView2:
+   │   main.tsx → App.tsx
+   │   use-jarvis hook: window.pywebview.api.*
+   │   Todos os 6 paineis carregam (ou mostram placeholder)
+   │
+9. App aguarda interacao do usuario
 ```
 
-## Tempo de Inicialização
+## Tempo de Inicializacao
 
 | Etapa | Estimativa |
 |-------|-----------|
-| QApplication + WebEngine | ~2s |
+| Python startup | ~500ms |
 | SQLite + Migrations | ~100ms |
 | Managers init | ~50ms |
-| Bridge setup | ~10ms |
-| WebEngine carregar React | ~1-3s |
-| **Total** | **~3-5s** |
+| WebView2 + React load | ~1-3s |
+| **Total** | **~2-4s** |
 
-## Dependências de Inicialização
+## Dependencias de Inicializacao
 
 ```
-Database ─┬─ ModelsManager ─── OrchestrationManager
-           ├─ AgentsManager ──┘
-           ├─ KnowledgeManager
+Database ─┬─ ModuleLoader
            ├─ WorkspaceManager
+           ├─ KnowledgeManager ── GraphBuilder
            ├─ EditorManager
            ├─ NetworkManager
-           └─ GitManager
+           ├─ GitManager
+           └─ TerminalManager
 
-Bridge ──── QWebEngineView ─── React
+OllamaClient ─┬─ ModelsManager ─┬─ AgentsManager
+               │                  └─ OrchestrationManager
+               └─────────────────────┘
+
+Bridge ─── receives all managers ─── React (js_api)
 ```

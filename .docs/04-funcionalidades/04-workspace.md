@@ -1,13 +1,11 @@
-# Módulo Workspace
+# Modulo Workspace
 
 ## O que faz
-Gerenciamento de projetos, árvore de arquivos, watcher de diretórios e operações de arquivo.
+Gerenciamento de projetos, arvore de arquivos, watcher de diretorios e operacoes de arquivo.
 
 ## Arquivos
 ```
-kernel/src/workspace/workspace_manager.cpp — CRUD de projetos e arquivos
-kernel/src/workspace/file_watcher.cpp      — Monitoramento de diretórios
-kernel/src/workspace/file_utils.cpp        — Utilitários de arquivo
+backend/jarvis/workspace_manager.py     — File I/O, watcher, projeto, cancelamento
 
 ui/src/components/Workspace/WorkspacePanel.tsx
 ui/src/components/Workspace/FileTree.tsx
@@ -18,30 +16,30 @@ ui/src/components/Workspace/FileTabs.tsx
 
 ### Projetos
 - Criar, abrir, editar, fechar projetos
-- Cada projeto tem diretório raiz + metadados
+- Cada projeto tem diretorio raiz + metadados
 - Lista de projetos recentes
 
-### Árvore de Arquivos
-- Navegação hierárquica de diretórios
-- Ícones por tipo de arquivo
+### Arvore de Arquivos
+- Navegacao hierarquica de diretorios
+- Icones por tipo de arquivo
 - Context menu: criar arquivo, criar pasta, renomear, deletar
-- Expandir/colapsar diretórios
-- Atalhos de teclado (navegação com setas)
+- Expandir/colapsar diretorios
+- Atalhos de teclado (navegacao com setas)
 
 ### File Watcher
-- Monitora mudanças em diretórios do projeto
-- Dispara evento `file-changed` via bridge quando arquivo é alterado no disco
-- Suporte a watch de múltiplos diretórios
+- Monitora mudancas em diretorios do projeto
+- Dispara evento `file-changed` via bridge quando arquivo e alterado no disco
+- Suporte a watch de multiplos diretorios
 
-### Operações de Arquivo
-- Criar arquivo com conteúdo inicial
+### Operacoes de Arquivo
+- Criar arquivo com conteudo inicial
 - Ler arquivo
 - Renomear/mover
-- Deletar (com confirmação)
+- Deletar (com confirmacao)
 - Abrir pasta como projeto
 
-## Bridge Handlers
-14 handlers: list_projects, get_project, create_project, update_project, delete_project, get_files, get_file, create_file, delete_file, rename_file, watch_directory, unwatch_directory, get_file_tree, open_folder
+## Bridge API
+- 15 metodos: `openWorkspace`, `addRoot`, `removeRoot`, `getRoots`, `listFiles`, `createFile`, `createFileWithPath`, `createDirectory`, `deletePath`, `renamePath`, `movePath`, `getRecentFiles`, `getProjectInfo`, `cancelGeneration`
 
 ## Eventos
-- `file-changed`: disparado quando file_watcher detecta alteração no disco
+- `file-changed`: disparado quando file_watcher detecta alteracao no disco

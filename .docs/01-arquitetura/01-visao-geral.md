@@ -19,29 +19,29 @@ Diferente de IDEs tradicionais que têm funcionalidades de IA, o JARVIS é um si
 ```
 ┌──────────────────────────────────────────────────────────┐
 │  L4: Plugins                                [NÃO INICIADO]│
-│     API pública C estável para extensões de terceiros    │
+│     Python plugins via ModuleLoader                      │
 ├──────────────────────────────────────────────────────────┤
 │  L3: Editor · Git · Terminal                  [✓ 3/3]    │
-│     Monaco Editor, xterm.js, Git commands nativos        │
+│     Monaco Editor, xterm.js, Git CLI subprocess          │
 ├──────────────────────────────────────────────────────────┤
-│  L2: Conhecimento · AI Engine · Autom · Voz  [✓ 2/4]    │
-│     Notes, Graph, Search, Models, Agents, Orchestration  │
+│  L2: Conhecimento · AI Engine                  [✓ 2/2]    │
+│     Notes, Graph, FTS5 Search, Models, Agents, Critic    │
 ├──────────────────────────────────────────────────────────┤
-│  L1: Workspace · Segurança · Rede · Persist [✓ 3/4]     │
-│     FileTree, FileWatcher, HTTP, OAuth, WS, SQLite       │
+│  L1: Workspace · Rede · Persistência           [✓ 3/3]   │
+│     File I/O, Watcher, HTTP, OAuth, SQLite (WAL)        │
 ├──────────────────────────────────────────────────────────┤
-│  L0: Kernel ⚙️                               [✓ COMPLETO]│
-│     ModuleLoader, ServiceLocator, PermManager, Bridge    │
-│     25 .cpp / 26 .h / 89 bridge handlers                 │
+│  L0: Bridge ⚙️                               [✓ COMPLETO]│
+│     pywebview JSON-RPC, 65+ window.jarvis.* handlers     │
+│     14 Python modules, 260+ pytest tests                 │
 ├──────────────────────────────────────────────────────────┤
-│  OS: Windows (primary), Linux (Docker dev container)     │
+│  OS: Windows (primary)                                   │
 └──────────────────────────────────────────────────────────┘
 ```
 
 ## Diferenciais
 
-- **Conhecimento como feature principal** — Sistema de notas Obsidian-like nativo (Markdown, grafos, backlinks, busca full-text)
-- **AI Engine integrado** — Suporte a múltiplos provedores (Ollama), agentes configuráveis, orquestração
-- **IDE completa** — Monaco Editor, terminal xterm.js, Git integrado
-- **Bridge em tempo real** — Comunicação React↔C++ via QWebChannel com 89 handlers registrados
-- **Persistência local** — SQLite com WAL mode, migrations versionadas, backup nativo
+- **Conhecimento como feature principal** — Sistema de notas Obsidian-like nativo (Markdown, grafos, backlinks, busca full-text FTS5)
+- **AI Engine integrado** — Suporte Ollama, agentes configuráveis, orquestração multi-agente com critic agent
+- **IDE completa** — Monaco Editor, terminal xterm.js, Git integrado via CLI
+- **Bridge em tempo real** — Comunicação React↔Python via pywebview JSON-RPC com 65+ handlers
+- **Persistência local** — SQLite com WAL mode, 8 migrations versionadas

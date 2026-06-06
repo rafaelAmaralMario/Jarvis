@@ -1,96 +1,96 @@
-# Protocolo Bridge C++ ↔ React
+# Protocolo Bridge Python ↔ React
 
-## Visão Geral
+## Visao Geral
 
-A comunicação entre React (UI) e C++ (backend) é feita via **Qt WebChannel** com um adaptador JSON-RPC injetado em `QWebEngineScript::DocumentCreation`.
+A comunicacao entre React (UI) e Python (backend) e feita via **pywebview js_api** — um mecanismo nativo do WebView2 que serializa/deserializa JSON automaticamente.
 
 ## Arquitetura
 
 ```
 React (renderer process)
-    │ bridge.sendMessage("method", args)
+    │ window.pywebview.api.jarvisMethod(args)
     ▼
-Adaptador JS (DocumentCreation)
-    │ Empacota como JSON-RPC type-2/3
+pywebview (WebView2 IPC bridge)
+    │ Serializa args como JSON, envia via IPC nativo
     ▼
-Qt WebChannel (C++/JS bridge nativo)
-    │ Serializa/Deserializa
+JARVISBridge.metodo_correspondente(args)
+    │ Executa logica, retorna dict/list
     ▼
-BridgeHandler::handleMessage(QString)
-    │ Roteia para handler registrado
+pywebview serializa resultado como JSON
     ▼
-Handler especifico (ex: knowledge::searchNotes)
-    │ Executa logica, retorna resultado JSON
+Promise<result> resolve no React
+```
+
+### Fluxo Detalhado
+
+```
+React Component
+    │ onSearch("machine learning")
     ▼
-BridgeHandler → WebChannel → Adaptador JS → Promise resolve
+use-jarvis hook: window.pywebview.api.jarvisSearchNotes("machine learning", 10)
+    │ pywebview 5.x serializa args → JSON IPC
+    ▼
+bridge.py: search_notes(self, query, limit) → self.knowledge.search_notes(query, limit)
+    │ Executa SQL FTS5, retorna list[dict]
+    ▼
+pywebview serializa resultado → JSON → IPC
+    │ Promise<Note[]> resolve
+    ▼
+React atualiza estado → renderiza SearchResults
 ```
 
 ## Formato das Mensagens
 
-### Requisição (React → C++)
-```json
-{
-  "method": "knowledge/search_notes",
-  "args": { "query": "machine learning", "limit": 10 },
-  "id": 1
-}
+pywebview gerencia a serializacao automaticamente. Nao ha formato manual — chamadas sao funcoes assincronas diretas:
+
+### Requisicao (React → Python)
+```typescript
+// React
+const results = await window.pywebview.api.jarvisSearchNotes("machine learning", 10);
 ```
 
-### Resposta (C++ → React)
-```json
-{
-  "result": [ { "id": 1, "title": "...", "content": "..." } ],
-  "id": 1
-}
+### Resposta (Python → React)
+```python
+# Python
+def search_notes(self, query: str, limit: int) -> list[dict]: ...
 ```
 
-### Evento (C++ → React)
-```json
-{
-  "event": "file-changed",
-  "data": { "path": "/home/project/main.cpp" }
-}
+### Evento (Python → React)
+```python
+# Python envia evento via pywebview
+self._window.evaluate_js(f"window.onTerminalOutput('{terminal_id}', '{escaped_data}')")
 ```
 
-## Handlers Registrados (89 total)
+## Metodos Expostos: 65+
 
-| Grupo | Métodos |
+| Grupo | Metodos |
 |-------|---------|
-| **kernel/** (4) | get_version, get_build_info, get_system_info, get_uptime |
-| **module/** (4) | get_modules, load_module, unload_module, get_module_info |
-| **knowledge/** (10) | search_notes, create_note, get_note, update_note, delete_note, get_graph, get_backlinks, get_folders, create_folder, rename_folder |
-| **ai/models/** (7) | list, get, create, update, delete, test, pull |
-| **ai/agents/** (6) | list, get, create, update, delete, set_active |
-| **ai/orchestration/** (7) | get_config, update_config, get_traces, get_active_agent_id, set_active_agent, run_agent, stop_agent |
-| **workspace/** (14) | list_projects, get_project, create_project, update_project, delete_project, get_files, get_file, create_file, delete_file, rename_file, watch_directory, unwatch_directory, get_file_tree, open_folder |
-| **editor/** (9) | open_file, close_file, get_open_files, set_active_tab, modify_file, save_file, get_settings, update_settings, get_breadcrumb |
-| **terminal/** (6) | create_terminal, write, resize, kill, list, get_output |
-| **net/** (11) | http_get, http_post, oauth_start, oauth_complete, oauth_get_token, ws_connect, ws_send, ws_close, get_api_keys, save_api_key, delete_api_key |
-| **git/** (15) | status, diff, stage, unstage, commit, log, branches, create_branch, checkout, push, pull, fetch, stash, stash_pop, merge |
-| **db/** (4) | execute_raw, get_backup_list, create_backup, restore_backup |
+| **Module (2)** | `getModules`, `getModule` |
+| **File (3)** | `readFile`, `writeFile`, `listDirectory` |
+| **Model (8)** | `listModels`, `getModel`, `pullModel`, `deleteModel`, `startModel`, `stopModel`, `updateModelMetadata`, `getModelBySpecialty` |
+| **Agent (8)** | `listAgents`, `getAgent`, `createAgent`, `updateAgent`, `deleteAgent`, `setDefaultAgent`, `getDefaultAgent`, `getOrchestrationPool` |
+| **Orchestration (5)** | `getOrchestrationConfig`, `updateOrchestrationConfig`, `sendMessage`, `executeOrchestratedQuery`, `getAgentTrace` |
+| **Workspace (15)** | `openWorkspace`, `addRoot`, `removeRoot`, `getRoots`, `listFiles`, `createFile`, `createFileWithPath`, `createDirectory`, `deletePath`, `renamePath`, `movePath`, `getRecentFiles`, `getProjectInfo`, `cancelGeneration` |
+| **Knowledge (12)** | `createNote`, `getNote`, `listNotes`, `updateNote`, `deleteNote`, `searchNotes`, `getBacklinks`, `getGraph`, `getFolders`, `moveNote`, `importNote`, `exportNote` |
+| **Editor (8)** | `editorOpenFile`, `editorSaveFile`, `editorCloseFile`, `editorGetOpenFiles`, `editorDetectLanguage`, `editorSearchFiles`, `editorGetSettings`, `editorUpdateSettings` |
+| **Terminal (6)** | `terminalCreate`, `terminalWrite`, `terminalResize`, `terminalClose`, `terminalList`, `terminalCloseAll` |
+| **Network (10)** | `networkGet`, `networkPost`, `networkOAuthStart`, `networkOAuthComplete`, `networkGetStoredToken`, `networkClearToken`, `networkStoreApiKey`, `networkGetApiKey`, `networkDeleteApiKey`, `networkListApiKeys` |
+| **Git (17)** | `gitStatus`, `gitDiff`, `gitDiffGutter`, `gitStage`, `gitUnstage`, `gitStageAll`, `gitCommit`, `gitBranches`, `gitCheckout`, `gitCreateBranch`, `gitDeleteBranch`, `gitPush`, `gitPull`, `gitLog`, `gitIsRepo`, `gitCurrentBranch`, `gitSetCredentials` |
 
-## Eventos C++ → React
+## Eventos Python → React
 
-| Evento | Disparado quando |
-|--------|-----------------|
-| `file-changed` | Arquivo alterado no disco |
-| `terminal-output` | Nova saída do terminal |
-| `ai-model-status` | Status do modelo mudou |
-| `git-operation-complete` | Operação git finalizou |
-| `ws-message` | Mensagem WebSocket recebida |
-| `backup-complete` | Backup finalizado |
+| Evento | Disparado quando | Implementacao |
+|--------|-----------------|---------------|
+| `terminal-output` | Nova saida do terminal | `window.onTerminalOutput(id, data)` |
+| `terminal-exit` | Terminal fechou | `window.onTerminalExit(id, code)` |
+| `file-changed` | Arquivo criado/deletado no disco | `window.onFileChanged(type, path)` |
 
-## Adaptador JS (Injetado em DocumentCreation)
+## Diferencas do Protocolo C++ Anterior
 
-O adaptador intercepta `window.qt.webChannelTransport.send()` e `onmessage` para:
-
-1. **Envio (React → C++)**: Empacota `{type: 2, data: {method, args, id}}` antes de chamar o send nativo
-2. **Recepção (C++ → React)**: Desempacota mensagens type-3 (respostas) e type-0/1 (eventos), chamando os callbacks corretos
-
-```javascript
-// Conceitualmente:
-function send(pkt) {
-    const wrapped = { type: 2, data: { method: pkt.method, args: pkt.args, id: pkt.id } };
-    _origSend.call(transport, wrapped);
-}
-```
+| Aspecto | Qt WebChannel (C++) | pywebview (Python) |
+|---------|--------------------|--------------------|
+| Serializacao | JSON-RPC manual | Automatica (pywebview) |
+| Roteamento | BridgeHandler com registro | Reflexao Python (`getattr`) |
+| Assincrono | Callbacks via Signal/Slot | await/async nativo |
+| Eventos (C++→React) | Qt Signals | `evaluate_js()` |
+| Numero de metodos | 89 | 65+ (consolidados) |

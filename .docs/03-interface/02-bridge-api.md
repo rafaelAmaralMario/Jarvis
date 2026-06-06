@@ -1,167 +1,164 @@
 # API Completa do Bridge
 
+O bridge expõe todos os métodos como `window.jarvis.<metodo>()` via pywebview.
+
 ## Uso no Frontend
 
 ```typescript
-import { useJarvis, useBridgeEvent } from '../hooks/use-jarvis';
+import { useJarvis } from '../hooks/use-jarvis';
 
 function MyComponent() {
     const jarvis = useJarvis();
-    
+
     useEffect(() => {
-        jarvis.kernel.getVersion().then(console.log);
-        jarvis.knowledge.searchNotes({ query: 'machine learning' }).then(setResults);
+        jarvis.listNotes().then(setNotes);
+        jarvis.listModels().then(setModels);
     }, []);
-    
-    useBridgeEvent('file-changed', (data) => {
-        console.log('Arquivo alterado:', data.path);
-    });
 }
 ```
 
-## API Completa por Grupo
+## API Completa (65+ métodos, flat namespace)
 
-### kernel/
-```
-getVersion()           → { version, build, commit }
-getBuildInfo()         → { compiler, qtVersion, buildType }
-getSystemInfo()        → { os, cpu, memory, uptime }
-getUptime()            → { uptimeMs }
-```
-
-### module/
+### Module
 ```
 getModules()           → ModuleInfo[]
-loadModule(path)       → { success, moduleId }
-unloadModule(id)       → { success }
-getModuleInfo(id)      → ModuleInfo
+getModule(id)          → ModuleInfo | null
 ```
 
-### knowledge/
+### File (legacy — delegado ao Workspace)
 ```
-searchNotes({ query, limit?, folder? })   → Note[]
-createNote({ title, content, folder? })   → Note
-getNote(id)                                → Note
-updateNote(id, { title?, content? })       → Note
-deleteNote(id)                             → { success }
-getGraph({ rootId?, depth? })              → GraphData
-getBacklinks(id)                           → Backlink[]
-getFolders()                               → FolderEntry[]
-createFolder({ name, parent? })            → FolderEntry
-renameFolder(id, { name })                 → FolderEntry
+readFile(path)                        → string
+writeFile(path, content)              → bool
+listDirectory()                        → FileEntry[]
 ```
 
-### ai/models/
+### Model
 ```
-list()                                     → ModelInfo[]
-get(id)                                    → ModelDetail
-create(data)                               → ModelDetail
-update(id, data)                           → ModelDetail
-delete(id)                                 → { success }
-test(id)                                   → { status, latencyMs }
-pull({ name, source? })                    → { success }
-```
-
-### ai/agents/
-```
-list()                                     → Agent[]
-get(id)                                    → Agent
-create(data)                               → Agent
-update(id, data)                           → Agent
-delete(id)                                 → { success }
-setActive(id)                              → { success }
+listModels()                          → ModelInfo[]
+getModel(name)                        → ModelInfo | null
+pullModel(name)                       → bool
+deleteModel(name)                     → bool
+startModel(name)                      → bool
+stopModel(name)                       → bool
+updateModelMetadata(name, metadata)   → bool
+getModelBySpecialty(specialty)        → ModelInfo | null
 ```
 
-### ai/orchestration/
+### Agent
 ```
-getConfig()                                → OrchestrationConfig
-updateConfig(data)                         → OrchestrationConfig
-getTraces({ limit? })                      → AgentTrace[]
-getActiveAgentId()                         → { agentId }
-setActiveAgent(id)                         → { success }
-runAgent({ input, agentId })               → { output, traceId }
-stopAgent(traceId)                         → { success }
-```
-
-### workspace/
-```
-listProjects()                             → Project[]
-getProject(id)                             → Project
-createProject(data)                        → Project
-updateProject(id, data)                    → Project
-deleteProject(id)                          → { success }
-getFiles(projectId)                        → FileEntry[]
-getFile({ projectId, path })               → FileEntry
-createFile({ projectId, path, content })   → FileEntry
-deleteFile({ projectId, path })            → { success }
-renameFile({ projectId, oldPath, newPath })→ { success }
-watchDirectory({ projectId, path })        → { success }
-unwatchDirectory({ projectId, path })      → { success }
-getFileTree({ projectId, path? })          → FileTreeEntry[]
-openFolder(path)                           → Project
+listAgents()                          → Agent[]
+getAgent(id)                          → Agent | null
+createAgent(data)                     → Agent
+updateAgent(id, data)                 → Agent
+deleteAgent(id)                       → bool
+setDefaultAgent(id)                   → bool
+getDefaultAgent()                     → Agent | null
+getOrchestrationPool()                → Agent[]
 ```
 
-### editor/
+### Orchestration
 ```
-openFile({ projectId, path })              → { success }
-closeFile({ projectId, path })             → { success }
-getOpenFiles()                             → EditorTabInfo[]
-setActiveTab(tabId)                        → { success }
-modifyFile({ path, content })              → { success }
-saveFile(path)                             → { success }
-getSettings()                              → EditorSettings
-updateSettings(data)                       → EditorSettings
-getBreadcrumb(path)                        → BreadcrumbEntry[]
+getOrchestrationConfig()              → OrchestrationConfig
+updateOrchestrationConfig(config)     → bool
+sendMessage(query)                    → string
+executeOrchestratedQuery(query)       → string
+getAgentTrace(queryId)                → AgentTrace | null
 ```
 
-### terminal/
+### Workspace
 ```
-createTerminal({ id, shell? })             → { success }
-write({ id, data })                        → { success }
-resize({ id, cols, rows })                 → { success }
-kill(id)                                   → { success }
-list()                                     → TerminalInfo[]
-getOutput(id)                              → { output }
-```
-
-### net/
-```
-httpGet({ url, headers? })                 → { status, body, headers }
-httpPost({ url, body, headers? })          → { status, body, headers }
-oauthStart({ provider })                   → { url, state }
-oauthComplete({ provider, code, state })   → { token, expiresIn }
-oauthGetToken(provider)                    → { token?, expiresIn? }
-wsConnect({ url, protocols? })             → { connectionId }
-wsSend({ connectionId, data })             → { success }
-wsClose(connectionId)                      → { success }
-getApiKeys()                               → ApiKey[]
-saveApiKey(key)                            → { success }
-deleteApiKey(id)                           → { success }
+openWorkspace(path)                   → bool
+addRoot(path)                         → bool
+removeRoot(path)                      → bool
+getRoots()                            → string[]
+listFiles(path?)                      → FileEntry[]
+createFile(name, parentDir)           → bool
+createFileWithPath(fullPath)          → bool
+createDirectory(name, parentDir)      → bool
+deletePath(path)                      → bool
+renamePath(oldPath, newPath)          → bool
+movePath(src, dest)                   → bool
+getRecentFiles(limit?)                → RecentFile[]
+getProjectInfo(path)                  → ProjectInfo | null
+cancelGeneration()                    → bool
 ```
 
-### git/
+### Knowledge
 ```
-status()                                   → GitStatusEntry[]
-diff({ file? })                            → { diff }
-stage({ files, all? })                     → { success }
-unstage({ files, all? })                   → { success }
-commit({ message, files? })                → { success, commitId }
-log({ maxCount? })                         → GitLogEntry[]
-branches()                                 → GitBranch[]
-createBranch({ name, from? })              → { success }
-checkout({ branch, create? })              → { success }
-push({ remote?, branch? })                 → { success }
-pull({ remote?, branch? })                 → { success }
-fetch({ remote? })                         → { success }
-stash({ message? })                        → { success }
-stashPop()                                 → { success }
-merge({ branch })                          → { success }
+createNote(data)                      → Note
+getNote(id)                           → Note | null
+listNotes(folder?)                    → Note[]
+updateNote(id, data)                  → Note
+deleteNote(id)                        → bool
+searchNotes(query)                    → SearchResult[]
+getBacklinks(noteId)                  → Backlink[]
+getGraph()                            → { nodes, edges }
+getFolders()                          → FolderEntry[]
+moveNote(id, targetFolder)            → bool
+importNote(filePath)                  → Note | null
+exportNote(noteId, outputPath)        → bool
 ```
 
-### db/
+### Editor
 ```
-executeRaw({ sql, params? })               → { rows, columns }
-getBackupList()                            → BackupEntry[]
-createBackup({ name? })                    → { success, path }
-restoreBackup(id)                          → { success }
+editorOpenFile(path)                  → FileBuffer | null
+editorSaveFile(path, content)         → bool
+editorCloseFile(path)                 → bool
+editorGetOpenFiles()                  → FileBuffer[]
+editorDetectLanguage(path)            → string
+editorSearchFiles(query)              → { path, language }[]
+editorGetSettings()                   → dict
+editorUpdateSettings(key, value)      → bool
 ```
+
+### Terminal
+```
+terminalCreate()                      → string (id)
+terminalWrite(id, data)               → bool
+terminalResize(id, cols, rows)        → bool
+terminalClose(id)                     → bool
+terminalList()                        → string[]
+terminalCloseAll()                    → bool
+```
+
+### Network
+```
+networkGet(url, headers?)             → { statusCode, body, headers }
+networkPost(url, body, contentType?, headers?) → { statusCode, body, headers }
+networkOAuthStart(provider)           → string (URL)
+networkOAuthComplete(provider, code)  → string (token)
+networkGetStoredToken(provider)       → string
+networkClearToken(provider)           → bool
+networkStoreApiKey(service, key)      → bool
+networkGetApiKey(service)             → string
+networkDeleteApiKey(service)          → bool
+networkListApiKeys()                  → { service, key }[]
+```
+
+### Git
+```
+gitStatus(repoPath)                   → GitStatus[]
+gitDiff(repoPath, filePath?)          → string
+gitDiffGutter(repoPath, filePath)     → GitGutterLine[]
+gitStage(repoPath, filePath)          → bool
+gitUnstage(repoPath, filePath)        → bool
+gitStageAll(repoPath)                 → bool
+gitCommit(repoPath, message)          → bool
+gitBranches(repoPath)                 → GitBranch[]
+gitCheckout(repoPath, branch)         → bool
+gitCreateBranch(repoPath, branch)     → bool
+gitDeleteBranch(repoPath, branch)     → bool
+gitPush(repoPath, remote?, branch?)   → bool
+gitPull(repoPath, remote?, branch?)   → bool
+gitLog(repoPath, count?)              → GitLogEntry[]
+gitIsRepo(repoPath)                   → bool
+gitCurrentBranch(repoPath)            → string
+gitSetCredentials(repoPath, user, token) → bool
+```
+
+## Eventos (Bridge → React)
+
+Eventos são disparados via pywebview `window.pywebview.api` callbacks:
+- `terminal-output(terminalId, data)` — output do terminal
+- `terminal-exit(terminalId, exitCode)` — terminal fechou
+- `file-changed({ type, path })` — arquivo criado/deletado no watcher

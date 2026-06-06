@@ -1,30 +1,31 @@
-# Módulo Git
+# Modulo Git
 
 ## O que faz
-Integração completa com Git via CLI: status, diff, stage/unstage, commit, branches, push/pull, stash e merge.
+Integracao completa com Git via CLI: status, diff, stage/unstage, commit, branches, push/pull.
 
 ## Arquivos
 ```
-kernel/src/git/git_manager.cpp — Execução de comandos Git via QProcess
+backend/jarvis/git_manager.py            — Execucao de comandos Git via subprocess
 
 ui/src/components/Git/GitPanel.tsx           — Painel principal Git
 ui/src/components/Git/GitStatusList.tsx      — Lista de arquivos modificados
 ui/src/components/Git/GitCommitBox.tsx       — Caixa de mensagem de commit
 ui/src/components/Git/GitBranchManager.tsx   — Gerenciamento de branches
-ui/src/components/Git/GitHistoryView.tsx     — Histórico de commits
+ui/src/components/Git/GitHistoryView.tsx     — Historico de commits
 ```
 
 ## Funcionalidades
 
 ### Status
 - Lista de arquivos modified/staged/untracked
-- Ícones por estado (M, A, D, ?, etc)
+- Icones por estado (M, A, D, ?, etc)
 - Agrupamento por status
 
 ### Diff
-- Visualização de diff lado a lado
+- Visualizacao de diff lado a lado
 - Destaque de linhas adicionadas/removidas
 - Diff por arquivo individual
+- Diff gutter (marcacoes na gutter do Monaco)
 
 ### Stage/Unstage
 - Stage arquivo individual
@@ -34,14 +35,15 @@ ui/src/components/Git/GitHistoryView.tsx     — Histórico de commits
 
 ### Commit
 - Mensagem de commit com textarea
-- Author name/email configurável
-- Commit com seleção de arquivos
+- Author name/email configuravel
+- Commit com selecao de arquivos
 - Indicador de sucesso
 
 ### Branches
 - Listar branches (local + remote)
 - Criar branch a partir de outra
 - Checkout de branch
+- Deletar branch
 - Indicador de branch atual
 
 ### Push/Pull/Fetch
@@ -49,19 +51,15 @@ ui/src/components/Git/GitHistoryView.tsx     — Histórico de commits
 - Pull com merge
 - Fetch de remote
 - Status de ahead/behind
+- Credenciais via `git config` ou OAuth
 
-### Stash
-- Stash com mensagem opcional
-- Stash pop
-- Lista de stashes
+### Log
+- Historico de commits
+- Hash, autor, data, mensagem
+- Navegacao entre paginas
 
-### Merge
-- Merge de branch
-- Detecção de conflitos
+## Bridge API
+- 17 metodos: `gitStatus`, `gitDiff`, `gitDiffGutter`, `gitStage`, `gitUnstage`, `gitStageAll`, `gitCommit`, `gitBranches`, `gitCheckout`, `gitCreateBranch`, `gitDeleteBranch`, `gitPush`, `gitPull`, `gitLog`, `gitIsRepo`, `gitCurrentBranch`, `gitSetCredentials`
 
-## Bridge Handlers
-15 handlers: status, diff, stage, unstage, commit, log, branches, create_branch, checkout, push, pull, fetch, stash, stash_pop, merge
-
-## Dependências
-- Git instalado no sistema (chamado via QProcess)
-- OAuth (Task 022) para push/pull autenticado
+## Dependencias
+- Git instalado no sistema (chamado via `subprocess.run`)

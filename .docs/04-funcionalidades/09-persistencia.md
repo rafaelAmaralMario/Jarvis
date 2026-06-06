@@ -1,56 +1,43 @@
-# Módulo Persistência
+# Modulo Persistencia
 
 ## O que faz
-Camada de abstração sobre SQLite com migrations, repositories, query builder e backup.
+Camada de abstracao sobre SQLite com migrations, controle de acesso concorrente e backup.
 
 ## Arquivos
 ```
-kernel/src/persistence/database.cpp          — Wrapper SQLite (WAL, multi-statement)
-kernel/src/persistence/migration_runner.cpp  — Execução de migrations
-kernel/src/persistence/repository.cpp        — Repositório genérico
-kernel/src/persistence/query_builder.cpp     — Builder de queries
-kernel/src/persistence/backup_manager.cpp    — Backup nativo SQLite
+backend/jarvis/database.py           — SQLite WAL thread-safe (RLock, isolation_level=None)
+backend/jarvis/migration_runner.py   — Execucao de 8 migrations
 ```
 
 ## Funcionalidades
 
 ### Database
-- Conexão SQLite com WAL mode
-- Mutex recursivo para thread safety
-- Factory `createDatabase()` com `getJarvisDataDir()`
-- Suporte a transações
+- Conexao SQLite com WAL mode (`PRAGMA journal_mode=WAL`)
+- RLock (recursive lock) para thread safety
+- Transacoes explicitas com `BEGIN`/`COMMIT`/`ROLLBACK`
+- `isolation_level = None` para controle manual
+- Localizacao: `%APPDATA%\JARVIS\jarvis-ai.db`
 
 ### Migration Runner
-- Descoberta automática de scripts .sql
-- Execução sequencial com controle de versão
-- Split multi-statement (cada `;` = 1 execução)
-- Tabela de controle: `schema_version`
+- Descoberta automatica de scripts .sql embutidos
+- Execucao sequencial com controle de versao (tabela `schema_version`)
+- Split multi-statement (cada `;` = 1 execucao)
 
-### Repository
-- CRUD genérico para qualquer tabela
-- Query por ID
-- Listagem com filtros
-- Paginação
+### Repositories
+- Cada manager acessa o banco diretamente via `database.py`
+- Sem ORM — SQL direto com parametros nomeados
+- Prevencao de SQL injection via `?` placeholders no sqlite3
 
-### Query Builder
-- Montagem programática de SQL
-- Suporte a WHERE, JOIN, ORDER BY, LIMIT
-- Parâmetros nomeados
-- Prevenção de SQL injection (via Qt)
-
-### Backup Manager
-- Backup nativo via API `sqlite3_backup_*`
-- Backup para arquivo .db
-- Restore de backup
-- Listagem de backups disponíveis
-- Agendamento automático (configurável)
+### Backup
+- Backup via `VACUUM INTO` (SQLite 3.27+)
+- Alternativa: copia do arquivo .db
 
 ## Schema Migrations (8 arquivos)
 1. `core_001_core.sql` — tabelas base do sistema
-2. `core_002_permissions.sql` — permissões e roles
-3. `core_003_extensions.sql` — extensões
+2. `core_002_permissions.sql` — permissoes e roles
+3. `core_003_extensions.sql` — extensoes
 4. `models_agents_001.sql` — modelos e agentes
 5. `knowledge_001.sql` — notas e links
 6. `workspace_001.sql` — projetos e arquivos
-7. `editor_001.sql` — configurações do editor
+7. `editor_001.sql` — configuracoes do editor
 8. `api_keys_001.sql` — chaves de API
