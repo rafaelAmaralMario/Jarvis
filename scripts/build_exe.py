@@ -32,7 +32,7 @@ def build_exe():
         sys.exit(1)
 
     subprocess.run(
-        ["pyinstaller", "--clean", "--noconfirm", SPEC_FILE],
+        [sys.executable, "-m", "PyInstaller", "--clean", "--noconfirm", SPEC_FILE],
         cwd=PROJECT_ROOT,
         check=True,
     )

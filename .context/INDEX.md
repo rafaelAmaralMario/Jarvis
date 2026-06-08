@@ -39,6 +39,7 @@
 | 022 | Agent Panel Context Menu | 2026-06-08T08:15:00-03:00 | active | — | — | context-generator |
 | 023 | Model Server Status Detection | 2026-06-08T08:30:00-03:00 | active | — | — | context-generator |
 | 024 | Native Folder Picker | 2026-06-08T08:35:00-03:00 | active | — | — | context-generator |
+| 025 | Auto-Update Runtime + App Icon | 2026-06-08T09:05:00-03:00 | active | — | — | context-generator |
 
 > **Nota:** Ao adicionar novo contexto, insira uma nova linha na tabela acima e crie o arquivo correspondente em `.context/YYYY-MM-DD-NNN-titulo.md`.
 >

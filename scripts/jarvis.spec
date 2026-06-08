@@ -4,7 +4,11 @@
 import os
 import sys
 
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+try:
+    spec_dir = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    spec_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+PROJECT_ROOT = os.path.abspath(os.path.join(spec_dir, ".."))
 BACKEND_DIR = os.path.join(PROJECT_ROOT, "backend")
 UI_DIST_DIR = os.path.join(PROJECT_ROOT, "ui", "dist")
 
