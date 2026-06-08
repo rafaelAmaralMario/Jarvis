@@ -68,9 +68,10 @@
 
 - [x] Método bridge `getModelServerStatus()` — detecta processo ollama
 - [x] Método bridge `startModelServer()` — inicia servidor com comando
-- ⬜ Atualizar `ModelCard.tsx` — mostrar status do servidor + botão iniciar
-- ⬜ Atualizar `ModelsPanel.tsx` — indicador global de servidor
-- ⬜ Auto-refresh do status a cada 5s
+- [x] Método bridge `getModelServerStatus()` — detecta processo ollama
+- [x] Método bridge `startModelServer()` — inicia servidor com comando
+- [x] Atualizar `ModelsPanel.tsx` — indicador global de servidor + botão iniciar
+- [x] Auto-refresh do status a cada 5s
 
 **Commit:** `feat: model server status detection + start button`
 

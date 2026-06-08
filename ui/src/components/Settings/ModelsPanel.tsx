@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import type { Specialty, ModelDetail } from '@/types';
+import type { Specialty, ModelDetail, ModelServerStatus } from '@/types';
 import { SPECIALTIES, SPECIALTY_CONFIG } from '@/types';
 import { ModelCard } from './ModelCard';
 import { useJarvis } from '@/hooks/use-jarvis';
@@ -13,6 +13,8 @@ export function ModelsPanel() {
   const [pullInput, setPullInput] = useState('');
   const [pulling, setPulling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [serverStatus, setServerStatus] = useState<ModelServerStatus | null>(null);
+  const [startingServer, setStartingServer] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -20,6 +22,18 @@ export function ModelsPanel() {
       .then(list => setModels(list as any as ModelDetail[]))
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
+  }, [bridge]);
+
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const status = await bridge.getModelServerStatus();
+        setServerStatus(status);
+      } catch {}
+    };
+    check();
+    const interval = setInterval(check, 5000);
+    return () => clearInterval(interval);
   }, [bridge]);
 
   const filtered = activeTab === 'all'
@@ -39,6 +53,23 @@ export function ModelsPanel() {
       setModels(prev => prev.map(m => m.name === name ? { ...m, status: 'running' as const } : m));
     } catch (err) {
       setError(`Erro ao iniciar ${name}: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  async function handleStartServer() {
+    setStartingServer(true);
+    setError(null);
+    try {
+      await bridge.startModelServer();
+      // Wait a moment then re-check
+      setTimeout(async () => {
+        const status = await bridge.getModelServerStatus();
+        setServerStatus(status);
+        setStartingServer(false);
+      }, 2000);
+    } catch (err) {
+      setError(`Erro ao iniciar servidor: ${err instanceof Error ? err.message : err}`);
+      setStartingServer(false);
     }
   }
 
@@ -165,11 +196,40 @@ export function ModelsPanel() {
         </div>
       )}
 
-      <div className="flex items-center gap-2 px-4 py-3 rounded-lg border bg-card text-xs text-muted-foreground">
-        <span className="text-base">⚡</span>
-        <span><strong className="text-foreground/70">Ollama</strong> running at <code className="text-primary bg-primary/10 px-1.5 py-0.5 rounded">http://localhost:11434</code></span>
-        <span className="text-border">|</span>
-        <span>▶ <strong>Start</strong> preloads model on GPU · ■ <strong>Stop</strong> releases memory</span>
+      <div className={`flex items-center gap-2 px-4 py-3 rounded-lg border text-xs ${
+        serverStatus?.running
+          ? 'bg-card border-green-900/30 text-muted-foreground'
+          : 'bg-red-950/10 border-red-900/30 text-red-400'
+      }`}>
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+          serverStatus?.running ? 'bg-green-500 shadow-sm shadow-green-500/60 animate-pulse' : 'bg-red-500'
+        }`} />
+        <span>
+          <strong className={serverStatus?.running ? 'text-green-500' : 'text-red-400'}>
+            Ollama {serverStatus?.running ? 'running' : 'stopped'}
+          </strong>
+          {serverStatus?.running
+            ? <span className="text-muted-foreground"> — {serverStatus.command}</span>
+            : <span className="text-muted-foreground"> — {serverStatus?.command || 'ollama serve'}</span>
+          }
+          {serverStatus?.pid && <span className="text-muted-foreground/60 ml-2">PID {serverStatus.pid}</span>}
+        </span>
+        {!serverStatus?.running && (
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleStartServer}
+            disabled={startingServer}
+            className="ml-auto px-3 py-1 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-500 transition-colors disabled:opacity-50"
+          >
+            {startingServer ? '⏳ Iniciando...' : '▶ Iniciar Servidor'}
+          </motion.button>
+        )}
+        {serverStatus?.running && (
+          <span className="ml-auto text-muted-foreground/60">
+            ▶ Start/■ Stop preloads/releases model memory
+          </span>
+        )}
       </div>
     </div>
   );
