@@ -150,7 +150,14 @@ class JARVISBridge:
         try:
             return _serialize(self._models.list_models())
         except Exception as e:
-            logger.warning("listModels failed: %s", e)
+            msg = str(e)
+            if "connection" in msg.lower() or "refused" in msg.lower():
+                logger.warning(
+                    "Ollama server não está rodando. "
+                    "Inicie com 'ollama serve' ou pela interface Settings → Models."
+                )
+            else:
+                logger.warning("listModels failed: %s", msg)
             return []
 
     def getModel(self, name: str):
@@ -1514,3 +1521,26 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
         except Exception as e:
             logger.warning("showFolderPicker failed: %s", e)
             return None
+
+    # ── Version / Update ────────────────────────────────────────────────
+
+    def getAppVersion(self) -> dict:
+        from jarvis.version import get_app_version
+        return {"version": get_app_version(), "app_name": "JARVIS"}
+
+    def checkForUpdates(self) -> dict:
+        from jarvis.version import check_for_updates
+        result = check_for_updates()
+        return _serialize(result)
+
+    def getAvailableVersions(self) -> list:
+        from jarvis.version import get_available_versions
+        return get_available_versions()
+
+    def downloadAndInstall(self, version: str) -> dict:
+        from jarvis.version import download_and_install
+        try:
+            path = download_and_install(version)
+            return {"success": True, "path": path}
+        except Exception as e:
+            return {"success": False, "error": str(e)}

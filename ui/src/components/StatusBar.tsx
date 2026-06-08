@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useJarvis } from '@/hooks/use-jarvis';
 
 interface StatusBarProps {
   moduleCount: number;
@@ -6,6 +8,21 @@ interface StatusBarProps {
 }
 
 export function StatusBar({ moduleCount, modelName }: StatusBarProps) {
+  const bridge = useJarvis();
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [latestVersion, setLatestVersion] = useState('');
+
+  useEffect(() => {
+    bridge.getAppVersion().then(() => {
+      bridge.checkForUpdates().then(result => {
+        if (result.update_available) {
+          setUpdateAvailable(true);
+          setLatestVersion(result.latest_version);
+        }
+      });
+    });
+  }, [bridge]);
+
   return (
     <motion.footer
       initial={{ y: 24 }}
@@ -18,6 +35,18 @@ export function StatusBar({ moduleCount, modelName }: StatusBarProps) {
       <span className="mx-3 opacity-50">|</span>
       <span>Modelo: {modelName}</span>
       <div className="flex-1" />
+      {updateAvailable && (
+        <motion.a
+          initial={{ x: 20, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          href="#"
+          onClick={e => { e.preventDefault(); window.location.hash = '#settings/updates'; }}
+          className="flex items-center gap-1.5 mr-3 px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+          v{latestVersion} disponível
+        </motion.a>
+      )}
       <motion.span
         animate={{ opacity: [1, 0.5, 1] }}
         transition={{ repeat: Infinity, duration: 2 }}

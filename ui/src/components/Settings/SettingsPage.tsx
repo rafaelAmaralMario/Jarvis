@@ -9,6 +9,7 @@ import { LLMProvidersPanel } from './LLMProvidersPanel';
 import { MCPServersPanel } from './MCPServersPanel';
 import { WorkflowsPanel } from './WorkflowsPanel';
 import { SecurityPanel } from './SecurityPanel';
+import { UpdatesPanel } from './UpdatesPanel';
 
 const TABS: { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'models', label: 'Models', icon: '📦' },
@@ -20,6 +21,7 @@ const TABS: { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'workflows', label: 'Workflows', icon: '⚡' },
   { id: 'security', label: 'Security', icon: '🔒' },
   { id: 'general', label: 'Geral', icon: '📋' },
+  { id: 'updates', label: 'Atualizações', icon: '🔄' },
 ];
 
 const spring = { type: 'spring' as const, stiffness: 300, damping: 30 };
@@ -87,6 +89,7 @@ export function SettingsPage() {
                   <p>General settings coming soon.</p>
                 </div>
               )}
+              {activeTab === 'updates' && <UpdatesPanel />}
             </motion.div>
           </AnimatePresence>
         </div>

@@ -48,17 +48,17 @@ describe('Auth Utilities', () => {
 
 describe('Route Export Contracts', () => {
   it('notes route exports default router', async () => {
-    const mod = await import('../routes/notes');
+    const mod = await import('../routes/notes.js');
     expect(mod.default).toBeDefined();
   });
 
   it('users route exports default router', async () => {
-    const mod = await import('../routes/users');
+    const mod = await import('../routes/users.js');
     expect(mod.default).toBeDefined();
   });
 
   it('workspaces route exports default router', async () => {
-    const mod = await import('../routes/workspaces');
+    const mod = await import('../routes/workspaces.js');
     expect(mod.default).toBeDefined();
   });
 });

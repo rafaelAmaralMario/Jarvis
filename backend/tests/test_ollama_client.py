@@ -5,6 +5,7 @@ from jarvis.ollama_client import (
     OllamaClient,
     OllamaModel,
     OllamaGenerateRequest,
+    OllamaError,
 )
 
 
@@ -20,7 +21,7 @@ def test_ping_when_ollama_offline(client):
 
 
 def test_list_models_empty_when_offline(client):
-    with pytest.raises((httpx.ConnectError, httpx.RemoteProtocolError)):
+    with pytest.raises(OllamaError, match="conectar ao servidor Ollama"):
         client.list_models()
 
 
@@ -58,12 +59,12 @@ def test_generate_fails_when_offline(client):
 
 
 def test_pull_model_fails_when_offline(client):
-    with pytest.raises((httpx.ConnectError, httpx.RemoteProtocolError)):
+    with pytest.raises(OllamaError, match="conectar ao servidor Ollama"):
         client.pull_model("llama3")
 
 
 def test_delete_model_raises_when_offline(client):
-    with pytest.raises((httpx.ConnectError, httpx.RemoteProtocolError)):
+    with pytest.raises(OllamaError, match="conectar ao servidor Ollama"):
         client.delete_model("llama3")
 
 

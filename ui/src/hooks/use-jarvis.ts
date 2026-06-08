@@ -8,7 +8,7 @@ import type {
   LLMProviderInfo, LLMTestResult, LLMGenerateResponse,
   MCPServerInfo, MCPServerDetail, MCPToolInfo, MCPCallResult,
   WorkflowSummary, WorkflowDetail, WorkflowExecutionResult,
-  PermissionInfo, AuditEntry, SecretInfo, ModelServerStatus
+  PermissionInfo, AuditEntry, SecretInfo, ModelServerStatus, UpdateStatus
 } from '@/types';
 
 declare global {
@@ -62,6 +62,10 @@ function createBridge(): JarvisBridge {
   getDefaultAgent: null,
   getOrchestrationConfig: { strategy: 'auto', maxRounds: 3 },
   getProjectInfo: null,
+  getAppVersion: { version: '0.1.0', app_name: 'JARVIS' },
+  checkForUpdates: { current_version: '0.1.0', latest_version: '', update_available: false, releases: [], error: '' },
+  getAvailableVersions: [],
+  downloadAndInstall: { success: false, error: 'No bridge available' },
 };
 
 function send(method: string, ...args: unknown[]): Promise<unknown> {
@@ -252,6 +256,10 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     getModelServerStatus: () => send('getModelServerStatus') as Promise<ModelServerStatus>,
     startModelServer: () => send('startModelServer') as Promise<boolean>,
     showFolderPicker: () => send('showFolderPicker') as Promise<string | null>,
+    getAppVersion: () => send('getAppVersion') as Promise<{ version: string; app_name: string }>,
+    checkForUpdates: () => send('checkForUpdates') as Promise<UpdateStatus>,
+    getAvailableVersions: () => send('getAvailableVersions') as Promise<string[]>,
+    downloadAndInstall: (version) => send('downloadAndInstall', version) as Promise<{ success: boolean; path?: string; error?: string }>,
 
     onEvent: (event, cb) => {
       if (!callbacks.has(event)) callbacks.set(event, new Set());

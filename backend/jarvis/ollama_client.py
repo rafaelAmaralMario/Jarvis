@@ -56,8 +56,20 @@ class OllamaClient:
             return False
 
     def list_models(self) -> list[OllamaModel]:
-        resp = self._client.get("/api/tags")
-        resp.raise_for_status()
+        try:
+            resp = self._client.get("/api/tags")
+            resp.raise_for_status()
+        except httpx.ConnectError:
+            raise OllamaError(
+                "Não foi possível conectar ao servidor Ollama em "
+                f"{self._base_url}. Execute 'ollama serve' ou inicie "
+                "pela interface Settings → Models."
+            )
+        except httpx.HTTPStatusError:
+            raise OllamaError(
+                f"Ollama retornou erro HTTP {resp.status_code}. "
+                "Verifique se o servidor está funcionando."
+            )
         data = resp.json()
         models: list[OllamaModel] = []
         for m in data.get("models", []):
@@ -75,16 +87,28 @@ class OllamaClient:
         return models
 
     def pull_model(self, name: str) -> bool:
-        body = {"name": name, "stream": False}
-        resp = self._client.post("/api/pull", json=body, timeout=300.0)
-        resp.raise_for_status()
-        data = resp.json()
-        return data.get("status") == "success"
+        try:
+            body = {"name": name, "stream": False}
+            resp = self._client.post("/api/pull", json=body, timeout=300.0)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("status") == "success"
+        except httpx.ConnectError:
+            raise OllamaError(
+                f"Não foi possível conectar ao servidor Ollama em {self._base_url} "
+                "para baixar o modelo."
+            )
 
     def delete_model(self, name: str) -> bool:
-        body = json.dumps({"name": name})
-        resp = self._client.request("DELETE", "/api/delete", content=body)
-        return resp.status_code == 200
+        try:
+            body = json.dumps({"name": name})
+            resp = self._client.request("DELETE", "/api/delete", content=body)
+            return resp.status_code == 200
+        except httpx.ConnectError:
+            raise OllamaError(
+                f"Não foi possível conectar ao servidor Ollama em {self._base_url} "
+                "para excluir o modelo."
+            )
 
     def generate(self, req: OllamaGenerateRequest) -> OllamaGenerateResponse:
         import time

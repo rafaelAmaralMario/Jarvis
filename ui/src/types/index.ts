@@ -145,6 +145,10 @@ export interface JarvisBridge {
   getModelServerStatus(): Promise<ModelServerStatus>;
   startModelServer(): Promise<boolean>;
   showFolderPicker(): Promise<string | null>;
+  getAppVersion(): Promise<{ version: string; app_name: string }>;
+  checkForUpdates(): Promise<UpdateStatus>;
+  getAvailableVersions(): Promise<string[]>;
+  downloadAndInstall(version: string): Promise<{ success: boolean; path?: string; error?: string }>;
 
   onEvent(event: string, callback: (data: unknown) => void): void;
   offEvent(event: string, callback: (data: unknown) => void): void;
@@ -545,5 +549,23 @@ export interface ModelServerStatus {
   error: string;
 }
 
+export interface UpdateStatus {
+  current_version: string;
+  latest_version: string;
+  update_available: boolean;
+  releases: ReleaseInfo[];
+  error: string;
+}
+
+export interface ReleaseInfo {
+  tag_name: string;
+  name: string;
+  body: string;
+  published_at: string;
+  prerelease: boolean;
+  download_url: string;
+  filename: string;
+}
+
 export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'settings' | 'git';
-export type SettingsTab = 'general' | 'models' | 'assistant' | 'orchestration' | 'agents' | 'api-keys' | 'llm-providers' | 'mcp-servers' | 'workflows' | 'security';
+export type SettingsTab = 'general' | 'models' | 'assistant' | 'orchestration' | 'agents' | 'api-keys' | 'llm-providers' | 'mcp-servers' | 'workflows' | 'security' | 'updates';
