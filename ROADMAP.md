@@ -55,9 +55,9 @@
 ### Fase 4: Agent Panel Context Menu
 **Descrição:** Adicionar menu de contexto contextual no painel do agente.
 
-- ⬜ Adicionar `data-context-menu-enabled` no painel do agente
-- ⬜ Opções: Novo Chat, Limpar Conversa, Copiar Última Resposta, Exportar Chat, Configurações do Agente
-- ⬜ Menu sensível ao contexto (com seleção vs sem seleção)
+- [x] Adicionar `data-context-menu-enabled` no painel do agente
+- [x] Opções: Novo Chat, Limpar Conversa, Copiar Última Resposta, Exportar Chat, Configurações do Agente
+- [x] Menu sensível ao contexto (com seleção vs sem seleção)
 
 **Commit:** `feat: agent panel context menu`
 

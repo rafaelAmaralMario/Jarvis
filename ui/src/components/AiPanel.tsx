@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useJarvis } from '@/hooks/use-jarvis';
 import type { Agent } from '@/types';
+import { ContextMenu } from '@/components/ui/ContextMenu';
+import type { ContextMenuItem } from '@/components/ui/ContextMenu';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -90,6 +92,7 @@ export function AiPanel() {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; convId: string; hasSelection: boolean } | null>(null);
 
   const activeConv = conversations.find(c => c.id === activeConvId) ?? conversations[0];
 
@@ -160,14 +163,82 @@ export function AiPanel() {
     setShowHistory(false);
   }
 
+  const getContextMenuItems = useCallback((convId: string, hasSelection: boolean): ContextMenuItem[] => {
+    const items: ContextMenuItem[] = [];
+
+    items.push({
+      id: 'new-chat', label: 'Novo Chat', icon: '✚',
+      onClick: newConversation,
+    });
+    items.push({
+      id: 'clear-chat', label: 'Limpar Conversa', icon: '🗑️', danger: true,
+      onClick: () => {
+        setConversations(prev => prev.map(c =>
+          c.id === convId ? { ...c, messages: [{
+            role: 'assistant' as const,
+            content: 'Olá! Sou o **JARVIS**, seu assistente AI.\n\nComo posso ajudar hoje?',
+          }] } : c
+        ));
+      },
+    });
+    items.push({ id: 'div1', label: '', divider: true, onClick: () => {} });
+
+    if (activeConv.messages.length > 1) {
+      items.push({
+        id: 'copy-last', label: 'Copiar Última Resposta', icon: '📋',
+        onClick: () => {
+          const lastAssistant = [...activeConv.messages].reverse().find(m => m.role === 'assistant' && !m.error);
+          if (lastAssistant) bridge.copyToClipboard(lastAssistant.content);
+        },
+      });
+    }
+    if (hasSelection) {
+      items.push({
+        id: 'copy-selection', label: 'Copiar Seleção', icon: '📋',
+        onClick: () => {
+          const sel = window.getSelection()?.toString();
+          if (sel) bridge.copyToClipboard(sel);
+        },
+      });
+    }
+    items.push({ id: 'div2', label: '', divider: true, onClick: () => {} });
+    items.push({
+      id: 'export-chat', label: 'Exportar Conversa', icon: '📤',
+      onClick: () => {
+        const text = activeConv.messages.map(m =>
+          `${m.role === 'user' ? '👤' : '🤖'}: ${m.content}`
+        ).join('\n\n---\n\n');
+        bridge.copyToClipboard(text);
+      },
+    });
+    items.push({
+      id: 'agent-settings', label: 'Configurações do Agente', icon: '⚙️',
+      onClick: () => {
+        // Navigate to settings -> agents tab (handled via view change)
+      },
+    });
+
+    return items;
+  }, [activeConv, bridge, newConversation]);
+
+  const contextMenuItems = contextMenu
+    ? getContextMenuItems(contextMenu.convId, contextMenu.hasSelection)
+    : [];
+
   const quickActions = ['📝 Resumir documento', '💻 Explicar código', '🧠 Brainstorm', '🔀 Multi-Agent'];
 
   return (
     <motion.aside
+      data-context-menu-enabled
       initial={{ width: 0, opacity: 0 }}
       animate={{ width: 380, opacity: 1 }}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       className="flex flex-col bg-card border-l border-border overflow-hidden relative"
+      onContextMenu={(e) => {
+        const sel = window.getSelection();
+        const hasSelection = sel && sel.toString().trim().length > 0;
+        setContextMenu({ x: e.clientX, y: e.clientY, convId: activeConvId, hasSelection: !!hasSelection });
+      }}
     >
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
@@ -361,6 +432,10 @@ export function AiPanel() {
           </motion.button>
         </div>
       </div>
+      <ContextMenu
+        state={contextMenu ? { x: contextMenu.x, y: contextMenu.y, items: contextMenuItems } : null}
+        onClose={() => setContextMenu(null)}
+      />
     </motion.aside>
   );
 }
