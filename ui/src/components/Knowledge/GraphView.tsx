@@ -17,11 +17,16 @@ export function GraphView({ onSelectNode }: GraphViewProps) {
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const animationRef = useRef<number>(0);
 
-  // Simple force-directed layout state
   const nodesRef = useRef<{
     id: string; label: string; x: number; y: number; vx: number; vy: number; radius: number; color: string;
   }[]>([]);
   const edgesRef = useRef<{ source: string; target: string }[]>([]);
+
+  const zoomRef = useRef(1);
+  const offsetRef = useRef({ x: 0, y: 0 });
+  const draggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const dragOffsetStartRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     setLoading(true);
@@ -38,7 +43,6 @@ export function GraphView({ onSelectNode }: GraphViewProps) {
     const centerX = 300;
     const centerY = 250;
     const angleStep = (2 * Math.PI) / Math.max(g.nodes.length, 1);
-
     nodesRef.current = g.nodes.map((n, i) => ({
       id: n.id,
       label: n.label,
@@ -49,24 +53,17 @@ export function GraphView({ onSelectNode }: GraphViewProps) {
       radius: Math.min(30, 10 + n.linkCount * 3),
       color: COLORS[i % COLORS.length],
     }));
-
-    edgesRef.current = g.edges.map((e) => ({
-      source: e.source,
-      target: e.target,
-    }));
+    edgesRef.current = g.edges.map((e) => ({ source: e.source, target: e.target }));
   }
 
   const simulate = useCallback(() => {
     const nodes = nodesRef.current;
     const edges = edgesRef.current;
     if (nodes.length === 0) return;
-
     const REPULSION = 5000;
     const ATTRACTION = 0.005;
     const DAMPING = 0.85;
     const MIN_DIST = 30;
-
-    // Repulsion between all nodes
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
         let dx = nodes[j].x - nodes[i].x;
@@ -82,8 +79,6 @@ export function GraphView({ onSelectNode }: GraphViewProps) {
         nodes[j].vy += fy;
       }
     }
-
-    // Attraction along edges
     for (const edge of edges) {
       const si = nodes.findIndex((n) => n.id === edge.source);
       const ti = nodes.findIndex((n) => n.id === edge.target);
@@ -98,8 +93,6 @@ export function GraphView({ onSelectNode }: GraphViewProps) {
       nodes[ti].vx -= (dx / dist) * force;
       nodes[ti].vy -= (dy / dist) * force;
     }
-
-    // Apply velocity
     for (const n of nodes) {
       n.vx *= DAMPING;
       n.vy *= DAMPING;
@@ -124,9 +117,12 @@ export function GraphView({ onSelectNode }: GraphViewProps) {
     const h = rect.height;
     ctx.clearRect(0, 0, w, h);
 
+    ctx.save();
+    ctx.translate(offsetRef.current.x, offsetRef.current.y);
+    ctx.scale(zoomRef.current, zoomRef.current);
+
     const nodes = nodesRef.current;
 
-    // Draw edges
     ctx.strokeStyle = 'rgba(139, 148, 158, 0.15)';
     ctx.lineWidth = 1;
     for (const edge of edgesRef.current) {
@@ -139,40 +135,33 @@ export function GraphView({ onSelectNode }: GraphViewProps) {
       ctx.stroke();
     }
 
-    // Draw nodes
     for (const n of nodes) {
       const isSelected = n.id === selectedNode;
       const isHovered = hoveredNode?.id === n.id;
-
-      // Glow for selected/hovered
       if (isSelected || isHovered) {
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius + 6, 0, 2 * Math.PI);
         ctx.fillStyle = isSelected ? 'rgba(88, 166, 255, 0.2)' : 'rgba(88, 166, 255, 0.1)';
         ctx.fill();
       }
-
-      // Node circle
       ctx.beginPath();
       ctx.arc(n.x, n.y, n.radius, 0, 2 * Math.PI);
       ctx.fillStyle = n.color;
       ctx.globalAlpha = isSelected ? 1 : 0.8;
       ctx.fill();
       ctx.globalAlpha = 1;
-
       if (isSelected || isHovered) {
         ctx.strokeStyle = '#58a6ff';
         ctx.lineWidth = 2;
         ctx.stroke();
       }
-
-      // Label
       ctx.fillStyle = '#e6edf3';
       ctx.font = '10px Inter, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillText(n.label, n.x, n.y + n.radius + 4);
     }
+    ctx.restore();
   }
 
   function animate() {
@@ -187,16 +176,21 @@ export function GraphView({ onSelectNode }: GraphViewProps) {
     return () => cancelAnimationFrame(animationRef.current);
   }, [graph]);
 
-  function handleCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
+  function getCanvasPoint(e: React.MouseEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    return {
+      x: (e.clientX - rect.left - offsetRef.current.x) / zoomRef.current,
+      y: (e.clientY - rect.top - offsetRef.current.y) / zoomRef.current,
+    };
+  }
 
+  function handleCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
+    const pt = getCanvasPoint(e);
     for (const n of nodesRef.current) {
-      const dx = x - n.x;
-      const dy = y - n.y;
+      const dx = pt.x - n.x;
+      const dy = pt.y - n.y;
       if (dx * dx + dy * dy < (n.radius + 5) * (n.radius + 5)) {
         setSelectedNode(n.id);
         onSelectNode(n.id);
@@ -207,23 +201,46 @@ export function GraphView({ onSelectNode }: GraphViewProps) {
   }
 
   function handleCanvasMove(e: React.MouseEvent<HTMLCanvasElement>) {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
+    const pt = getCanvasPoint(e);
     let found: GraphNode | null = null;
     for (const n of nodesRef.current) {
-      const dx = x - n.x;
-      const dy = y - n.y;
+      const dx = pt.x - n.x;
+      const dy = pt.y - n.y;
       if (dx * dx + dy * dy < (n.radius + 5) * (n.radius + 5)) {
         found = { id: n.id, label: n.label, folder: '', tags: [], linkCount: 0 };
         break;
       }
     }
     setHoveredNode(found);
-    canvas.style.cursor = found ? 'pointer' : 'default';
+    if (canvasRef.current) canvasRef.current.style.cursor = found ? 'pointer' : 'grab';
+  }
+
+  function handleWheel(e: React.WheelEvent<HTMLCanvasElement>) {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    zoomRef.current = Math.max(0.1, Math.min(5, zoomRef.current * delta));
+  }
+
+  function handleMouseDown(e: React.MouseEvent<HTMLCanvasElement>) {
+    draggingRef.current = true;
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    dragOffsetStartRef.current = { ...offsetRef.current };
+  }
+
+  function handleMouseUp() { draggingRef.current = false; }
+
+  function handleMouseLeave() {
+    draggingRef.current = false;
+    setHoveredNode(null);
+  }
+
+  function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
+    if (draggingRef.current) {
+      offsetRef.current.x = dragOffsetStartRef.current.x + (e.clientX - dragStartRef.current.x);
+      offsetRef.current.y = dragOffsetStartRef.current.y + (e.clientY - dragStartRef.current.y);
+    } else {
+      handleCanvasMove(e);
+    }
   }
 
   if (loading) {
@@ -249,13 +266,17 @@ export function GraphView({ onSelectNode }: GraphViewProps) {
     <div className="relative">
       <canvas
         ref={canvasRef}
-        className="w-full h-[300px] rounded-lg cursor-grab active:cursor-grabbing"
+        className="w-full h-[350px] rounded-lg cursor-grab active:cursor-grabbing"
         onClick={handleCanvasClick}
-        onMouseMove={handleCanvasMove}
-        onMouseLeave={() => setHoveredNode(null)}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        onWheel={handleWheel}
       />
       <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground/50">
         <span>{graph.nodes.length} nodes · {graph.edges.length} edges</span>
+        <span>scroll to zoom · drag to pan</span>
         {selectedNode && (
           <span className="text-primary/70">selected: {nodesRef.current.find(n => n.id === selectedNode)?.label}</span>
         )}

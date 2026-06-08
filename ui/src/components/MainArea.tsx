@@ -95,6 +95,32 @@ export function MainArea({ activeView, onViewChange }: MainAreaProps) {
     );
   }
 
+  if (activeView === 'automation') {
+    return (
+      <div className="flex-1 p-8 overflow-y-auto">
+        <h1 className="text-lg font-semibold mb-4">⚡ Workflows & Automation</h1>
+        <p className="text-sm text-muted-foreground mb-6">Configure and run automation workflows. Go to Settings → Workflows to manage.</p>
+        <div className="grid gap-4 max-w-2xl">
+          {[
+            { icon: '⚡', title: 'Run Command', desc: 'Execute shell commands as workflow steps' },
+            { icon: '🌐', title: 'API Calls', desc: 'Make HTTP requests to external services' },
+            { icon: '🧠', title: 'AI Query', desc: 'Query LLM models within workflows' },
+            { icon: '📝', title: 'Create Note', desc: 'Auto-generate knowledge notes' },
+            { icon: '⏰', title: 'Schedule', desc: 'Trigger workflows on a schedule' },
+          ].map(item => (
+            <div key={item.title} className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card">
+              <span className="text-2xl">{item.icon}</span>
+              <div>
+                <div className="font-medium text-sm">{item.title}</div>
+                <div className="text-xs text-muted-foreground">{item.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return null;
 
   function handleOpenInEditor(path: string) {

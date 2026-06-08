@@ -31,6 +31,10 @@
 | 014 | Fase 7 — Build + E2E | 2026-06-06T10:30:00-03:00 | active | — | — | context-generator |
 | 015 | Fase 8 — Documentacao | 2026-06-06T10:40:00-03:00 | active | — | — | context-generator |
 | 016 | Fase 9 — Limpeza .oldC++/ | 2026-06-06T10:50:00-03:00 | active | — | — | context-generator |
+| 017 | LLM Gateway Multi-Provider + MCP Server | 2026-06-08T07:00:00-03:00 | active | — | — | context-generator |
+| 018 | Workflow Engine + Security Manager | 2026-06-08T07:10:00-03:00 | active | — | — | context-generator |
+| 019 | Frontend Types/Hooks/Components | 2026-06-08T07:20:00-03:00 | active | — | — | context-generator |
+| 020 | CI/CD + E2E + Server Tests | 2026-06-08T07:30:00-03:00 | active | 010 | — | context-generator |
 
 > **Nota:** Ao adicionar novo contexto, insira uma nova linha na tabela acima e crie o arquivo correspondente em `.context/YYYY-MM-DD-NNN-titulo.md`.
 >

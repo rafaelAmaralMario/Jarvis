@@ -103,6 +103,40 @@ export interface JarvisBridge {
   gitCurrentBranch(repoPath: string): Promise<string>;
   gitSetCredentials(repoPath: string, username: string, token: string): Promise<boolean>;
 
+  llmGetProviders(): Promise<LLMProviderInfo[]>;
+  llmGetProvider(provider: string): Promise<LLMProviderInfo | null>;
+  llmSaveProvider(config: LLMProviderConfig): Promise<boolean>;
+  llmSetDefaultProvider(provider: string): Promise<boolean>;
+  llmGetDefaultProvider(): Promise<string>;
+  llmTestConnection(provider: string): Promise<LLMTestResult>;
+  llmGenerate(request: LLMGenerateRequest): Promise<LLMGenerateResponse>;
+
+  mcpListServers(): Promise<MCPServerInfo[]>;
+  mcpGetServer(id: string): Promise<MCPServerDetail | null>;
+  mcpCreateServer(data: MCPServerInput): Promise<MCPServerDetail>;
+  mcpUpdateServer(id: string, data: Partial<MCPServerInput>): Promise<MCPServerDetail>;
+  mcpDeleteServer(id: string): Promise<boolean>;
+  mcpStartServer(id: string): Promise<boolean>;
+  mcpStopServer(id: string): Promise<boolean>;
+  mcpListTools(): Promise<MCPToolInfo[]>;
+  mcpCallTool(serverId: string, toolName: string, args: Record<string, unknown>): Promise<MCPCallResult>;
+
+  workflowList(): Promise<WorkflowSummary[]>;
+  workflowGet(id: string): Promise<WorkflowDetail | null>;
+  workflowCreate(data: WorkflowInput): Promise<WorkflowDetail>;
+  workflowUpdate(id: string, data: Partial<WorkflowInput>): Promise<WorkflowDetail>;
+  workflowDelete(id: string): Promise<boolean>;
+  workflowExecute(id: string, context?: Record<string, unknown>): Promise<WorkflowExecutionResult>;
+
+  securityGetPermissions(): Promise<PermissionInfo[]>;
+  securityGetModulePermissions(moduleId: string): Promise<PermissionInfo[]>;
+  securitySetPermission(moduleId: string, permission: string, granted: boolean): Promise<boolean>;
+  securityGetAuditLog(module?: string, limit?: number, offset?: number): Promise<AuditEntry[]>;
+  securityStoreSecret(key: string, value: string, category?: string): Promise<boolean>;
+  securityGetSecret(key: string): Promise<string>;
+  securityDeleteSecret(key: string): Promise<boolean>;
+  securityListSecrets(category?: string): Promise<SecretInfo[]>;
+
   onEvent(event: string, callback: (data: unknown) => void): void;
   offEvent(event: string, callback: (data: unknown) => void): void;
 }
@@ -335,5 +369,165 @@ export interface EditorTabInfo {
   isDirty: boolean;
 }
 
+export interface LLMProviderInfo {
+  provider: string;
+  apiUrl: string;
+  defaultModel: string;
+  enabled: boolean;
+  models: string[];
+  hasKey: boolean;
+}
+
+export interface LLMProviderConfig {
+  provider: string;
+  apiKey?: string;
+  apiUrl?: string;
+  defaultModel?: string;
+  enabled?: boolean;
+  models?: string[];
+}
+
+export interface LLMTestResult {
+  success: boolean;
+  models?: string[];
+  error?: string;
+}
+
+export interface LLMGenerateRequest {
+  provider?: string;
+  model?: string;
+  messages: { role: string; content: string }[];
+  system?: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+export interface LLMGenerateResponse {
+  content: string;
+  model: string;
+  provider: string;
+  promptTokens: number;
+  completionTokens: number;
+  latencyMs: number;
+  done: boolean;
+}
+
+export interface MCPServerInfo {
+  id: string;
+  name: string;
+  transport: string;
+  command: string;
+  url: string;
+  enabled: boolean;
+  running: boolean;
+}
+
+export interface MCPServerDetail extends MCPServerInfo {
+  args: string[];
+  env: Record<string, string>;
+}
+
+export interface MCPServerInput {
+  name: string;
+  transport?: string;
+  command?: string;
+  url?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  enabled?: boolean;
+}
+
+export interface MCPToolInfo {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  serverId: string;
+  serverName: string;
+}
+
+export interface MCPCallResult {
+  success: boolean;
+  content?: unknown;
+  error?: string;
+}
+
+export interface WorkflowSummary {
+  id: string;
+  name: string;
+  description: string;
+  triggerType: string;
+  enabled: boolean;
+  stepCount: number;
+}
+
+export interface WorkflowDetail {
+  id: string;
+  name: string;
+  description: string;
+  triggerType: string;
+  triggerConfig: Record<string, unknown>;
+  steps: WorkflowStep[];
+  enabled: boolean;
+}
+
+export interface WorkflowStep {
+  id: string;
+  type: string;
+  name: string;
+  config: Record<string, unknown>;
+  nextOnSuccess?: string;
+  nextOnFailure?: string;
+}
+
+export interface WorkflowInput {
+  name: string;
+  description?: string;
+  triggerType?: string;
+  triggerConfig?: Record<string, unknown>;
+  steps?: WorkflowStep[];
+  enabled?: boolean;
+}
+
+export interface WorkflowExecutionResult {
+  executionId: string;
+  workflowId: string;
+  status: string;
+  trigger: string;
+  startedAt: string;
+  completedAt: string;
+  results: WorkflowStepResult[];
+  success: boolean;
+}
+
+export interface WorkflowStepResult {
+  stepId: string;
+  stepName: string;
+  stepType: string;
+  success: boolean;
+  output?: unknown;
+  error?: string;
+}
+
+export interface PermissionInfo {
+  moduleId: string;
+  permission: string;
+  granted: boolean;
+}
+
+export interface AuditEntry {
+  id: number;
+  module: string;
+  action: string;
+  detail: string;
+  createdAt: string;
+}
+
+export interface SecretInfo {
+  key: string;
+  category: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'settings' | 'git';
-export type SettingsTab = 'general' | 'models' | 'assistant' | 'orchestration' | 'agents' | 'api-keys';
+export type SettingsTab = 'general' | 'models' | 'assistant' | 'orchestration' | 'agents' | 'api-keys' | 'llm-providers' | 'mcp-servers' | 'workflows' | 'security';

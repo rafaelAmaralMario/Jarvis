@@ -5,14 +5,21 @@ import { ModelsPanel } from './ModelsPanel';
 import { AgentsPanel } from './AgentsPanel';
 import { OrchestrationPanel } from './OrchestrationPanel';
 import { ApiKeyManager } from './ApiKeyManager';
+import { LLMProvidersPanel } from './LLMProvidersPanel';
+import { MCPServersPanel } from './MCPServersPanel';
+import { WorkflowsPanel } from './WorkflowsPanel';
+import { SecurityPanel } from './SecurityPanel';
 
-const TABS: { id: SettingsTab; label: string; icon: string; count?: number }[] = [
-  { id: 'general', label: 'Geral', icon: '📋' },
-  { id: 'models', label: 'Models', icon: '📦', count: 3 },
-  { id: 'assistant', label: 'Assistente', icon: '🧠' },
+const TABS: { id: SettingsTab; label: string; icon: string }[] = [
+  { id: 'models', label: 'Models', icon: '📦' },
+  { id: 'agents', label: 'Agents', icon: '🤖' },
   { id: 'orchestration', label: 'Orquestração', icon: '🔀' },
-  { id: 'agents', label: 'Agents', icon: '🤖', count: 2 },
   { id: 'api-keys', label: 'API Keys', icon: '🔑' },
+  { id: 'llm-providers', label: 'LLM Providers', icon: '🧠' },
+  { id: 'mcp-servers', label: 'MCP Servers', icon: '🔌' },
+  { id: 'workflows', label: 'Workflows', icon: '⚡' },
+  { id: 'security', label: 'Security', icon: '🔒' },
+  { id: 'general', label: 'Geral', icon: '📋' },
 ];
 
 const spring = { type: 'spring' as const, stiffness: 300, damping: 30 };
@@ -39,11 +46,6 @@ export function SettingsPage() {
             >
               <span className="text-base">{tab.icon}</span>
               <span>{tab.label}</span>
-              {tab.count !== undefined && (
-                <span className="ml-auto text-xs bg-muted px-1.5 py-0.5 rounded-full text-muted-foreground">
-                  {tab.count}
-                </span>
-              )}
             </button>
           ))}
         </nav>
@@ -74,19 +76,17 @@ export function SettingsPage() {
               {activeTab === 'models' && <ModelsPanel />}
               {activeTab === 'agents' && <AgentsPanel />}
               {activeTab === 'orchestration' && <OrchestrationPanel />}
+              {activeTab === 'api-keys' && <ApiKeyManager />}
+              {activeTab === 'llm-providers' && <LLMProvidersPanel />}
+              {activeTab === 'mcp-servers' && <MCPServersPanel />}
+              {activeTab === 'workflows' && <WorkflowsPanel />}
+              {activeTab === 'security' && <SecurityPanel />}
               {activeTab === 'general' && (
                 <div className="p-8 text-center text-muted-foreground">
                   <p className="text-4xl mb-4">📋</p>
                   <p>General settings coming soon.</p>
                 </div>
               )}
-              {activeTab === 'assistant' && (
-                <div className="p-8 text-center text-muted-foreground">
-                  <p className="text-4xl mb-4">🧠</p>
-                  <p>Assistant preferences coming soon.</p>
-                </div>
-              )}
-              {activeTab === 'api-keys' && <ApiKeyManager />}
             </motion.div>
           </AnimatePresence>
         </div>

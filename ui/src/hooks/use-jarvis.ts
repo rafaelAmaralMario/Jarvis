@@ -4,7 +4,11 @@ import type {
   ModelInfo, ModelDetail, Agent,
   OrchestrationConfig, AgentTrace,
   Backlink, GraphData, FolderEntry, Project, EditorTabInfo,
-  GitStatusEntry, GitBranch, GitLogEntry, GitGutterLine
+  GitStatusEntry, GitBranch, GitLogEntry, GitGutterLine,
+  LLMProviderInfo, LLMTestResult, LLMGenerateResponse,
+  MCPServerInfo, MCPServerDetail, MCPToolInfo, MCPCallResult,
+  WorkflowSummary, WorkflowDetail, WorkflowExecutionResult,
+  PermissionInfo, AuditEntry, SecretInfo
 } from '@/types';
 
 declare global {
@@ -174,6 +178,40 @@ function createBridge(): JarvisBridge {
     gitIsRepo: (repoPath) => send('gitIsRepo', repoPath) as Promise<boolean>,
     gitCurrentBranch: (repoPath) => send('gitCurrentBranch', repoPath) as Promise<string>,
     gitSetCredentials: (repoPath, username, token) => send('gitSetCredentials', repoPath, username, token) as Promise<boolean>,
+
+    llmGetProviders: () => send('llmGetProviders') as Promise<LLMProviderInfo[]>,
+    llmGetProvider: (provider) => send('llmGetProvider', provider) as Promise<LLMProviderInfo | null>,
+    llmSaveProvider: (config) => send('llmSaveProvider', config) as Promise<boolean>,
+    llmSetDefaultProvider: (provider) => send('llmSetDefaultProvider', provider) as Promise<boolean>,
+    llmGetDefaultProvider: () => send('llmGetDefaultProvider') as Promise<string>,
+    llmTestConnection: (provider) => send('llmTestConnection', provider) as Promise<LLMTestResult>,
+    llmGenerate: (request) => send('llmGenerate', request) as Promise<LLMGenerateResponse>,
+
+    mcpListServers: () => send('mcpListServers') as Promise<MCPServerInfo[]>,
+    mcpGetServer: (id) => send('mcpGetServer', id) as Promise<MCPServerDetail | null>,
+    mcpCreateServer: (data) => send('mcpCreateServer', data) as Promise<MCPServerDetail>,
+    mcpUpdateServer: (id, data) => send('mcpUpdateServer', id, data) as Promise<MCPServerDetail>,
+    mcpDeleteServer: (id) => send('mcpDeleteServer', id) as Promise<boolean>,
+    mcpStartServer: (id) => send('mcpStartServer', id) as Promise<boolean>,
+    mcpStopServer: (id) => send('mcpStopServer', id) as Promise<boolean>,
+    mcpListTools: () => send('mcpListTools') as Promise<MCPToolInfo[]>,
+    mcpCallTool: (serverId, toolName, callArgs) => send('mcpCallTool', serverId, toolName, callArgs) as Promise<MCPCallResult>,
+
+    workflowList: () => send('workflowList') as Promise<WorkflowSummary[]>,
+    workflowGet: (id) => send('workflowGet', id) as Promise<WorkflowDetail | null>,
+    workflowCreate: (data) => send('workflowCreate', data) as Promise<WorkflowDetail>,
+    workflowUpdate: (id, data) => send('workflowUpdate', id, data) as Promise<WorkflowDetail>,
+    workflowDelete: (id) => send('workflowDelete', id) as Promise<boolean>,
+    workflowExecute: (id, context) => send('workflowExecute', id, context) as Promise<WorkflowExecutionResult>,
+
+    securityGetPermissions: () => send('securityGetPermissions') as Promise<PermissionInfo[]>,
+    securityGetModulePermissions: (moduleId) => send('securityGetModulePermissions', moduleId) as Promise<PermissionInfo[]>,
+    securitySetPermission: (moduleId, permission, granted) => send('securitySetPermission', moduleId, permission, granted) as Promise<boolean>,
+    securityGetAuditLog: (module, limit, offset) => send('securityGetAuditLog', module, limit, offset) as Promise<AuditEntry[]>,
+    securityStoreSecret: (key, value, category) => send('securityStoreSecret', key, value, category) as Promise<boolean>,
+    securityGetSecret: (key) => send('securityGetSecret', key) as Promise<string>,
+    securityDeleteSecret: (key) => send('securityDeleteSecret', key) as Promise<boolean>,
+    securityListSecrets: (category) => send('securityListSecrets', category) as Promise<SecretInfo[]>,
 
     onEvent: (event, cb) => {
       if (!callbacks.has(event)) callbacks.set(event, new Set());

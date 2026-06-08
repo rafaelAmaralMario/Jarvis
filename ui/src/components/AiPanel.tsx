@@ -18,16 +18,57 @@ interface Conversation {
 
 const spring = { type: 'spring' as const, stiffness: 300, damping: 25 };
 
-function renderInlineMarkdown(text: string) {
-  return text
-    .replace(/\*\*(.*?)\*\*/g, '<strong class="text-primary">$1</strong>')
-    .replace(/`([^`]+)`/g, '<code class="bg-primary/10 text-primary px-1 py-0.5 rounded text-xs">$1</code>')
-    .replace(/^### (.*$)/gm, '<h3 class="text-sm font-bold mt-3 mb-1">$1</h3>')
-    .replace(/^## (.*$)/gm, '<h2 class="text-base font-bold mt-4 mb-1">$1</h2>')
-    .replace(/^# (.*$)/gm, '<h1 class="text-lg font-bold mt-4 mb-2">$1</h1>')
-    .replace(/^- (.*$)/gm, '<li class="ml-4 list-disc text-sm">$1</li>')
-    .replace(/\n\n/g, '<br/><br/>')
-    .replace(/\n/g, '<br/>');
+function renderMarkdown(text: string) {
+  const lines = text.split('\n');
+  const result: string[] = [];
+  let inCodeBlock = false;
+  let codeLang = '';
+  let codeLines: string[] = [];
+
+  for (const line of lines) {
+    if (line.trimStart().startsWith('```')) {
+      if (inCodeBlock) {
+        const lang = codeLang || 'text';
+        result.push(`<pre class="bg-muted p-3 rounded-lg overflow-x-auto my-2 text-xs font-mono"><code class="language-${lang}">${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+        codeLines = [];
+        inCodeBlock = false;
+        codeLang = '';
+      } else {
+        inCodeBlock = true;
+        codeLang = line.trim().slice(3).trim();
+      }
+      continue;
+    }
+    if (inCodeBlock) {
+      codeLines.push(line);
+      continue;
+    }
+    let processed = line
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\*\*(.*?)\*\*/g, '<strong class="text-primary">$1</strong>')
+      .replace(/`([^`]+)`/g, '<code class="bg-primary/10 text-primary px-1 py-0.5 rounded text-xs">$1</code>');
+    if (/^### (.*$)/.test(processed)) {
+      processed = processed.replace(/^### (.*$)/, '<h3 class="text-sm font-bold mt-3 mb-1">$1</h3>');
+    } else if (/^## (.*$)/.test(processed)) {
+      processed = processed.replace(/^## (.*$)/, '<h2 class="text-base font-bold mt-4 mb-1">$1</h2>');
+    } else if (/^# (.*$)/.test(processed)) {
+      processed = processed.replace(/^# (.*$)/, '<h1 class="text-lg font-bold mt-4 mb-2">$1</h1>');
+    } else if (/^- (.*$)/.test(processed)) {
+      processed = processed.replace(/^- (.*$)/, '<li class="ml-4 list-disc text-sm">$1</li>');
+    } else if (/^\d+\. (.*$)/.test(processed)) {
+      processed = processed.replace(/^(\d+\. .*$)/, '<li class="ml-4 list-decimal text-sm">$1</li>');
+    } else if (/^> (.*$)/.test(processed)) {
+      processed = processed.replace(/^> (.*$)/, '<blockquote class="border-l-2 border-primary/30 pl-3 italic text-muted-foreground my-1">$1</blockquote>');
+    }
+    result.push(processed || '<br/>');
+  }
+  return result.join('\n');
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 export function AiPanel() {
@@ -233,7 +274,7 @@ export function AiPanel() {
                         ? 'bg-red-950/20 text-red-400 border border-red-900/40 rounded-bl-sm'
                         : 'bg-muted text-foreground rounded-bl-sm'
                   }`}
-                  dangerouslySetInnerHTML={{ __html: renderInlineMarkdown(msg.content) }}
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
                 />
               </div>
             </motion.div>

@@ -8,8 +8,39 @@ on:
 
 env:
   NODE_VERSION: '22'
+  PYTHON_VERSION: '3.14'
 
 jobs:
+  backend-lint:
+    name: Backend — Ruff Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install ruff
+      - run: ruff check jarvis/ tests/
+
+  backend-tests:
+    name: Backend — Pytest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: backend/pyproject.toml
+      - run: pip install -e ".[dev]"
+      - run: python -m pytest --tb=short --no-header -q -x
+
   ui:
     name: UI — TypeScript & Tests
     runs-on: ubuntu-latest
@@ -26,9 +57,10 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npx vitest run
+      - run: npm run build
 
   server:
-    name: Server — TypeScript Check
+    name: Server — TypeScript & Tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -43,29 +75,19 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-  kernel:
-    name: Kernel — Build & Test
+  e2e:
+    name: E2E — Bridge Protocol Tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tests/e2e
     steps:
       - uses: actions/checkout@v4
-      - name: Install Qt6
-        uses: jurplel/install-qt-action@v4
+      - uses: actions/setup-node@v4
         with:
-          version: '6.7.2'
-          host: 'linux'
-          target: 'desktop'
-          modules: qtwebengine qtwebsockets qtwebchannel
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y catch2 cmake g++ libgl1-mesa-dev
-      - name: Configure CMake
-        run: cmake -B build -S kernel -DBUILD_TESTING=ON
-      - name: Build kernel-tests
-        run: cmake --build build --target kernel-tests --parallel $(nproc)
-      - name: Run tests
-        working-directory: build
-        run: ctest --output-on-failure
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm init -y && npm install vitest
+      - run: npx vitest run
 
   docker:
     name: Docker — Sync Server Image

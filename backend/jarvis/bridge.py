@@ -12,12 +12,16 @@ from jarvis.editor_manager import EditorManager
 from jarvis.git_manager import GitManager
 from jarvis.graph_builder import GraphBuilder
 from jarvis.knowledge_manager import CreateNoteDTO, KnowledgeManager
+from jarvis.llm_gateway import LLMGateway, LLMRequest, LLMMessage
+from jarvis.mcp_manager import MCPManager
 from jarvis.models_manager import ModelMetadata, ModelSpecialty, ModelsManager
 from jarvis.module_loader import ModuleLoader
 from jarvis.network_manager import NetworkManager
 from jarvis.ollama_client import OllamaClient
 from jarvis.orchestration_manager import OrchestrationConfig, OrchestrationManager
+from jarvis.security_manager import SecurityManager
 from jarvis.terminal_manager import TerminalManager
+from jarvis.workflow_engine import WorkflowEngine
 from jarvis.workspace_manager import WorkspaceManager
 
 logger = logging.getLogger(__name__)
@@ -61,6 +65,10 @@ class JARVISBridge:
         orchestration: OrchestrationManager | None = None,
         knowledge: KnowledgeManager | None = None,
         graph: GraphBuilder | None = None,
+        llm_gateway: LLMGateway | None = None,
+        mcp: MCPManager | None = None,
+        workflows: WorkflowEngine | None = None,
+        security: SecurityManager | None = None,
     ):
         self._workspace = workspace
         self._git = git
@@ -73,6 +81,10 @@ class JARVISBridge:
         self._orchestration = orchestration
         self._knowledge = knowledge
         self._graph = graph
+        self._llm = llm_gateway
+        self._mcp = mcp
+        self._workflows = workflows
+        self._security = security
 
     # ========================================================================
     # Module handlers
@@ -1015,3 +1027,313 @@ class JARVISBridge:
         except Exception as e:
             logger.warning("gitSetCredentials failed: %s", e)
             return False
+
+    # ========================================================================
+    # LLM Gateway handlers
+    # ========================================================================
+    def llmGetProviders(self) -> list:
+        if not self._llm:
+            return []
+        try:
+            return self._llm.get_providers()
+        except Exception as e:
+            logger.warning("llmGetProviders failed: %s", e)
+            return []
+
+    def llmGetProvider(self, provider: str) -> dict | None:
+        if not self._llm:
+            return None
+        try:
+            return self._llm.get_provider(provider)
+        except Exception as e:
+            logger.warning("llmGetProvider(%s) failed: %s", provider, e)
+            return None
+
+    def llmSaveProvider(self, config: dict) -> bool:
+        if not self._llm:
+            return False
+        try:
+            from jarvis.llm_gateway import LLMProvider, LLMProviderConfig
+            cfg = LLMProviderConfig(
+                provider=LLMProvider(config.get("provider", "ollama")),
+                api_key=config.get("apiKey", ""),
+                api_url=config.get("apiUrl", ""),
+                default_model=config.get("defaultModel", ""),
+                enabled=config.get("enabled", True),
+                models=config.get("models", []),
+            )
+            return self._llm.save_provider(cfg)
+        except Exception as e:
+            logger.warning("llmSaveProvider failed: %s", e)
+            return False
+
+    def llmSetDefaultProvider(self, provider: str) -> bool:
+        if not self._llm:
+            return False
+        try:
+            return self._llm.set_default_provider(provider)
+        except Exception as e:
+            logger.warning("llmSetDefaultProvider(%s) failed: %s", provider, e)
+            return False
+
+    def llmGetDefaultProvider(self) -> str:
+        if not self._llm:
+            return "ollama"
+        try:
+            return self._llm.get_default_provider()
+        except Exception as e:
+            logger.warning("llmGetDefaultProvider failed: %s", e)
+            return "ollama"
+
+    def llmTestConnection(self, provider: str) -> dict:
+        if not self._llm:
+            return {"success": False, "error": "LLM gateway not available"}
+        try:
+            return self._llm.test_connection(provider)
+        except Exception as e:
+            logger.warning("llmTestConnection(%s) failed: %s", provider, e)
+            return {"success": False, "error": str(e)}
+
+    def llmGenerate(self, request: dict) -> dict:
+        if not self._llm:
+            return {"content": "", "done": False}
+        try:
+            from jarvis.llm_gateway import LLMProvider
+            req = LLMRequest(
+                provider=LLMProvider(request.get("provider", "ollama")),
+                model=request.get("model", ""),
+                messages=[LLMMessage(role=m.get("role", "user"), content=m.get("content", ""))
+                          for m in request.get("messages", [])],
+                system=request.get("system", ""),
+                temperature=request.get("temperature", 0.7),
+                max_tokens=request.get("maxTokens", 2048),
+            )
+            resp = self._llm.generate(req)
+            return {
+                "content": resp.content,
+                "model": resp.model,
+                "provider": resp.provider.value,
+                "promptTokens": resp.prompt_tokens,
+                "completionTokens": resp.completion_tokens,
+                "latencyMs": resp.latency_ms,
+                "done": resp.done,
+            }
+        except Exception as e:
+            logger.warning("llmGenerate failed: %s", e)
+            return {"content": f"Error: {e}", "done": True}
+
+    # ========================================================================
+    # MCP Server handlers
+    # ========================================================================
+    def mcpListServers(self) -> list:
+        if not self._mcp:
+            return []
+        try:
+            return self._mcp.list_servers()
+        except Exception as e:
+            logger.warning("mcpListServers failed: %s", e)
+            return []
+
+    def mcpGetServer(self, id: str) -> dict | None:
+        if not self._mcp:
+            return None
+        try:
+            return self._mcp.get_server(id)
+        except Exception as e:
+            logger.warning("mcpGetServer(%s) failed: %s", id, e)
+            return None
+
+    def mcpCreateServer(self, data: dict) -> dict:
+        if not self._mcp:
+            return {}
+        try:
+            return self._mcp.create_server(data)
+        except Exception as e:
+            logger.warning("mcpCreateServer failed: %s", e)
+            return {}
+
+    def mcpUpdateServer(self, id: str, data: dict) -> dict:
+        if not self._mcp:
+            return {}
+        try:
+            return self._mcp.update_server(id, data)
+        except Exception as e:
+            logger.warning("mcpUpdateServer(%s) failed: %s", id, e)
+            return {}
+
+    def mcpDeleteServer(self, id: str) -> bool:
+        if not self._mcp:
+            return False
+        try:
+            return self._mcp.delete_server(id)
+        except Exception as e:
+            logger.warning("mcpDeleteServer(%s) failed: %s", id, e)
+            return False
+
+    def mcpStartServer(self, id: str) -> bool:
+        if not self._mcp:
+            return False
+        try:
+            return self._mcp.start_server(id)
+        except Exception as e:
+            logger.warning("mcpStartServer(%s) failed: %s", id, e)
+            return False
+
+    def mcpStopServer(self, id: str) -> bool:
+        if not self._mcp:
+            return False
+        try:
+            return self._mcp.stop_server(id)
+        except Exception as e:
+            logger.warning("mcpStopServer(%s) failed: %s", id, e)
+            return False
+
+    def mcpListTools(self) -> list:
+        if not self._mcp:
+            return []
+        try:
+            return self._mcp.list_tools()
+        except Exception as e:
+            logger.warning("mcpListTools failed: %s", e)
+            return []
+
+    def mcpCallTool(self, serverId: str, toolName: str, arguments: dict) -> dict:
+        if not self._mcp:
+            return {"success": False, "error": "MCP not available"}
+        try:
+            return self._mcp.call_tool(serverId, toolName, arguments)
+        except Exception as e:
+            logger.warning("mcpCallTool(%s) failed: %s", toolName, e)
+            return {"success": False, "error": str(e)}
+
+    # ========================================================================
+    # Workflow handlers
+    # ========================================================================
+    def workflowList(self) -> list:
+        if not self._workflows:
+            return []
+        try:
+            return self._workflows.list_workflows()
+        except Exception as e:
+            logger.warning("workflowList failed: %s", e)
+            return []
+
+    def workflowGet(self, id: str) -> dict | None:
+        if not self._workflows:
+            return None
+        try:
+            return self._workflows.get_workflow(id)
+        except Exception as e:
+            logger.warning("workflowGet(%s) failed: %s", id, e)
+            return None
+
+    def workflowCreate(self, data: dict) -> dict:
+        if not self._workflows:
+            return {}
+        try:
+            return self._workflows.create_workflow(data)
+        except Exception as e:
+            logger.warning("workflowCreate failed: %s", e)
+            return {}
+
+    def workflowUpdate(self, id: str, data: dict) -> dict:
+        if not self._workflows:
+            return {}
+        try:
+            return self._workflows.update_workflow(id, data)
+        except Exception as e:
+            logger.warning("workflowUpdate(%s) failed: %s", id, e)
+            return {}
+
+    def workflowDelete(self, id: str) -> bool:
+        if not self._workflows:
+            return False
+        try:
+            return self._workflows.delete_workflow(id)
+        except Exception as e:
+            logger.warning("workflowDelete(%s) failed: %s", id, e)
+            return False
+
+    def workflowExecute(self, id: str, context: dict = None) -> dict:
+        if not self._workflows:
+            return {"success": False, "error": "Workflow engine not available"}
+        try:
+            return self._workflows.execute_workflow(id, context)
+        except Exception as e:
+            logger.warning("workflowExecute(%s) failed: %s", id, e)
+            return {"success": False, "error": str(e)}
+
+    # ========================================================================
+    # Security handlers
+    # ========================================================================
+    def securityGetPermissions(self) -> list:
+        if not self._security:
+            return []
+        try:
+            return self._security.get_permissions()
+        except Exception as e:
+            logger.warning("securityGetPermissions failed: %s", e)
+            return []
+
+    def securityGetModulePermissions(self, moduleId: str) -> list:
+        if not self._security:
+            return []
+        try:
+            return self._security.get_module_permissions(moduleId)
+        except Exception as e:
+            logger.warning("securityGetModulePermissions(%s) failed: %s", moduleId, e)
+            return []
+
+    def securitySetPermission(self, moduleId: str, permission: str, granted: bool) -> bool:
+        if not self._security:
+            return False
+        try:
+            return self._security.set_permission(moduleId, permission, granted)
+        except Exception as e:
+            logger.warning("securitySetPermission(%s) failed: %s", moduleId, e)
+            return False
+
+    def securityGetAuditLog(self, module: str = "", limit: int = 50, offset: int = 0) -> list:
+        if not self._security:
+            return []
+        try:
+            return self._security.get_audit_log(module, limit, offset)
+        except Exception as e:
+            logger.warning("securityGetAuditLog failed: %s", e)
+            return []
+
+    def securityStoreSecret(self, key: str, value: str, category: str = "general") -> bool:
+        if not self._security:
+            return False
+        try:
+            return self._security.store_secret(key, value, category)
+        except Exception as e:
+            logger.warning("securityStoreSecret(%s) failed: %s", key, e)
+            return False
+
+    def securityGetSecret(self, key: str) -> str:
+        if not self._security:
+            return ""
+        try:
+            return self._security.get_secret(key)
+        except Exception as e:
+            logger.warning("securityGetSecret(%s) failed: %s", key, e)
+            return ""
+
+    def securityDeleteSecret(self, key: str) -> bool:
+        if not self._security:
+            return False
+        try:
+            return self._security.delete_secret(key)
+        except Exception as e:
+            logger.warning("securityDeleteSecret(%s) failed: %s", key, e)
+            return False
+
+    def securityListSecrets(self, category: str = "") -> list:
+        if not self._security:
+            return []
+        try:
+            return self._security.list_secrets(category)
+        except Exception as e:
+            logger.warning("securityListSecrets(%s) failed: %s", category, e)
+            return []

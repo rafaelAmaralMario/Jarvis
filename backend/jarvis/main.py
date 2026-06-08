@@ -11,13 +11,17 @@ from jarvis.editor_manager import EditorManager
 from jarvis.git_manager import GitManager
 from jarvis.graph_builder import GraphBuilder
 from jarvis.knowledge_manager import KnowledgeManager
+from jarvis.llm_gateway import LLMGateway
+from jarvis.mcp_manager import MCPManager
 from jarvis.migration_runner import MigrationRunner
 from jarvis.models_manager import ModelsManager
 from jarvis.module_loader import ModuleLoader
 from jarvis.network_manager import NetworkManager
 from jarvis.ollama_client import OllamaClient
 from jarvis.orchestration_manager import OrchestrationManager
+from jarvis.security_manager import SecurityManager
 from jarvis.terminal_manager import TerminalManager
+from jarvis.workflow_engine import WorkflowEngine
 from jarvis.workspace_manager import WorkspaceManager
 
 
@@ -63,6 +67,10 @@ def main():
     knowledge = KnowledgeManager(db)
     graph = GraphBuilder(db)
     orchestration = OrchestrationManager(models, agents, db, ollama)
+    llm_gateway = LLMGateway(db)
+    mcp = MCPManager(db)
+    workflows = WorkflowEngine(db)
+    security = SecurityManager(db)
 
     bridge = JARVISBridge(
         db=db,
@@ -78,6 +86,10 @@ def main():
         orchestration=orchestration,
         knowledge=knowledge,
         graph=graph,
+        llm_gateway=llm_gateway,
+        mcp=mcp,
+        workflows=workflows,
+        security=security,
     )
 
     import webview

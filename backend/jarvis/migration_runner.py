@@ -220,6 +220,53 @@ MIGRATIONS: list[Migration] = [
             created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         );
     """),
+    Migration(9, "llm-gateway", """
+        CREATE TABLE IF NOT EXISTS llm_providers (
+            provider TEXT PRIMARY KEY,
+            api_key TEXT NOT NULL DEFAULT '',
+            api_url TEXT NOT NULL DEFAULT '',
+            default_model TEXT NOT NULL DEFAULT '',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            models TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );
+        CREATE TABLE IF NOT EXISTS mcp_servers (
+            id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+            name TEXT NOT NULL,
+            transport TEXT NOT NULL DEFAULT 'stdio' CHECK (transport IN ('stdio','sse','websocket')),
+            command TEXT NOT NULL DEFAULT '',
+            url TEXT NOT NULL DEFAULT '',
+            args TEXT NOT NULL DEFAULT '[]',
+            env TEXT NOT NULL DEFAULT '{}',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );
+        CREATE TABLE IF NOT EXISTS workflows (
+            id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            trigger_type TEXT NOT NULL DEFAULT 'manual' CHECK (trigger_type IN ('manual','schedule','event','webhook')),
+            trigger_config TEXT NOT NULL DEFAULT '{}',
+            steps TEXT NOT NULL DEFAULT '[]',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );
+        INSERT OR IGNORE INTO llm_providers (provider, api_url, default_model, enabled)
+        VALUES ('ollama', 'http://localhost:11434', 'llama3.2', 1);
+    """),
+    Migration(10, "secret-storage", """
+        CREATE TABLE IF NOT EXISTS secret_storage (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL DEFAULT '',
+            category TEXT NOT NULL DEFAULT 'general',
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_secrets_category ON secret_storage(category);
+    """),
 ]
 
 
