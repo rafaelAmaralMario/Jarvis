@@ -9,6 +9,8 @@ import { MarkdownPreview } from './MarkdownPreview';
 import { Breadcrumb } from './Breadcrumb';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { EditorSettingsPanel } from './EditorSettingsPanel';
+import { ContextMenu } from '@/components/ui/ContextMenu';
+import type { ContextMenuItem } from '@/components/ui/ContextMenu';
 
 interface EditorPanelProps {
   fileToOpen?: string;
@@ -209,35 +211,48 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
     }
   }, [confirmClose, saveFile, closeFile]);
 
-  const handleContextMenuAction = useCallback((action: string, path: string) => {
-    setContextMenu(null);
-    switch (action) {
-      case 'save': saveFile(path); break;
-      case 'close': closeFile(path); break;
-      case 'save-all': {
-        const keys = Array.from(tabsRef.current.keys());
-        keys.forEach(p => saveFile(p));
-        break;
-      }
-      case 'close-others': {
-        const keys = Array.from(tabsRef.current.keys());
-        keys.forEach(p => {
-          if (p !== path) closeFile(p, true);
-        });
-        break;
-      }
-      case 'open-left': {
-        if (activeTab) setActiveTab(path);
-        else openFile(path);
-        setSplitMode('single');
-        break;
-      }
-      case 'open-right': {
-        openFileInSplit(path, 'right');
-        break;
-      }
-    }
-  }, [saveFile, closeFile, openFileInSplit, activeTab, openFile]);
+  const getContextMenuItems = useCallback((path: string): ContextMenuItem[] => {
+    const keys = Array.from(tabsRef.current.keys());
+    return [
+      {
+        id: 'save', label: 'Salvar', icon: '💾', shortcut: 'Ctrl+S',
+        onClick: () => saveFile(path),
+      },
+      {
+        id: 'close', label: 'Fechar', icon: '✕', shortcut: 'Ctrl+W',
+        onClick: () => closeFile(path),
+      },
+      { id: 'div1', label: '', divider: true, onClick: () => {} },
+      {
+        id: 'save-all', label: 'Salvar Todos', icon: '💾',
+        onClick: () => keys.forEach(p => saveFile(p)),
+      },
+      {
+        id: 'close-others', label: 'Fechar Outros', icon: '✕',
+        onClick: () => keys.forEach(p => { if (p !== path) closeFile(p, true); }),
+      },
+      {
+        id: 'close-all', label: 'Fechar Todos', icon: '✕', danger: true,
+        onClick: () => keys.forEach(p => closeFile(p, true)),
+      },
+      { id: 'div2', label: '', divider: true, onClick: () => {} },
+      {
+        id: 'copy-path', label: 'Copiar Caminho', icon: '📋',
+        onClick: () => bridge.copyToClipboard(path),
+      },
+      { id: 'div3', label: '', divider: true, onClick: () => {} },
+      {
+        id: 'open-left', label: 'Abrir no Painel Esquerdo', icon: '◀',
+        onClick: () => { if (activeTab) setActiveTab(path); else openFile(path); setSplitMode('single'); },
+      },
+      {
+        id: 'open-right', label: 'Abrir no Painel Direito', icon: '▶',
+        onClick: () => openFileInSplit(path, 'right'),
+      },
+    ];
+  }, [saveFile, closeFile, openFileInSplit, activeTab, openFile, bridge]);
+
+  const contextMenuItems = contextMenu ? getContextMenuItems(contextMenu.path) : [];
 
   const handleToggleSplit = useCallback(() => {
     if (isSplit) {
@@ -437,57 +452,10 @@ export function EditorPanel({ fileToOpen }: EditorPanelProps) {
         }}
       />
 
-      {contextMenu && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setContextMenu(null)}
-          />
-          <div
-            className="fixed z-50 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[180px]"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-          >
-            <button
-              onClick={() => handleContextMenuAction('save', contextMenu.path)}
-              className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/30 transition-colors"
-            >
-              Salvar <span className="text-muted-foreground ml-2">Ctrl+S</span>
-            </button>
-            <button
-              onClick={() => handleContextMenuAction('close', contextMenu.path)}
-              className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/30 transition-colors"
-            >
-              Fechar <span className="text-muted-foreground ml-2">Ctrl+W</span>
-            </button>
-            <div className="border-t border-border my-1" />
-            <button
-              onClick={() => handleContextMenuAction('save-all', contextMenu.path)}
-              className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/30 transition-colors"
-            >
-              Salvar todos
-            </button>
-            <button
-              onClick={() => handleContextMenuAction('close-others', contextMenu.path)}
-              className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/30 transition-colors"
-            >
-              Fechar outros
-            </button>
-            <div className="border-t border-border my-1" />
-            <button
-              onClick={() => handleContextMenuAction('open-left', contextMenu.path)}
-              className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/30 transition-colors"
-            >
-              Abrir no painel esquerdo
-            </button>
-            <button
-              onClick={() => handleContextMenuAction('open-right', contextMenu.path)}
-              className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/30 transition-colors"
-            >
-              Abrir no painel direito
-            </button>
-          </div>
-        </>
-      )}
+      <ContextMenu
+        state={contextMenu ? { x: contextMenu.x, y: contextMenu.y, items: contextMenuItems } : null}
+        onClose={() => setContextMenu(null)}
+      />
 
       {confirmClose && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">

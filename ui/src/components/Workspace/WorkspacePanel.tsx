@@ -294,6 +294,8 @@ export function WorkspacePanel({ onOpenInEditor }: WorkspacePanelProps) {
                     onRename={handleRename}
                     selectedPath={selectedPath}
                     onCreateFileWithPath={handleCreateFileWithPath}
+                    roots={_roots}
+                    onOpenProject={() => setShowFolderInput(true)}
                   />
                 )}
               </div>

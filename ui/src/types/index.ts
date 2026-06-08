@@ -137,6 +137,14 @@ export interface JarvisBridge {
   securityDeleteSecret(key: string): Promise<boolean>;
   securityListSecrets(category?: string): Promise<SecretInfo[]>;
 
+  copyToClipboard(text: string): Promise<boolean>;
+  revealInExplorer(path: string): Promise<boolean>;
+  getRelativePath(base: string, target: string): Promise<string>;
+  getPlatform(): Promise<string>;
+  getPathSeparator(): Promise<string>;
+  getModelServerStatus(): Promise<ModelServerStatus>;
+  startModelServer(): Promise<boolean>;
+
   onEvent(event: string, callback: (data: unknown) => void): void;
   offEvent(event: string, callback: (data: unknown) => void): void;
 }
@@ -527,6 +535,13 @@ export interface SecretInfo {
   category: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ModelServerStatus {
+  running: boolean;
+  command: string;
+  pid: number;
+  error: string;
 }
 
 export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'settings' | 'git';

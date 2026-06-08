@@ -21,7 +21,17 @@ export function App() {
       }
     };
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+
+    const preventContext = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement)?.closest('[data-context-menu-enabled]')) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('contextmenu', preventContext);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      window.removeEventListener('contextmenu', preventContext);
+    };
   }, []);
 
   return (

@@ -3,6 +3,8 @@
 import json
 import logging
 import os
+import subprocess
+import sys
 from dataclasses import asdict, is_dataclass
 from typing import Any
 
@@ -1337,3 +1339,133 @@ class JARVISBridge:
         except Exception as e:
             logger.warning("securityListSecrets(%s) failed: %s", category, e)
             return []
+
+    # ── Utility: Clipboard, Explorer, Platform ────────────────────────
+
+    def copyToClipboard(self, text: str) -> bool:
+        try:
+            if sys.platform == "win32":
+                subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", "Set-Clipboard", text],
+                    check=True, timeout=5,
+                )
+            elif sys.platform == "darwin":
+                subprocess.run(
+                    ["osascript", "-e", f'set the clipboard to "{text}"'],
+                    check=True, timeout=5,
+                )
+            else:
+                subprocess.run(
+                    ["xclip", "-selection", "clipboard"],
+                    input=text.encode(), check=True, timeout=5,
+                )
+            return True
+        except Exception as e:
+            logger.warning("copyToClipboard failed: %s", e)
+            return False
+
+    def revealInExplorer(self, path: str) -> bool:
+        try:
+            if sys.platform == "win32":
+                subprocess.Popen(["explorer", "/select,", os.path.abspath(path)])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", "-R", os.path.abspath(path)])
+            else:
+                subprocess.Popen(["xdg-open", os.path.dirname(os.path.abspath(path))])
+            return True
+        except Exception as e:
+            logger.warning("revealInExplorer failed: %s", e)
+            return False
+
+    def getRelativePath(self, base: str, target: str) -> str:
+        try:
+            rel = os.path.relpath(os.path.abspath(target), os.path.abspath(base))
+            return rel.replace("\\", "/")
+        except Exception as e:
+            logger.warning("getRelativePath failed: %s", e)
+            return target
+
+    def getPlatform(self) -> str:
+        if sys.platform == "win32":
+            return "windows"
+        if sys.platform == "darwin":
+            return "macos"
+        return "linux"
+
+    def getPathSeparator(self) -> str:
+        return "\\" if sys.platform == "win32" else "/"
+
+    # ── Model / Ollama Server Status ──────────────────────────────────
+
+    def getModelServerStatus(self) -> dict:
+        status = {"running": False, "command": "", "pid": 0, "error": ""}
+        try:
+            if sys.platform == "win32":
+                result = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command",
+                     "Get-Process ollama -ErrorAction SilentlyContinue | Select-Object Id, CommandLine"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if "ollama" in result.stdout.lower():
+                    status["running"] = True
+                    status["command"] = "ollama serve"
+                    lines = result.stdout.strip().split("\n")
+                    for line in lines:
+                        if line.strip() and line.strip() != lines[0]:
+                            parts = line.strip().split()
+                            if parts:
+                                try:
+                                    status["pid"] = int(parts[0])
+                                except ValueError:
+                                    pass
+                    return status
+            else:
+                result = subprocess.run(
+                    ["pgrep", "-f", "ollama"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if result.stdout.strip():
+                    status["running"] = True
+                    status["pid"] = int(result.stdout.strip().split("\n")[0])
+                    status["command"] = "ollama serve"
+                    return status
+
+            # Not running — detect install path
+            if sys.platform == "win32":
+                paths = [
+                    os.path.expandvars(r"%LOCALAPPDATA%\Programs\Ollama\ollama.exe"),
+                    os.path.expandvars(r"%PROGRAMFILES%\Ollama\ollama.exe"),
+                    os.path.expandvars(r"%PROGRAMFILES(X86)%\Ollama\ollama.exe"),
+                ]
+                for p in paths:
+                    if os.path.exists(p):
+                        status["command"] = f'"{p}" serve'
+                        break
+                else:
+                    status["command"] = "ollama serve"
+            else:
+                status["command"] = "ollama serve"
+
+        except Exception as e:
+            status["error"] = str(e)
+            status["command"] = "ollama serve"
+
+        return status
+
+    def startModelServer(self) -> bool:
+        try:
+            status = self.getModelServerStatus()
+            if status.get("running"):
+                return True
+            cmd = status.get("command", "ollama serve")
+            if sys.platform == "win32":
+                subprocess.Popen(
+                    ["powershell", "-NoProfile", "-Command", f"Start-Process -WindowStyle Hidden '{cmd}'"],
+                    shell=True,
+                )
+            else:
+                subprocess.Popen(cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True
+        except Exception as e:
+            logger.warning("startModelServer failed: %s", e)
+            return False

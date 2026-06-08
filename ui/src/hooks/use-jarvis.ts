@@ -8,7 +8,7 @@ import type {
   LLMProviderInfo, LLMTestResult, LLMGenerateResponse,
   MCPServerInfo, MCPServerDetail, MCPToolInfo, MCPCallResult,
   WorkflowSummary, WorkflowDetail, WorkflowExecutionResult,
-  PermissionInfo, AuditEntry, SecretInfo
+  PermissionInfo, AuditEntry, SecretInfo, ModelServerStatus
 } from '@/types';
 
 declare global {
@@ -212,6 +212,14 @@ function createBridge(): JarvisBridge {
     securityGetSecret: (key) => send('securityGetSecret', key) as Promise<string>,
     securityDeleteSecret: (key) => send('securityDeleteSecret', key) as Promise<boolean>,
     securityListSecrets: (category) => send('securityListSecrets', category) as Promise<SecretInfo[]>,
+
+    copyToClipboard: (text) => send('copyToClipboard', text) as Promise<boolean>,
+    revealInExplorer: (path) => send('revealInExplorer', path) as Promise<boolean>,
+    getRelativePath: (base, target) => send('getRelativePath', base, target) as Promise<string>,
+    getPlatform: () => send('getPlatform') as Promise<string>,
+    getPathSeparator: () => send('getPathSeparator') as Promise<string>,
+    getModelServerStatus: () => send('getModelServerStatus') as Promise<ModelServerStatus>,
+    startModelServer: () => send('startModelServer') as Promise<boolean>,
 
     onEvent: (event, cb) => {
       if (!callbacks.has(event)) callbacks.set(event, new Set());

@@ -1,5 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { FileEntry } from '@/types';
+import { useJarvis } from '@/hooks/use-jarvis';
+import { ContextMenu } from '@/components/ui/ContextMenu';
+import type { ContextMenuItem } from '@/components/ui/ContextMenu';
 
 interface FileTreeProps {
   entries: FileEntry[];
@@ -11,6 +14,8 @@ interface FileTreeProps {
   selectedPath?: string;
   depth?: number;
   onCreateFileWithPath?: (fullPath: string) => void;
+  roots?: string[];
+  onOpenProject?: () => void;
 }
 
 function fileIcon(entry: FileEntry): string {
@@ -39,15 +44,10 @@ function fileIcon(entry: FileEntry): string {
   }
 }
 
-interface ContextMenuState {
-  x: number;
-  y: number;
-  entry: FileEntry | null;
-}
-
-export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, onCreateFolder, onRename, selectedPath, depth = 0, onCreateFileWithPath }: FileTreeProps) {
+export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, onCreateFolder, onRename, selectedPath, depth = 0, onCreateFileWithPath, roots, onOpenProject }: FileTreeProps) {
+  const bridge = useJarvis();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry: FileEntry | null } | null>(null);
   const [renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [createMode, setCreateMode] = useState<'file' | 'folder' | null>(null);
@@ -64,13 +64,6 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
     if (createInputRef.current) createInputRef.current.focus();
   }, [createMode]);
 
-  useEffect(() => {
-    if (!contextMenu) return;
-    const close = () => setContextMenu(null);
-    window.addEventListener('click', close);
-    return () => window.removeEventListener('click', close);
-  }, [contextMenu]);
-
   function toggleCollapse(path: string) {
     setCollapsed(prev => ({ ...prev, [path]: !prev[path] }));
   }
@@ -81,41 +74,95 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
     return a.name.localeCompare(b.name);
   });
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, entry: FileEntry) => {
+  const getRelativePath = useCallback(async (path: string) => {
+    if (roots && roots.length > 0) {
+      return bridge.getRelativePath(roots[0], path);
+    }
+    return path;
+  }, [roots, bridge]);
+
+  const getContextMenuItems = useCallback((entry: FileEntry | null): ContextMenuItem[] => {
+    const items: ContextMenuItem[] = [];
+
+    if (!entry) {
+      items.push({
+        id: 'new-file-root', label: 'Novo Arquivo', icon: '📄',
+        onClick: () => { setCreateMode('file'); setCreateParent(''); setCreateValue(''); },
+      });
+      items.push({
+        id: 'new-folder-root', label: 'Nova Pasta', icon: '📁',
+        onClick: () => { setCreateMode('folder'); setCreateParent(''); setCreateValue(''); },
+      });
+      items.push({ id: 'divider2', label: '', divider: true, onClick: () => {} });
+      items.push({
+        id: 'open-project', label: 'Abrir Projeto...', icon: '📂',
+        onClick: () => onOpenProject?.(),
+      });
+      return items;
+    }
+
+    if (entry.isDirectory) {
+      items.push({
+        id: 'new-file', label: 'Novo Arquivo', icon: '📄',
+        onClick: () => { setCreateMode('file'); setCreateParent(entry.path); setCreateValue(''); },
+      });
+      items.push({
+        id: 'new-folder', label: 'Nova Pasta', icon: '📁',
+        onClick: () => { setCreateMode('folder'); setCreateParent(entry.path); setCreateValue(''); },
+      });
+      items.push({ id: 'divider1', label: '', divider: true, onClick: () => {} });
+      items.push({
+        id: 'rename', label: 'Renomear', icon: '✎',
+        onClick: () => { setRenameTarget({ path: entry.path, name: entry.name }); setRenameValue(entry.name); },
+      });
+      items.push({
+        id: 'delete', label: 'Excluir', icon: '✕', danger: true,
+        onClick: () => { if (confirm(`Delete "${entry.name}"?`)) onDeleteFile(entry.path); },
+      });
+    } else {
+      items.push({
+        id: 'open', label: 'Abrir', icon: '▶',
+        onClick: () => onSelectFile(entry.path),
+      });
+      items.push({ id: 'divider3', label: '', divider: true, onClick: () => {} });
+      items.push({
+        id: 'rename', label: 'Renomear', icon: '✎',
+        onClick: () => { setRenameTarget({ path: entry.path, name: entry.name }); setRenameValue(entry.name); },
+      });
+      items.push({
+        id: 'delete', label: 'Excluir', icon: '✕', danger: true,
+        onClick: () => { if (confirm(`Delete "${entry.name}"?`)) onDeleteFile(entry.path); },
+      });
+    }
+
+    items.push({ id: 'divider4', label: '', divider: true, onClick: () => {} });
+    items.push({
+      id: 'copy-path', label: 'Copiar Caminho', icon: '📋',
+      onClick: () => bridge.copyToClipboard(entry.path),
+    });
+    items.push({
+      id: 'copy-relative', label: 'Copiar Caminho Relativo', icon: '📋',
+      onClick: async () => {
+        const rel = await getRelativePath(entry.path);
+        bridge.copyToClipboard(rel);
+      },
+    });
+    items.push({ id: 'divider5', label: '', divider: true, onClick: () => {} });
+    items.push({
+      id: 'reveal', label: 'Abrir Pasta do Arquivo', icon: '📂',
+      onClick: () => bridge.revealInExplorer(entry.path),
+    });
+
+    return items;
+  }, [onSelectFile, onDeleteFile, onRename, bridge, getRelativePath, onOpenProject]);
+
+  const contextMenuItems = contextMenu ? getContextMenuItems(contextMenu.entry) : [];
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, entry: FileEntry | null) => {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({ x: e.clientX, y: e.clientY, entry });
   }, []);
-
-  const handleContextAction = useCallback((action: string) => {
-    const entry = contextMenu?.entry;
-    setContextMenu(null);
-
-    if (!entry) return;
-
-    switch (action) {
-      case 'new-file':
-        setCreateMode('file');
-        setCreateParent(entry.isDirectory ? entry.path : entry.path.split(/[/\\]/).slice(0, -1).join('/'));
-        setCreateValue('');
-        break;
-      case 'new-folder':
-        setCreateMode('folder');
-        setCreateParent(entry.isDirectory ? entry.path : entry.path.split(/[/\\]/).slice(0, -1).join('/'));
-        setCreateValue('');
-        break;
-      case 'rename':
-        setRenameTarget({ path: entry.path, name: entry.name });
-        setRenameValue(entry.name);
-        break;
-      case 'delete':
-        if (confirm(`Delete "${entry.name}"?`)) onDeleteFile(entry.path);
-        break;
-      case 'open':
-        if (!entry.isDirectory) onSelectFile(entry.path);
-        break;
-    }
-  }, [contextMenu, onDeleteFile, onSelectFile]);
 
   const handleRenameSubmit = useCallback(() => {
     if (renameTarget && renameValue.trim()) {
@@ -130,24 +177,16 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
       setCreateMode(null);
       return;
     }
-
     if (createMode === 'file') {
-      // Support batch creation: "folder/file.txt" or "/parent/child/file.txt"
       if (onCreateFileWithPath && createValue.includes('/')) {
-        const fullPath = createParent
-          ? createParent + '/' + createValue
-          : createValue;
+        const fullPath = createParent ? createParent + '/' + createValue : createValue;
         onCreateFileWithPath(fullPath);
       } else {
         onCreateFile(createParent);
-        // Pass the name via a different mechanism — the existing prompt is used
-        // We'll handle this via the prompt in the parent
       }
     } else {
       if (createValue.includes('/') && onCreateFileWithPath) {
-        const fullPath = createParent
-          ? createParent + '/' + createValue
-          : createValue;
+        const fullPath = createParent ? createParent + '/' + createValue : createValue;
         onCreateFileWithPath(fullPath);
       } else {
         onCreateFolder(createParent);
@@ -163,7 +202,7 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
   }, [handleCreateSubmit]);
 
   return (
-    <div className="select-none text-sm">
+    <div className="select-none text-sm" onContextMenu={(e) => handleContextMenu(e, null)}>
       {sorted.map((entry) => (
         <div key={entry.path}>
           <div
@@ -238,7 +277,6 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
             </div>
           </div>
 
-          {/* Inline create input */}
           {createMode && createParent === entry.path && (
             <div
               className="flex items-center gap-1.5 px-2 py-1"
@@ -258,9 +296,6 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
                         onCreateFileWithPath(createParent + '/' + createValue);
                       } else {
                         onCreateFile(createParent);
-                        setTimeout(() => {
-                          // The parent uses prompt, so we set a timeout
-                        }, 0);
                       }
                     } else {
                       onCreateFolder(createParent);
@@ -292,6 +327,8 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
               selectedPath={selectedPath}
               depth={depth + 1}
               onCreateFileWithPath={onCreateFileWithPath}
+              roots={roots}
+              onOpenProject={onOpenProject}
             />
           )}
         </div>
@@ -318,46 +355,10 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
         </div>
       )}
 
-      {/* Context menu */}
-      {contextMenu && (
-        <div
-          className="fixed z-50 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[180px]"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
-          <button
-            onClick={() => { if (contextMenu.entry && !contextMenu.entry.isDirectory) onSelectFile(contextMenu.entry.path); setContextMenu(null); }}
-            className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/30 transition-colors"
-          >
-            ▶ Abrir
-          </button>
-          <div className="border-t border-border my-1" />
-          <button
-            onClick={() => handleContextAction('new-file')}
-            className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/30 transition-colors"
-          >
-            📄 Novo Arquivo
-          </button>
-          <button
-            onClick={() => handleContextAction('new-folder')}
-            className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/30 transition-colors"
-          >
-            📁 Nova Pasta
-          </button>
-          <div className="border-t border-border my-1" />
-          <button
-            onClick={() => handleContextAction('rename')}
-            className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/30 transition-colors"
-          >
-            ✎ Renomear
-          </button>
-          <button
-            onClick={() => handleContextAction('delete')}
-            className="w-full text-left px-3 py-1.5 text-xs hover:bg-red-500/20 text-red-400 transition-colors"
-          >
-            ✕ Excluir
-          </button>
-        </div>
-      )}
+      <ContextMenu
+        state={contextMenu ? { x: contextMenu.x, y: contextMenu.y, items: contextMenuItems } : null}
+        onClose={() => setContextMenu(null)}
+      />
     </div>
   );
 }
