@@ -63,7 +63,7 @@ class OllamaClient:
             raise OllamaError(
                 "Não foi possível conectar ao servidor Ollama em "
                 f"{self._base_url}. Execute 'ollama serve' ou inicie "
-                "pela interface Settings → Models."
+                "pela interface Settings -> Models."
             )
         except httpx.HTTPStatusError:
             raise OllamaError(

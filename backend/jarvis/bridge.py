@@ -154,7 +154,7 @@ class JARVISBridge:
             if "connection" in msg.lower() or "refused" in msg.lower():
                 logger.warning(
                     "Ollama server não está rodando. "
-                    "Inicie com 'ollama serve' ou pela interface Settings → Models."
+                    "Inicie com 'ollama serve' ou pela interface Settings -> Models."
                 )
             else:
                 logger.warning("listModels failed: %s", msg)
