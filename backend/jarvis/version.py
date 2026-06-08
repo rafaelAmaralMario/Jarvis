@@ -6,6 +6,7 @@ import platform
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 from urllib.request import urlopen, Request
@@ -17,6 +18,7 @@ APP_VERSION = "0.1.0"
 REPO_OWNER = "anomalyco"
 REPO_NAME = "jarvis"
 GITHUB_API = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases"
+UPDATER_SCRIPT = "jarvis_update.bat"
 
 
 @dataclass
@@ -66,12 +68,35 @@ def is_newer(v1: str, v2: str) -> bool:
     return _parse_version(v1) > _parse_version(v2)
 
 
+def _fetch_releases() -> list[dict]:
+    req = Request(
+        GITHUB_API,
+        headers={
+            "User-Agent": f"{APP_NAME}/{APP_VERSION}",
+            "Accept": "application/vnd.github.v3+json",
+        },
+    )
+    resp = urlopen(req, timeout=10)
+    return json.loads(resp.read().decode())
+
+
+def _get_asset_for_platform(assets: list[dict]) -> tuple[str, str]:
+    system = platform.system()
+    for asset in assets:
+        name = asset.get("name", "")
+        if system == "Windows" and (name.endswith(".exe") or name.endswith(".msi") or name.endswith(".zip")):
+            return asset.get("browser_download_url", ""), name
+        if system == "Darwin" and (name.endswith(".dmg") or name.endswith(".zip")):
+            return asset.get("browser_download_url", ""), name
+        if system == "Linux" and (name.endswith(".AppImage") or name.endswith(".deb")):
+            return asset.get("browser_download_url", ""), name
+    return "", ""
+
+
 def check_for_updates() -> UpdateStatus:
     status = UpdateStatus(current_version=APP_VERSION)
     try:
-        req = Request(GITHUB_API, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}", "Accept": "application/vnd.github.v3+json"})
-        resp = urlopen(req, timeout=10)
-        data = json.loads(resp.read().decode())
+        data = _fetch_releases()
         releases: list[ReleaseInfo] = []
         for r in data:
             rel = ReleaseInfo(
@@ -81,20 +106,9 @@ def check_for_updates() -> UpdateStatus:
                 published_at=r.get("published_at", ""),
                 prerelease=r.get("prerelease", False),
             )
-            for asset in r.get("assets", []):
-                name = asset.get("name", "")
-                if platform.system() == "Windows" and (name.endswith(".exe") or name.endswith(".msi")):
-                    rel.download_url = asset.get("browser_download_url", "")
-                    rel.filename = name
-                    break
-                elif platform.system() == "Darwin" and name.endswith(".dmg"):
-                    rel.download_url = asset.get("browser_download_url", "")
-                    rel.filename = name
-                    break
-                elif platform.system() == "Linux" and name.endswith(".AppImage"):
-                    rel.download_url = asset.get("browser_download_url", "")
-                    rel.filename = name
-                    break
+            url, fname = _get_asset_for_platform(r.get("assets", []))
+            rel.download_url = url
+            rel.filename = fname
             releases.append(rel)
         status.releases = [_serialize(r) for r in releases]
         if releases:
@@ -109,45 +123,119 @@ def check_for_updates() -> UpdateStatus:
 
 def get_available_versions() -> list[str]:
     try:
-        req = Request(GITHUB_API, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}", "Accept": "application/vnd.github.v3+json"})
-        resp = urlopen(req, timeout=10)
-        data = json.loads(resp.read().decode())
+        data = _fetch_releases()
         return [r.get("tag_name", "").lstrip("vV") for r in data if not r.get("prerelease")]
     except Exception:
         return []
 
 
-def download_and_install(version: str) -> str:
+def _download_file(url: str, dest: str) -> str:
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    req = Request(url, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}"})
+    with urlopen(req, timeout=300) as src, open(dest, "wb") as f:
+        f.write(src.read())
+    return dest
+
+
+def _create_updater_bat(
+    downloaded_path: str,
+    current_pid: int,
+    is_installer: bool,
+) -> str:
+    bat_path = os.path.join(tempfile.gettempdir(), UPDATER_SCRIPT)
+    lines = [
+        "@echo off",
+        "title JARVIS Updater",
+        "",
+        f":wait",
+        f"  tasklist /FI \"PID eq {current_pid}\" 2>NUL | find \"{current_pid}\" >NUL",
+        f"  if not errorlevel 1 (",
+        f"    timeout /t 1 /nobreak >NUL",
+        f"    goto wait",
+        f"  )",
+        "",
+    ]
+    if is_installer:
+        lines += [
+            f"echo Instalando JARVIS...",
+            f"start /wait \"\" \"{downloaded_path}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-",
+            "",
+            f'if exist "{_get_installed_exe_path()}" (',
+            f'  start "" "{_get_installed_exe_path()}"',
+            f")",
+        ]
+    else:
+        current_exe = sys.executable if getattr(sys, 'frozen', False) else ""
+        if current_exe:
+            lines += [
+                f'echo Atualizando JARVIS...',
+                f'copy /Y "{downloaded_path}" "{current_exe}"',
+                f'start "" "{current_exe}"',
+            ]
+        else:
+            lines.append(f'start "" "{downloaded_path}"')
+
+    lines.append("")
+    lines.append("echo Atualizacao concluida.")
+    lines.append("if exist \"%~f0\" del \"%~f0\"")
+    lines.append("exit")
+
+    content = "\r\n".join(lines)
+    with open(bat_path, "w", newline="\r\n") as f:
+        f.write(content)
+    return bat_path
+
+
+def _get_installed_exe_path() -> str:
+    if getattr(sys, 'frozen', False):
+        return sys.executable
+    return os.path.join(os.path.dirname(sys.executable) if hasattr(sys, 'executable') else os.getcwd(), f"{APP_NAME}.exe")
+
+
+def _is_installer(filename: str) -> bool:
+    name = filename.lower()
+    return "setup" in name or "installer" in name
+
+
+def download_and_install(version: str) -> dict:
     target_tag = f"v{version}" if not version.startswith("v") else version
     try:
-        req = Request(GITHUB_API, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}", "Accept": "application/vnd.github.v3+json"})
-        resp = urlopen(req, timeout=10)
-        data = json.loads(resp.read().decode())
+        data = _fetch_releases()
     except Exception as e:
         raise RuntimeError(f"Falha ao buscar releases: {e}")
 
     for r in data:
         if r.get("tag_name") == target_tag:
-            system = platform.system()
-            for asset in r.get("assets", []):
-                name = asset.get("name", "")
-                if system == "Windows" and (name.endswith(".exe") or name.endswith(".msi")):
-                    download_url = asset.get("browser_download_url", "")
-                    break
-                elif system == "Darwin" and name.endswith(".dmg"):
-                    download_url = asset.get("browser_download_url", "")
-                    break
-                elif system == "Linux" and name.endswith(".AppImage"):
-                    download_url = asset.get("browser_download_url", "")
-                    break
-            else:
-                raise RuntimeError(f"Nenhum asset encontrado para {system} na release {target_tag}")
+            download_url, filename = _get_asset_for_platform(r.get("assets", []))
+            if not download_url:
+                raise RuntimeError(f"Nenhum asset compatível encontrado para {platform.system()} na release {target_tag}")
 
-            dest = os.path.join(tempfile.gettempdir(), f"{APP_NAME}-{version}{os.path.splitext(download_url)[1]}")
-            req = Request(download_url, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}"})
-            with urlopen(req, timeout=300) as src, open(dest, "wb") as f:
-                f.write(src.read())
-            return dest
+            ext = os.path.splitext(download_url)[1] or ".exe"
+            dest = os.path.join(tempfile.gettempdir(), f"{APP_NAME}-{version}{ext}")
+
+            downloaded = _download_file(download_url, dest)
+
+            frozen = getattr(sys, 'frozen', False)
+            if frozen:
+                is_inst = _is_installer(filename)
+                current_pid = os.getpid()
+                bat = _create_updater_bat(downloaded, current_pid, is_inst)
+                try:
+                    subprocess.Popen(
+                        ["cmd.exe", "/c", bat],
+                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
+                        close_fds=True,
+                    )
+                except Exception:
+                    pass
+                return {
+                    "success": True,
+                    "path": downloaded,
+                    "restart": True,
+                    "message": "Atualização preparada. O JARVIS será reiniciado para aplicar a atualização.",
+                }
+            else:
+                return {"success": True, "path": downloaded, "restart": False}
 
     raise RuntimeError(f"Release {target_tag} não encontrada")
 

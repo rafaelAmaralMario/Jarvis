@@ -8,9 +8,10 @@ export function UpdatesPanel() {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [installing, setInstalling] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [selectedVersion, setSelectedVersion] = useState('');
   const [versions, setVersions] = useState<string[]>([]);
+  const [restartPending, setRestartPending] = useState(false);
 
   useEffect(() => {
     bridge.getAppVersion().then(() => {
@@ -43,7 +44,12 @@ export function UpdatesPanel() {
     try {
       const result = await bridge.downloadAndInstall(v);
       if (result.success) {
-        setMessage({ type: 'success', text: `Versão ${v} baixada! O instalador está em: ${result.path}` });
+        if (result.restart) {
+          setRestartPending(true);
+          setMessage({ type: 'info', text: result.message || `Versão ${v} preparada. Reinicie o JARVIS para aplicar.` });
+        } else {
+          setMessage({ type: 'success', text: `Versão ${v} baixada em: ${result.path}` });
+        }
       } else {
         setMessage({ type: 'error', text: result.error || 'Falha ao baixar atualização' });
       }
@@ -54,9 +60,12 @@ export function UpdatesPanel() {
     }
   }
 
+  function handleRestart() {
+    bridge.quitApp();
+  }
+
   return (
     <div className="p-6 space-y-6">
-      {/* Current version */}
       <div className="rounded-lg border border-border bg-card p-5">
         <h3 className="text-sm font-semibold mb-3">Versão Atual</h3>
         <div className="flex items-center gap-3">
@@ -77,7 +86,6 @@ export function UpdatesPanel() {
         </div>
       </div>
 
-      {/* Check for updates */}
       <div className="flex items-center gap-3">
         <motion.button
           whileHover={{ scale: 1.02 }}
@@ -95,7 +103,6 @@ export function UpdatesPanel() {
         )}
       </div>
 
-      {/* Message */}
       {message && (
         <motion.div
           initial={{ opacity: 0, y: -4 }}
@@ -103,6 +110,8 @@ export function UpdatesPanel() {
           className={`px-4 py-2 rounded-lg text-sm ${
             message.type === 'success'
               ? 'bg-green-950/20 border border-green-900/30 text-green-400'
+              : message.type === 'info'
+              ? 'bg-blue-950/20 border border-blue-900/30 text-blue-400'
               : 'bg-red-950/20 border border-red-900/30 text-red-400'
           }`}
         >
@@ -110,8 +119,23 @@ export function UpdatesPanel() {
         </motion.div>
       )}
 
-      {/* Version selector + install */}
-      {versions.length > 0 && (
+      {restartPending && (
+        <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}>
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleRestart}
+            className="px-6 py-3 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-500 transition-colors"
+          >
+            🔄 Reiniciar JARVIS Agora
+          </motion.button>
+          <p className="text-xs text-muted-foreground mt-2">
+            Ao reiniciar, a nova versão será aplicada automaticamente.
+          </p>
+        </motion.div>
+      )}
+
+      {versions.length > 0 && !restartPending && (
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <h3 className="text-sm font-semibold">Instalar Versão Específica</h3>
           <div className="flex items-center gap-3">
@@ -140,8 +164,7 @@ export function UpdatesPanel() {
         </div>
       )}
 
-      {/* Release history */}
-      {status && status.releases && status.releases.length > 0 && (
+      {status && status.releases && status.releases.length > 0 && !restartPending && (
         <div className="rounded-lg border border-border bg-card p-5">
           <h3 className="text-sm font-semibold mb-3">Histórico de Releases</h3>
           <div className="space-y-3 max-h-80 overflow-y-auto">

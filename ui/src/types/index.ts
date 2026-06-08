@@ -148,7 +148,8 @@ export interface JarvisBridge {
   getAppVersion(): Promise<{ version: string; app_name: string }>;
   checkForUpdates(): Promise<UpdateStatus>;
   getAvailableVersions(): Promise<string[]>;
-  downloadAndInstall(version: string): Promise<{ success: boolean; path?: string; error?: string }>;
+  downloadAndInstall(version: string): Promise<{ success: boolean; path?: string; error?: string; restart?: boolean; message?: string }>;
+  quitApp(): void;
 
   onEvent(event: string, callback: (data: unknown) => void): void;
   offEvent(event: string, callback: (data: unknown) => void): void;

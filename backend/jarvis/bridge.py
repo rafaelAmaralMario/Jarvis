@@ -1540,7 +1540,17 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
     def downloadAndInstall(self, version: str) -> dict:
         from jarvis.version import download_and_install
         try:
-            path = download_and_install(version)
-            return {"success": True, "path": path}
+            result = download_and_install(version)
+            return result
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(e), "restart": False}
+
+    def quitApp(self) -> None:
+        """Close the application window."""
+        try:
+            import webview
+            for w in webview.windows:
+                w.destroy()
+        except Exception:
+            import os
+            os._exit(0)

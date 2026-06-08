@@ -65,7 +65,7 @@ function createBridge(): JarvisBridge {
   getAppVersion: { version: '0.1.0', app_name: 'JARVIS' },
   checkForUpdates: { current_version: '0.1.0', latest_version: '', update_available: false, releases: [], error: '' },
   getAvailableVersions: [],
-  downloadAndInstall: { success: false, error: 'No bridge available' },
+  downloadAndInstall: { success: false, error: 'No bridge available', restart: false },
 };
 
 function send(method: string, ...args: unknown[]): Promise<unknown> {
@@ -259,7 +259,8 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     getAppVersion: () => send('getAppVersion') as Promise<{ version: string; app_name: string }>,
     checkForUpdates: () => send('checkForUpdates') as Promise<UpdateStatus>,
     getAvailableVersions: () => send('getAvailableVersions') as Promise<string[]>,
-    downloadAndInstall: (version) => send('downloadAndInstall', version) as Promise<{ success: boolean; path?: string; error?: string }>,
+    downloadAndInstall: (version) => send('downloadAndInstall', version) as Promise<{ success: boolean; path?: string; error?: string; restart?: boolean; message?: string }>,
+    quitApp: () => { send('quitApp'); },
 
     onEvent: (event, cb) => {
       if (!callbacks.has(event)) callbacks.set(event, new Set());
