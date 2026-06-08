@@ -47,6 +47,7 @@ logs/
 # Temp
 tmp/
 temp/
+test-results/
 *.tmp
 *.bak
 
@@ -56,6 +57,8 @@ docker-data/
 
 # Build artifacts
 ui/dist/
+ui/playwright-report/
+ui/test-results/
 
 # Node
 node_modules/
