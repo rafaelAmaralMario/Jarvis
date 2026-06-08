@@ -1469,3 +1469,48 @@ class JARVISBridge:
         except Exception as e:
             logger.warning("startModelServer failed: %s", e)
             return False
+
+    def showFolderPicker(self) -> str | None:
+        try:
+            if sys.platform == "win32":
+                script = r"""
+Add-Type -AssemblyName System.Windows.Forms
+$folder = New-Object System.Windows.Forms.FolderBrowserDialog
+$folder.Description = "Selecione a pasta do projeto"
+$folder.ShowNewFolderButton = $true
+$result = $folder.ShowDialog((New-Object System.Windows.Forms.Form -Property @{TopMost=$true}))
+if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+    Write-Output $folder.SelectedPath
+}
+"""
+                result = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", script],
+                    capture_output=True, text=True, timeout=30,
+                )
+                out = result.stdout.strip()
+                return out if out and os.path.isdir(out) else None
+            elif sys.platform == "darwin":
+                script = 'set folderPath to choose folder with prompt "Selecione a pasta do projeto"\nif folderPath is not "" then return POSIX path of folderPath'
+                result = subprocess.run(
+                    ["osascript", "-e", script],
+                    capture_output=True, text=True, timeout=30,
+                )
+                out = result.stdout.strip()
+                return out if out and os.path.isdir(out) else None
+            else:
+                # Linux — use zenity or kdialog
+                for cmd, args in [
+                    ("zenity", ["zenity", "--file-selection", "--directory", "--title=Selecione a pasta do projeto"]),
+                    ("kdialog", ["kdialog", "--getexistingdirectory", "."]),
+                ]:
+                    try:
+                        result = subprocess.run(args, capture_output=True, text=True, timeout=30)
+                        if result.returncode == 0:
+                            out = result.stdout.strip()
+                            return out if out and os.path.isdir(out) else None
+                    except FileNotFoundError:
+                        continue
+                return None
+        except Exception as e:
+            logger.warning("showFolderPicker failed: %s", e)
+            return None

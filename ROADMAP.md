@@ -80,21 +80,21 @@
 ### Fase 6: Native Folder Picker + Project Management
 **Descrição:** Usar seletor de pastas nativo do Windows para abrir projetos.
 
-- ⬜ Método bridge `showFolderPicker()` via pywebview ou PowerShell
-- ⬜ Atualizar `WorkspacePanel.tsx` — botão "Abrir Projeto" usa seletor nativo
-- ⬜ Melhorar fluxo de criação de pastas no seletor
+- [x] Método bridge `showFolderPicker()` via PowerShell/zenity/osascript
+- [x] Atualizar `WorkspacePanel.tsx` — botão "Abrir Pasta" abre dialog nativo
+- [x] Fallback para input manual se dialog for cancelado
 - ⬜ Indicador visual de projeto ativo com switch entre projetos
 
-**Commit:** `feat: native folder picker + project management`
+**Commit:** `feat: native folder picker dialog`
 
 ---
 
 ### Fase 7: Documentação Final + Contextos
 **Descrição:** Gerar docs, README, e arquivos de contexto para cada fase.
 
-- ⬜ Contexto Fase 1-3: `021-context-menu-part1.md`
-- ⬜ Contexto Fase 4: `022-agent-context-menu.md`
-- ⬜ Contexto Fase 5: `023-model-server-status.md`
+- [x] Contexto Fase 1-3: `021-context-menu-part1.md`
+- [x] Contexto Fase 4: `022-agent-context-menu.md`
+- [x] Contexto Fase 5: `023-model-server-status.md`
 - ⬜ Contexto Fase 6: `024-native-folder-picker.md`
 - ⬜ Atualizar `.context/INDEX.md`
 - ⬜ Atualizar `.docs/` com novas funcionalidades

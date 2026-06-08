@@ -144,6 +144,7 @@ export interface JarvisBridge {
   getPathSeparator(): Promise<string>;
   getModelServerStatus(): Promise<ModelServerStatus>;
   startModelServer(): Promise<boolean>;
+  showFolderPicker(): Promise<string | null>;
 
   onEvent(event: string, callback: (data: unknown) => void): void;
   offEvent(event: string, callback: (data: unknown) => void): void;

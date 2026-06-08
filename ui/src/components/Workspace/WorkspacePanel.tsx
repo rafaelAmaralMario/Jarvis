@@ -84,7 +84,17 @@ export function WorkspacePanel({ onOpenInEditor }: WorkspacePanelProps) {
   }
 
   async function handleOpenFolder() {
-    setShowFolderInput(true);
+    const nativePath = await bridge.showFolderPicker();
+    if (nativePath) {
+      try {
+        await bridge.addRoot(nativePath);
+        await loadWorkspace();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    } else {
+      setShowFolderInput(true);
+    }
   }
 
   async function handleAddRoot() {

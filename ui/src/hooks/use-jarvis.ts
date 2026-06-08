@@ -220,6 +220,7 @@ function createBridge(): JarvisBridge {
     getPathSeparator: () => send('getPathSeparator') as Promise<string>,
     getModelServerStatus: () => send('getModelServerStatus') as Promise<ModelServerStatus>,
     startModelServer: () => send('startModelServer') as Promise<boolean>,
+    showFolderPicker: () => send('showFolderPicker') as Promise<string | null>,
 
     onEvent: (event, cb) => {
       if (!callbacks.has(event)) callbacks.set(event, new Set());
