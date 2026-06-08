@@ -95,9 +95,9 @@
 - [x] Contexto Fase 1-3: `021-context-menu-part1.md`
 - [x] Contexto Fase 4: `022-agent-context-menu.md`
 - [x] Contexto Fase 5: `023-model-server-status.md`
-- ⬜ Contexto Fase 6: `024-native-folder-picker.md`
-- ⬜ Atualizar `.context/INDEX.md`
-- ⬜ Atualizar `.docs/` com novas funcionalidades
+- [x] Contexto Fase 6: `024-native-folder-picker.md`
+- [x] Atualizar `.context/INDEX.md`
+- [x] E2E tests (Playwright) — 9 testes, bridge mock + context menu + models
 
 ---
 

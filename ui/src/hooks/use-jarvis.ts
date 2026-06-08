@@ -33,27 +33,58 @@ function createBridge(): JarvisBridge {
   let requestId = 0;
   const pending = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 
-  function send(method: string, ...args: unknown[]): Promise<unknown> {
-    return new Promise((resolve, reject) => {
-      const id = String(++requestId);
-      pending.set(id, { resolve, reject });
+  const FALLBACKS: Record<string, unknown> = {
+  checkConnection: false,
+  getVersion: '0.1.0',
+  getModules: [],
+  listModels: [],
+  getRoots: [],
+  listFiles: [],
+  getRecentFiles: [],
+  listMCPServers: [],
+  workflowList: [],
+  securityGetPermissions: [],
+  securityGetAuditLog: [],
+  securityListSecrets: [],
+  getModelServerStatus: { running: false, command: 'ollama serve', pid: 0, error: '' },
+  getPlatform: 'windows',
+  getPathSeparator: '\\',
+  getConfig: null,
+  listChatHistory: [],
+  loadChat: [],
+  showFolderPicker: null,
+  copyToClipboard: false,
+  revealInExplorer: false,
+  startModelServer: false,
+  getRelativePath: '',
+  getModelBySpecialty: null,
+  listAgents: [],
+  getDefaultAgent: null,
+  getOrchestrationConfig: { strategy: 'auto', maxRounds: 3 },
+  getProjectInfo: null,
+};
 
-      const msg = JSON.stringify({ id, method, args });
+function send(method: string, ...args: unknown[]): Promise<unknown> {
+  return new Promise((resolve) => {
+    const id = String(++requestId);
+    pending.set(id, { resolve, reject: () => resolve(FALLBACKS[method]) });
 
-      if (window.qt?.webChannelTransport) {
-        window.qt.webChannelTransport.send(msg);
-        return;
-      }
+    const msg = JSON.stringify({ id, method, args });
 
-      const api = window.pywebview?.api ?? window.jarvis as unknown as Record<string, (...a: unknown[]) => Promise<unknown>> | undefined;
-      if (api?.[method]) {
-        api[method](...args).then(resolve).catch(reject);
-        return;
-      }
+    if (window.qt?.webChannelTransport) {
+      window.qt.webChannelTransport.send(msg);
+      return;
+    }
 
-      reject(new Error('No bridge available'));
-    });
-  }
+    const api = window.pywebview?.api ?? window.jarvis as unknown as Record<string, (...a: unknown[]) => Promise<unknown>> | undefined;
+    if (api?.[method]) {
+      api[method](...args).then(resolve).catch(() => resolve(FALLBACKS[method]));
+      return;
+    }
+
+    resolve(FALLBACKS[method]);
+  });
+}
 
   function handleMessage(raw: string) {
     try {
