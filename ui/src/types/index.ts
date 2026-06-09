@@ -39,6 +39,7 @@ export interface JarvisBridge {
   setDefaultAgent(id: string): Promise<boolean>;
   getDefaultAgent(): Promise<Agent | null>;
   getOrchestrationPool(): Promise<Agent[]>;
+  aiGenerateAgent(prompt: string): Promise<Record<string, unknown>>;
 
   getOrchestrationConfig(): Promise<OrchestrationConfig>;
   updateOrchestrationConfig(config: Partial<OrchestrationConfig>): Promise<boolean>;
@@ -123,10 +124,11 @@ export interface JarvisBridge {
 
   workflowList(): Promise<WorkflowSummary[]>;
   workflowGet(id: string): Promise<WorkflowDetail | null>;
-  workflowCreate(data: WorkflowInput): Promise<WorkflowDetail>;
-  workflowUpdate(id: string, data: Partial<WorkflowInput>): Promise<WorkflowDetail>;
+  workflowCreate(data: Record<string, unknown>): Promise<WorkflowDetail>;
+  workflowUpdate(id: string, data: Record<string, unknown>): Promise<WorkflowDetail>;
   workflowDelete(id: string): Promise<boolean>;
   workflowExecute(id: string, context?: Record<string, unknown>): Promise<WorkflowExecutionResult>;
+  aiGenerateWorkflow(prompt: string): Promise<Record<string, unknown>>;
 
   securityGetPermissions(): Promise<PermissionInfo[]>;
   securityGetModulePermissions(moduleId: string): Promise<PermissionInfo[]>;
@@ -305,6 +307,7 @@ export interface Agent {
   isDefault: boolean;
   canOrchestrate: boolean;
   priority: number;
+  isBuiltin?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -472,6 +475,7 @@ export interface WorkflowSummary {
   triggerType: string;
   enabled: boolean;
   stepCount: number;
+  isBuiltin?: boolean;
 }
 
 export interface WorkflowDetail {
@@ -482,6 +486,7 @@ export interface WorkflowDetail {
   triggerConfig: Record<string, unknown>;
   steps: WorkflowStep[];
   enabled: boolean;
+  isBuiltin?: boolean;
 }
 
 export interface WorkflowStep {

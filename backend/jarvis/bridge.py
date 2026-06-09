@@ -362,12 +362,97 @@ class JARVISBridge:
 
     def sendMessage(self, query: str) -> str:
         if not self._orchestration:
-            return ""
+            return "Erro: Nenhum agente de orquestração configurado."
         try:
             return self._orchestration.execute_query(query)
         except Exception as e:
             logger.warning("sendMessage failed: %s", e)
-            return ""
+            return f"**Erro:** {e}"
+
+    def aiGenerateAgent(self, prompt: str) -> dict:
+        if not self._llm:
+            return {"error": "LLM gateway not available"}
+        try:
+            from jarvis.llm_gateway import LLMProvider
+            system = """You are a JSON generator for AI agent configurations. Respond ONLY with valid JSON matching this schema:
+{
+  "name": "string (short, kebab-case)",
+  "description": "string",
+  "model": "string (pick one: llama3.2, deepseek-r1:8b, qwen2.5:7b, phi4:14b, mistral:7b, gemma3:12b, command-r:35b, nemotron-mini:7b)",
+  "systemPrompt": "string (detailed system prompt for the agent)",
+  "temperature": 0.0-1.0,
+  "maxTokens": 128-8192,
+  "specialty": "string (e.g. coding, research, writing, general)",
+  "tools": ["string array - available tools"],
+  "canOrchestrate": true/false,
+  "priority": 1-10
+}
+Available tools: code_analysis, file_operations, web_search, terminal, memory, knowledge_base
+Use realistic values based on the user's request."""
+            req = LLMRequest(
+                provider=LLMProvider.OLLAMA,
+                model="",
+                messages=[LLMMessage(role="user", content=prompt)],
+                system=system,
+                temperature=0.3,
+                max_tokens=4096,
+            )
+            resp = self._llm.generate(req)
+            import json
+            data = json.loads(resp.content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip())
+            return self.createAgent(data)
+        except json.JSONDecodeError as e:
+            logger.warning("aiGenerateAgent JSON parse failed: %s | raw: %s", e, resp.content[:200])
+            return {"error": f"Failed to parse AI response: {e}"}
+        except Exception as e:
+            logger.warning("aiGenerateAgent failed: %s", e)
+            return {"error": str(e)}
+
+    def aiGenerateWorkflow(self, prompt: str) -> dict:
+        if not self._llm:
+            return {"error": "LLM gateway not available"}
+        try:
+            from jarvis.llm_gateway import LLMProvider
+            system = """You are a JSON generator for workflow configurations. Respond ONLY with valid JSON matching this schema:
+{
+  "name": "string (short, kebab-case)",
+  "description": "string",
+  "triggerType": "manual | schedule | event | webhook",
+  "steps": [
+    {
+      "name": "string",
+      "type": "code_execution | ai_generation | file_operation | web_request | notification | condition",
+      "config": {
+        "command": "string or script for code_execution",
+        "prompt": "string for ai_generation",
+        "path": "string for file_operation",
+        "url": "string for web_request",
+        "message": "string for notification",
+        "condition": "string for condition"
+      }
+    }
+  ],
+  "enabled": true/false
+}
+Generate 2-5 steps. Use realistic values based on the user's request."""
+            req = LLMRequest(
+                provider=LLMProvider.OLLAMA,
+                model="",
+                messages=[LLMMessage(role="user", content=prompt)],
+                system=system,
+                temperature=0.3,
+                max_tokens=4096,
+            )
+            resp = self._llm.generate(req)
+            import json
+            data = json.loads(resp.content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip())
+            return self.workflowCreate(data)
+        except json.JSONDecodeError as e:
+            logger.warning("aiGenerateWorkflow JSON parse failed: %s | raw: %s", e, resp.content[:200])
+            return {"error": f"Failed to parse AI response: {e}"}
+        except Exception as e:
+            logger.warning("aiGenerateWorkflow failed: %s", e)
+            return {"error": str(e)}
 
     def executeOrchestratedQuery(self, query: str) -> str:
         if not self._orchestration:
@@ -1407,6 +1492,9 @@ class JARVISBridge:
     def getModelServerStatus(self) -> dict:
         status = {"running": False, "command": "", "pid": 0, "error": ""}
         try:
+            process_found = False
+            pid = 0
+
             if sys.platform == "win32":
                 result = subprocess.run(
                     ["powershell", "-NoProfile", "-Command",
@@ -1414,28 +1502,35 @@ class JARVISBridge:
                     capture_output=True, text=True, timeout=5,
                 )
                 if "ollama" in result.stdout.lower():
-                    status["running"] = True
-                    status["command"] = "ollama serve"
+                    process_found = True
                     lines = result.stdout.strip().split("\n")
                     for line in lines:
                         if line.strip() and line.strip() != lines[0]:
                             parts = line.strip().split()
                             if parts:
                                 try:
-                                    status["pid"] = int(parts[0])
+                                    pid = int(parts[0])
                                 except ValueError:
                                     pass
-                    return status
             else:
                 result = subprocess.run(
                     ["pgrep", "-f", "ollama"],
                     capture_output=True, text=True, timeout=5,
                 )
                 if result.stdout.strip():
+                    process_found = True
+                    pid = int(result.stdout.strip().split("\n")[0])
+
+            if process_found:
+                ping_ok = OllamaClient().ping()
+                if ping_ok:
                     status["running"] = True
-                    status["pid"] = int(result.stdout.strip().split("\n")[0])
+                    status["pid"] = pid
                     status["command"] = "ollama serve"
                     return status
+                status["error"] = "Processo Ollama encontrado mas API não responde em localhost:11434"
+                status["command"] = "ollama serve"
+                return status
 
             # Not running — detect install path
             if sys.platform == "win32":
@@ -1467,11 +1562,17 @@ class JARVISBridge:
             cmd = status.get("command", "ollama serve")
             if sys.platform == "win32":
                 subprocess.Popen(
-                    ["powershell", "-NoProfile", "-Command", f"Start-Process -WindowStyle Hidden '{cmd}'"],
+                    ["powershell", "-NoProfile", "-Command",
+                     f"Start-Process -WindowStyle Hidden '{cmd}'"],
                     shell=True,
                 )
             else:
-                subprocess.Popen(cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(
+                    cmd.split() if " " not in cmd else cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    shell=True,
+                )
             return True
         except Exception as e:
             logger.warning("startModelServer failed: %s", e)

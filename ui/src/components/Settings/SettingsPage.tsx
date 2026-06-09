@@ -10,6 +10,7 @@ import { MCPServersPanel } from './MCPServersPanel';
 import { WorkflowsPanel } from './WorkflowsPanel';
 import { SecurityPanel } from './SecurityPanel';
 import { UpdatesPanel } from './UpdatesPanel';
+import { GeneralPanel } from './GeneralPanel';
 
 const TABS: { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'models', label: 'Models', icon: '📦' },
@@ -83,12 +84,7 @@ export function SettingsPage() {
               {activeTab === 'mcp-servers' && <MCPServersPanel />}
               {activeTab === 'workflows' && <WorkflowsPanel />}
               {activeTab === 'security' && <SecurityPanel />}
-              {activeTab === 'general' && (
-                <div className="p-8 text-center text-muted-foreground">
-                  <p className="text-4xl mb-4">📋</p>
-                  <p>General settings coming soon.</p>
-                </div>
-              )}
+              {activeTab === 'general' && <GeneralPanel />}
               {activeTab === 'updates' && <UpdatesPanel />}
             </motion.div>
           </AnimatePresence>

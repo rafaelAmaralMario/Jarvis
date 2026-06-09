@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import type { Specialty, ModelDetail, ModelServerStatus } from '@/types';
 import { SPECIALTIES, SPECIALTY_CONFIG } from '@/types';
@@ -16,13 +16,25 @@ export function ModelsPanel() {
   const [serverStatus, setServerStatus] = useState<ModelServerStatus | null>(null);
   const [startingServer, setStartingServer] = useState(false);
 
-  useEffect(() => {
-    setLoading(true);
-    bridge.listModels()
-      .then(list => setModels(list as any as ModelDetail[]))
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
+  const loadModels = useCallback(async () => {
+    try {
+      setLoading(true);
+      const list = await bridge.listModels();
+      setModels(list as any as ModelDetail[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar modelos');
+    } finally {
+      setLoading(false);
+    }
   }, [bridge]);
+
+  useEffect(() => { loadModels(); }, [loadModels]);
+
+  useEffect(() => {
+    if (serverStatus?.running) {
+      loadModels();
+    }
+  }, [serverStatus?.running, loadModels]);
 
   useEffect(() => {
     const check = async () => {

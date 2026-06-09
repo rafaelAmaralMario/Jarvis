@@ -66,6 +66,9 @@ function createBridge(): JarvisBridge {
   checkForUpdates: { current_version: '0.1.0', latest_version: '', update_available: false, releases: [], error: '' },
   getAvailableVersions: [],
   downloadAndInstall: { success: false, error: 'No bridge available', restart: false },
+  sendMessage: '**Erro:** Backend não disponível. Inicie o aplicativo Python para usar o chat.',
+  aiGenerateAgent: { error: 'Backend not available' },
+  aiGenerateWorkflow: { error: 'Backend not available' },
 };
 
 function send(method: string, ...args: unknown[]): Promise<unknown> {
@@ -150,6 +153,7 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     setDefaultAgent: (id) => send('setDefaultAgent', id) as Promise<boolean>,
     getDefaultAgent: () => send('getDefaultAgent') as Promise<Agent | null>,
     getOrchestrationPool: () => send('getOrchestrationPool') as Promise<Agent[]>,
+    aiGenerateAgent: (prompt) => send('aiGenerateAgent', prompt) as Promise<Record<string, unknown>>,
 
     getOrchestrationConfig: () => send('getOrchestrationConfig') as Promise<OrchestrationConfig>,
     updateOrchestrationConfig: (config) => send('updateOrchestrationConfig', config) as Promise<boolean>,
@@ -238,6 +242,7 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     workflowUpdate: (id, data) => send('workflowUpdate', id, data) as Promise<WorkflowDetail>,
     workflowDelete: (id) => send('workflowDelete', id) as Promise<boolean>,
     workflowExecute: (id, context) => send('workflowExecute', id, context) as Promise<WorkflowExecutionResult>,
+    aiGenerateWorkflow: (prompt) => send('aiGenerateWorkflow', prompt) as Promise<Record<string, unknown>>,
 
     securityGetPermissions: () => send('securityGetPermissions') as Promise<PermissionInfo[]>,
     securityGetModulePermissions: (moduleId) => send('securityGetModulePermissions', moduleId) as Promise<PermissionInfo[]>,

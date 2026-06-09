@@ -14,7 +14,7 @@ from urllib.request import urlopen, Request
 import httpx
 
 APP_NAME = "JARVIS"
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 REPO_OWNER = "anomalyco"
 REPO_NAME = "jarvis"
 GITHUB_API = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases"

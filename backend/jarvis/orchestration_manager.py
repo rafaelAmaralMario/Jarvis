@@ -198,8 +198,14 @@ class OrchestrationManager:
             max_tokens=agent.max_tokens,
             stream=False,
         )
-        result = self._ollama.generate(req)
-        return result.response
+        try:
+            result = self._ollama.generate(req)
+            return result.response
+        except Exception as e:
+            msg = str(e).lower()
+            if "connect" in msg or "refused" in msg:
+                return f"**Erro:** Não foi possível conectar ao Ollama em localhost:11434. Verifique se `ollama serve` está rodando."
+            return f"**Erro ao executar agente '{agent.name}':** {e}"
 
     def _orchestrator_plan(self, query: str) -> tuple[str, list[str]]:
         pool = self._agents.get_orchestration_pool()

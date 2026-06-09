@@ -167,14 +167,14 @@ export function WorkspacePanel({ onOpenInEditor }: WorkspacePanelProps) {
     }
   }
 
-  async function handleCreateFile(parentDir: string) {
-    const name = prompt('File name:');
-    if (!name) return;
+  async function handleCreateFile(parentDir: string, name?: string) {
+    const fileName = name || prompt('File name:');
+    if (!fileName) return;
     try {
-      if (name.includes('/')) {
-        await bridge.createFileWithPath(parentDir + '/' + name);
+      if (fileName.includes('/')) {
+        await bridge.createFileWithPath(parentDir ? parentDir + '/' + fileName : fileName);
       } else {
-        await bridge.createFile(name, parentDir);
+        await bridge.createFile(fileName, parentDir || '');
       }
       await loadWorkspace();
     } catch (err) {
@@ -182,11 +182,11 @@ export function WorkspacePanel({ onOpenInEditor }: WorkspacePanelProps) {
     }
   }
 
-  async function handleCreateFolder(parentDir: string) {
-    const name = prompt('Folder name:');
-    if (!name) return;
+  async function handleCreateFolder(parentDir: string, name?: string) {
+    const folderName = name || prompt('Folder name:');
+    if (!folderName) return;
     try {
-      await bridge.createDirectory(name, parentDir);
+      await bridge.createDirectory(folderName, parentDir || '');
       await loadWorkspace();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

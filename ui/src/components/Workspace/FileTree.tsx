@@ -8,8 +8,8 @@ interface FileTreeProps {
   entries: FileEntry[];
   onSelectFile: (path: string) => void;
   onDeleteFile: (path: string) => void;
-  onCreateFile: (parentDir: string) => void;
-  onCreateFolder: (parentDir: string) => void;
+  onCreateFile: (parentDir: string, name?: string) => void;
+  onCreateFolder: (parentDir: string, name?: string) => void;
   onRename: (oldPath: string, currentName: string) => void;
   selectedPath?: string;
   depth?: number;
@@ -182,14 +182,14 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
         const fullPath = createParent ? createParent + '/' + createValue : createValue;
         onCreateFileWithPath(fullPath);
       } else {
-        onCreateFile(createParent);
+        onCreateFile(createParent, createValue.trim());
       }
     } else {
       if (createValue.includes('/') && onCreateFileWithPath) {
         const fullPath = createParent ? createParent + '/' + createValue : createValue;
         onCreateFileWithPath(fullPath);
       } else {
-        onCreateFolder(createParent);
+        onCreateFolder(createParent, createValue.trim());
       }
     }
     setCreateMode(null);
@@ -202,7 +202,7 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
   }, [handleCreateSubmit]);
 
   return (
-    <div className="select-none text-sm" onContextMenu={(e) => handleContextMenu(e, null)}>
+    <div data-context-menu-enabled className="select-none text-sm" onContextMenu={(e) => handleContextMenu(e, null)}>
       {sorted.map((entry) => (
         <div key={entry.path}>
           <div
@@ -295,10 +295,10 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
                       if (onCreateFileWithPath && createValue.includes('/')) {
                         onCreateFileWithPath(createParent + '/' + createValue);
                       } else {
-                        onCreateFile(createParent);
+                        onCreateFile(createParent, createValue.trim());
                       }
                     } else {
-                      onCreateFolder(createParent);
+                      onCreateFolder(createParent, createValue.trim());
                     }
                     setCreateMode(null);
                     setCreateValue('');

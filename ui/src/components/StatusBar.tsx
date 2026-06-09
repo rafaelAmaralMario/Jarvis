@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useJarvis } from '@/hooks/use-jarvis';
+import type { ModelServerStatus } from '@/types';
 
 interface StatusBarProps {
   moduleCount: number;
@@ -11,6 +12,7 @@ export function StatusBar({ moduleCount, modelName }: StatusBarProps) {
   const bridge = useJarvis();
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [latestVersion, setLatestVersion] = useState('');
+  const [serverStatus, setServerStatus] = useState<ModelServerStatus | null>(null);
 
   useEffect(() => {
     bridge.getAppVersion().then(() => {
@@ -21,6 +23,18 @@ export function StatusBar({ moduleCount, modelName }: StatusBarProps) {
         }
       });
     });
+  }, [bridge]);
+
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const status = await bridge.getModelServerStatus();
+        setServerStatus(status);
+      } catch {}
+    };
+    check();
+    const interval = setInterval(check, 10000);
+    return () => clearInterval(interval);
   }, [bridge]);
 
   return (
@@ -47,6 +61,12 @@ export function StatusBar({ moduleCount, modelName }: StatusBarProps) {
           v{latestVersion} disponível
         </motion.a>
       )}
+      <span className="flex items-center gap-1.5 mr-2">
+        <span className={`w-1.5 h-1.5 rounded-full ${serverStatus?.running ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
+        <span className={serverStatus?.running ? 'text-green-200' : 'text-red-200'}>
+          Ollama {serverStatus?.running ? 'on' : 'off'}
+        </span>
+      </span>
       <motion.span
         animate={{ opacity: [1, 0.5, 1] }}
         transition={{ repeat: Infinity, duration: 2 }}

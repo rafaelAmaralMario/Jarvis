@@ -267,6 +267,10 @@ MIGRATIONS: list[Migration] = [
         );
         CREATE INDEX IF NOT EXISTS idx_secrets_category ON secret_storage(category);
     """),
+    Migration(11, "builtin-agents-workflows", """
+        ALTER TABLE agents ADD COLUMN is_builtin INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE workflows ADD COLUMN is_builtin INTEGER NOT NULL DEFAULT 0;
+    """),
 ]
 
 

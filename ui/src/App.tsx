@@ -23,9 +23,7 @@ export function App() {
     window.addEventListener('keydown', handler);
 
     const preventContext = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement)?.closest('[data-context-menu-enabled]')) {
-        e.preventDefault();
-      }
+      e.preventDefault();
     };
     window.addEventListener('contextmenu', preventContext);
     return () => {

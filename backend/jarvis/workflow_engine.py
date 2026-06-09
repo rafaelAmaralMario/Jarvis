@@ -57,11 +57,184 @@ class WorkflowExecution:
     results: str = "[]"
 
 
+# ---------------------------------------------------------------------------
+# Built-in software development workflows
+# ---------------------------------------------------------------------------
+_BUILTIN_WORKFLOWS = [
+    {
+        "id": "wf000000-0000-0000-0000-000000000001",
+        "name": "Ciclo Completo de Desenvolvimento",
+        "description": "Fluxo completo de desenvolvimento de software: análise de requisitos, arquitetura, design, implementação, testes, revisão, deploy e documentação.",
+        "trigger_type": "manual",
+        "trigger_config": {},
+        "enabled": True,
+        "steps": [
+            {
+                "id": "s1", "type": "ai_query", "name": "Análise de Requisitos",
+                "config": {"agent": "Analista de Requisitos", "prompt": "Analise os requisitos do projeto e documente histórias de usuário, critérios de aceitação e regras de negócio."},
+                "nextOnSuccess": "s2", "nextOnFailure": "",
+            },
+            {
+                "id": "s2", "type": "ai_query", "name": "Arquitetura de Software",
+                "config": {"agent": "Arquiteto de Software", "prompt": "Com base nos requisitos, projete a arquitetura do sistema, escolha tecnologias e documente decisões arquiteturais."},
+                "nextOnSuccess": "s3", "nextOnFailure": "",
+            },
+            {
+                "id": "s3", "type": "ai_query", "name": "Design de Software",
+                "config": {"agent": "Designer de Software", "prompt": "Projete a interface do usuário, árvore de componentes e fluxos de navegação baseados na arquitetura definida."},
+                "nextOnSuccess": "s4", "nextOnFailure": "",
+            },
+            {
+                "id": "s4", "type": "ai_query", "name": "Planejamento Técnico",
+                "config": {"agent": "Engenheiro de Software", "prompt": "Planeje tecnicamente a implementação: divida em tarefas, estime esforço e defina a estratégia de desenvolvimento."},
+                "nextOnSuccess": "s5", "nextOnFailure": "",
+            },
+            {
+                "id": "s5", "type": "ai_query", "name": "Implementação",
+                "config": {"agent": "Desenvolvedor Full-Stack", "prompt": "Implemente o código seguindo as especificações de arquitetura, design e planejamento técnico."},
+                "nextOnSuccess": "s6", "nextOnFailure": "",
+            },
+            {
+                "id": "s6", "type": "ai_query", "name": "Testes",
+                "config": {"agent": "Especialista em Testes", "prompt": "Crie e execute testes para validar a implementação: unitários, integração e end-to-end."},
+                "nextOnSuccess": "s7", "nextOnFailure": "",
+            },
+            {
+                "id": "s7", "type": "ai_query", "name": "Revisão de Código",
+                "config": {"agent": "Revisor de Código", "prompt": "Revise o código implementado e os testes. Identifique problemas e sugira melhorias."},
+                "nextOnSuccess": "s8", "nextOnFailure": "s5",
+            },
+            {
+                "id": "s8", "type": "ai_query", "name": "Documentação",
+                "config": {"agent": "Documentador Técnico", "prompt": "Documente o projeto: README, API docs, guias de uso e contribuição."},
+                "nextOnSuccess": "", "nextOnFailure": "",
+            },
+        ],
+    },
+    {
+        "id": "wf000000-0000-0000-0000-000000000002",
+        "name": "Análise e Planejamento",
+        "description": "Fluxo inicial de análise de requisitos, arquitetura e planejamento técnico para novos projetos ou funcionalidades.",
+        "trigger_type": "manual",
+        "trigger_config": {},
+        "enabled": True,
+        "steps": [
+            {
+                "id": "s1", "type": "ai_query", "name": "Análise de Requisitos",
+                "config": {"agent": "Analista de Requisitos", "prompt": "Analise os requisitos e produza um documento de especificação detalhado."},
+                "nextOnSuccess": "s2", "nextOnFailure": "",
+            },
+            {
+                "id": "s2", "type": "ai_query", "name": "Arquitetura",
+                "config": {"agent": "Arquiteto de Software", "prompt": "Projete a arquitetura baseada nos requisitos aprovados."},
+                "nextOnSuccess": "s3", "nextOnFailure": "",
+            },
+            {
+                "id": "s3", "type": "ai_query", "name": "Design",
+                "config": {"agent": "Designer de Software", "prompt": "Projete a interface e experiência do usuário."},
+                "nextOnSuccess": "s4", "nextOnFailure": "",
+            },
+            {
+                "id": "s4", "type": "ai_query", "name": "Planejamento Técnico",
+                "config": {"agent": "Engenheiro de Software", "prompt": "Crie o plano de implementação com tarefas, estimativas e milestones."},
+                "nextOnSuccess": "", "nextOnFailure": "",
+            },
+        ],
+    },
+    {
+        "id": "wf000000-0000-0000-0000-000000000003",
+        "name": "Implementação e Desenvolvimento",
+        "description": "Fluxo de codificação com implementação, testes e revisão para garantir código de qualidade.",
+        "trigger_type": "manual",
+        "trigger_config": {},
+        "enabled": True,
+        "steps": [
+            {
+                "id": "s1", "type": "ai_query", "name": "Planejamento da Implementação",
+                "config": {"agent": "Engenheiro de Software", "prompt": "Analise as especificações e crie um plano detalhado de implementação."},
+                "nextOnSuccess": "s2", "nextOnFailure": "",
+            },
+            {
+                "id": "s2", "type": "ai_query", "name": "Desenvolvimento",
+                "config": {"agent": "Desenvolvedor Full-Stack", "prompt": "Implemente o código seguindo o plano de implementação."},
+                "nextOnSuccess": "s3", "nextOnFailure": "",
+            },
+            {
+                "id": "s3", "type": "ai_query", "name": "Testes",
+                "config": {"agent": "Especialista em Testes", "prompt": "Crie testes abrangentes para o código implementado."},
+                "nextOnSuccess": "s4", "nextOnFailure": "",
+            },
+            {
+                "id": "s4", "type": "ai_query", "name": "Revisão de Código",
+                "config": {"agent": "Revisor de Código", "prompt": "Revise o código e os testes produzidos."},
+                "nextOnSuccess": "", "nextOnFailure": "s2",
+            },
+        ],
+    },
+    {
+        "id": "wf000000-0000-0000-0000-000000000004",
+        "name": "Testes e Garantia de Qualidade",
+        "description": "Fluxo completo de testes e validação de qualidade: unitários, integração, e2e e revisão.",
+        "trigger_type": "manual",
+        "trigger_config": {},
+        "enabled": True,
+        "steps": [
+            {
+                "id": "s1", "type": "ai_query", "name": "Plano de Testes",
+                "config": {"agent": "Especialista em Testes", "prompt": "Crie um plano de testes abrangente baseado nos requisitos e na implementação."},
+                "nextOnSuccess": "s2", "nextOnFailure": "",
+            },
+            {
+                "id": "s2", "type": "ai_query", "name": "Implementação de Testes",
+                "config": {"agent": "Desenvolvedor Full-Stack", "prompt": "Implemente os testes conforme o plano de testes definido."},
+                "nextOnSuccess": "s3", "nextOnFailure": "",
+            },
+            {
+                "id": "s3", "type": "ai_query", "name": "Execução e Relatório",
+                "config": {"agent": "Especialista em Testes", "prompt": "Execute os testes, analise resultados e produza relatório de qualidade."},
+                "nextOnSuccess": "s4", "nextOnFailure": "s2",
+            },
+            {
+                "id": "s4", "type": "ai_query", "name": "Revisão de Qualidade",
+                "config": {"agent": "Revisor de Código", "prompt": "Revise a qualidade geral: cobertura de testes, code smells e métricas."},
+                "nextOnSuccess": "", "nextOnFailure": "",
+            },
+        ],
+    },
+    {
+        "id": "wf000000-0000-0000-0000-000000000005",
+        "name": "Revisão e Documentação",
+        "description": "Fluxo final de revisão de código, documentação técnica e preparação para deploy.",
+        "trigger_type": "manual",
+        "trigger_config": {},
+        "enabled": True,
+        "steps": [
+            {
+                "id": "s1", "type": "ai_query", "name": "Revisão de Código",
+                "config": {"agent": "Revisor de Código", "prompt": "Realize uma revisão completa do código-fonte do projeto."},
+                "nextOnSuccess": "s2", "nextOnFailure": "",
+            },
+            {
+                "id": "s2", "type": "ai_query", "name": "Documentação Técnica",
+                "config": {"agent": "Documentador Técnico", "prompt": "Crie a documentação técnica completa do projeto."},
+                "nextOnSuccess": "s3", "nextOnFailure": "",
+            },
+            {
+                "id": "s3", "type": "ai_query", "name": "Preparação para Deploy",
+                "config": {"agent": "Especialista em DevOps", "prompt": "Prepare a configuração de infraestrutura e deploy para o projeto."},
+                "nextOnSuccess": "", "nextOnFailure": "",
+            },
+        ],
+    },
+]
+
+
 class WorkflowEngine:
     def __init__(self, db: Database):
         self._db = db
         self._step_handlers: dict[str, Callable] = {}
         self._register_default_handlers()
+        self._ensure_builtins()
 
     def _register_default_handlers(self):
         self._step_handlers[WorkflowStepType.RUN_COMMAND] = self._handle_run_command
@@ -75,9 +248,15 @@ class WorkflowEngine:
     def register_step_handler(self, step_type: str, handler: Callable):
         self._step_handlers[step_type] = handler
 
+    def _get_is_builtin(self, row) -> bool:
+        try:
+            return bool(row["is_builtin"])
+        except (KeyError, IndexError):
+            return False
+
     def list_workflows(self) -> list[dict]:
         rows = self._db.fetchall(
-            "SELECT * FROM workflows ORDER BY name"
+            "SELECT * FROM workflows ORDER BY is_builtin DESC, name ASC"
         )
         return [
             {
@@ -87,6 +266,7 @@ class WorkflowEngine:
                 "triggerType": r["trigger_type"],
                 "enabled": bool(r["enabled"]),
                 "stepCount": len(json.loads(r["steps"])),
+                "isBuiltin": self._get_is_builtin(r),
             }
             for r in rows
         ]
@@ -103,6 +283,7 @@ class WorkflowEngine:
             "triggerConfig": json.loads(row["trigger_config"]),
             "steps": json.loads(row["steps"]),
             "enabled": bool(row["enabled"]),
+            "isBuiltin": self._get_is_builtin(row),
         }
 
     def create_workflow(self, data: dict) -> dict:
@@ -143,8 +324,40 @@ class WorkflowEngine:
         return self.get_workflow(id) or {}
 
     def delete_workflow(self, id: str) -> bool:
+        wf = self.get_workflow(id)
+        if wf and wf.get("isBuiltin"):
+            return False
         self._db.execute("DELETE FROM workflows WHERE id = ?", (id,))
         return True
+
+    def _ensure_builtins(self):
+        for wf in _BUILTIN_WORKFLOWS:
+            existing = self._db.fetchone(
+                "SELECT id FROM workflows WHERE id = ?", (wf["id"],)
+            )
+            steps_json = json.dumps(wf["steps"])
+            config_json = json.dumps(wf["trigger_config"])
+            if existing:
+                self._db.execute(
+                    """UPDATE workflows SET name=?, description=?, trigger_type=?,
+                       trigger_config=?, steps=?, enabled=?, is_builtin=1 WHERE id=?""",
+                    (
+                        wf["name"], wf["description"], wf["trigger_type"],
+                        config_json, steps_json, 1 if wf["enabled"] else 0,
+                        wf["id"],
+                    ),
+                )
+            else:
+                self._db.execute(
+                    """INSERT INTO workflows (id, name, description, trigger_type,
+                       trigger_config, steps, enabled, is_builtin)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, 1)""",
+                    (
+                        wf["id"], wf["name"], wf["description"],
+                        wf["trigger_type"], config_json, steps_json,
+                        1 if wf["enabled"] else 0,
+                    ),
+                )
 
     def execute_workflow(self, id: str, context: dict | None = None) -> dict:
         wf = self.get_workflow(id)

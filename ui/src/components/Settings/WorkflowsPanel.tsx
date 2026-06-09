@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { AICreationDialog } from './AICreationDialog';
 import { useJarvis } from '@/hooks/use-jarvis';
 import type { WorkflowSummary, WorkflowDetail } from '@/types';
 
@@ -9,6 +10,7 @@ export function WorkflowsPanel() {
   const [loading, setLoading] = useState(true);
   const [selectedWf, setSelectedWf] = useState<WorkflowDetail | null>(null);
   const [execResult, setExecResult] = useState<string | null>(null);
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
 
   useEffect(() => { loadWorkflows(); }, []);
 
@@ -48,7 +50,18 @@ export function WorkflowsPanel() {
           <h2 className="text-lg font-semibold">Workflows</h2>
           <p className="text-sm text-muted-foreground">Automation workflows with step-based execution</p>
         </div>
-        <button onClick={loadWorkflows} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-accent">Refresh</button>
+        <div className="flex items-center gap-2">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setAiDialogOpen(true)}
+            className="px-3 py-1.5 text-xs rounded-lg border border-purple-500/30 text-purple-400 hover:bg-purple-950/20 transition-colors flex items-center gap-1.5"
+          >
+            <span>✨</span>
+            <span>Criar com IA</span>
+          </motion.button>
+          <button onClick={loadWorkflows} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-accent">Refresh</button>
+        </div>
       </div>
 
       <div className="grid gap-2">
@@ -58,7 +71,12 @@ export function WorkflowsPanel() {
               <div className="flex items-center gap-3">
                 <span className="text-lg">{triggerIcons[w.triggerType] || '⚡'}</span>
                 <div>
-                  <div className="font-medium text-sm">{w.name}</div>
+                  <div className="font-medium text-sm flex items-center gap-1.5">
+                    {w.name}
+                    {w.isBuiltin && (
+                      <span className="text-[10px] font-medium text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded-full border border-purple-500/20">Nativo</span>
+                    )}
+                  </div>
                   <div className="text-[10px] text-muted-foreground">{w.description || `${w.stepCount} steps · ${w.triggerType}`}</div>
                 </div>
               </div>
@@ -66,7 +84,7 @@ export function WorkflowsPanel() {
                 <span className={`w-2 h-2 rounded-full ${w.enabled ? 'bg-green-500' : 'bg-gray-500'}`} />
                 <button onClick={() => handleSelect(w.id)} className="px-2 py-1 text-xs rounded-md border border-border hover:bg-accent">View</button>
                 <button onClick={() => handleExecute(w.id)} className="px-2 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90">Run</button>
-                <button onClick={() => handleDelete(w.id)} className="px-2 py-1 text-xs rounded-md border border-border hover:bg-red-950/20 hover:text-red-400">Delete</button>
+                <button onClick={() => handleDelete(w.id)} disabled={w.isBuiltin} className="px-2 py-1 text-xs rounded-md border border-border hover:bg-red-950/20 hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-inherit" title={w.isBuiltin ? 'Workflows nativos não podem ser excluídos' : 'Excluir workflow'}>Delete</button>
               </div>
             </div>
           </motion.div>
@@ -103,6 +121,13 @@ export function WorkflowsPanel() {
           {execResult}
         </div>
       )}
+
+      <AICreationDialog
+        open={aiDialogOpen}
+        onClose={() => setAiDialogOpen(false)}
+        type="workflow"
+        onCreated={() => loadWorkflows()}
+      />
     </div>
   );
 }

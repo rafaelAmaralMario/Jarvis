@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { Agent, CreateAgentDTO } from '@/types';
 import { AgentCard } from './AgentCard';
 import { AgentFormDialog } from './AgentFormDialog';
+import { AICreationDialog } from './AICreationDialog';
 import { useJarvis } from '@/hooks/use-jarvis';
 
 export function AgentsPanel() {
@@ -12,6 +13,7 @@ export function AgentsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -81,14 +83,25 @@ export function AgentsPanel() {
         <div>
           <p className="text-sm text-muted-foreground">Configure AI agents for specific tasks.</p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => { setEditingAgent(null); setDialogOpen(true); }}
-          className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-        >
-          + New Agent
-        </motion.button>
+        <div className="flex items-center gap-2">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setAiDialogOpen(true)}
+            className="px-3 py-2 rounded-lg border border-purple-500/30 text-purple-400 text-sm font-medium hover:bg-purple-950/20 transition-colors flex items-center gap-1.5"
+          >
+            <span>✨</span>
+            <span>Criar com IA</span>
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => { setEditingAgent(null); setDialogOpen(true); }}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
+            + New Agent
+          </motion.button>
+        </div>
       </div>
 
       <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(420px,1fr))]">
@@ -105,6 +118,13 @@ export function AgentsPanel() {
           ))}
         </AnimatePresence>
       </div>
+
+      <AICreationDialog
+        open={aiDialogOpen}
+        onClose={() => setAiDialogOpen(false)}
+        type="agent"
+        onCreated={() => { bridge.listAgents().then(list => setAgents(list)); }}
+      />
 
       <AgentFormDialog
         open={dialogOpen}

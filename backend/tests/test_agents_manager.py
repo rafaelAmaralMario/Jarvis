@@ -23,6 +23,7 @@ def db_with_agents(tmp_path):
             is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0,1)),
             can_orchestrate INTEGER NOT NULL DEFAULT 1 CHECK (can_orchestrate IN (0,1)),
             priority INTEGER NOT NULL DEFAULT 5 CHECK (priority >= 0 AND priority <= 10),
+            is_builtin INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
             updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         )
@@ -53,6 +54,7 @@ def empty_db(tmp_path):
             is_default INTEGER NOT NULL DEFAULT 0,
             can_orchestrate INTEGER NOT NULL DEFAULT 1,
             priority INTEGER NOT NULL DEFAULT 5,
+            is_builtin INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
             updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         )
@@ -61,17 +63,21 @@ def empty_db(tmp_path):
     d.close()
 
 
-def test_seeds_default_agents_on_empty_db(empty_db):
+def test_seeds_builtin_agents_on_empty_db(empty_db):
     count_before = empty_db.fetchone("SELECT COUNT(*) AS cnt FROM agents")["cnt"]
     assert count_before == 0
 
     manager = AgentsManager(empty_db)
     agents = manager.list_agents()
 
-    assert len(agents) >= 2
+    assert len(agents) == 10
     names = [a.name for a in agents]
-    assert "Assistant Geral" in names
-    assert "Code Expert" in names
+    assert "Orquestrador Principal" in names
+    assert "Analista de Requisitos" in names
+    assert "Arquiteto de Software" in names
+    assert "Desenvolvedor Full-Stack" in names
+    assert "Especialista em Testes" in names
+    assert all(a.is_builtin for a in agents)
 
 
 def test_list_agents_returns_seeded(manager):
@@ -157,10 +163,16 @@ def test_update_agent_nonexistent(manager):
 
 
 def test_delete_agent(manager):
-    agents = manager.list_agents()
-    target = agents[0]
+    dto = CreateAgentDTO(name="Temp Agent", model="llama3")
+    target = manager.create_agent(dto)
     assert manager.delete_agent(target.id) is True
     assert manager.get_agent(target.id) is None
+
+
+def test_delete_builtin_agent_fails(manager):
+    agents = manager.list_agents()
+    builtin = next(a for a in agents if a.is_builtin)
+    assert manager.delete_agent(builtin.id) is False
 
 
 def test_delete_agent_nonexistent(manager):

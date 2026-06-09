@@ -34,6 +34,9 @@ export function AgentCard({ agent, onEdit, onDelete, onSetDefault, index = 0 }: 
             {agent.isDefault && (
               <span className="text-[10px] font-bold text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded-full">★ Default</span>
             )}
+            {agent.isBuiltin && (
+              <span className="text-[10px] font-medium text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded-full border border-purple-500/20">Nativo</span>
+            )}
           </div>
           <p className="text-xs text-muted-foreground truncate">{agent.description}</p>
         </div>
@@ -75,7 +78,9 @@ export function AgentCard({ agent, onEdit, onDelete, onSetDefault, index = 0 }: 
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={() => onDelete(agent.id)}
-          className="px-3 py-1.5 rounded-lg border border-red-900/40 text-xs font-medium text-red-500 hover:bg-red-950/20 transition-colors"
+          disabled={agent.isBuiltin}
+          className="px-3 py-1.5 rounded-lg border border-red-900/40 text-xs font-medium text-red-500 hover:bg-red-950/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+          title={agent.isBuiltin ? 'Agentes nativos não podem ser excluídos' : 'Excluir agente'}
         >
           🗑 Delete
         </motion.button>

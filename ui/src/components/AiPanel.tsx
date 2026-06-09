@@ -128,9 +128,17 @@ export function AiPanel() {
 
     setLoading(true);
     try {
-      const response = await bridge.sendMessage(text);
+      const timeout = new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout: backend não respondeu em 120s')), 120_000)
+      );
+      const response = await Promise.race([bridge.sendMessage(text), timeout]);
       setLoading(false);
-      const assistantMsg: Message = { role: 'assistant', content: response };
+      const isError = typeof response === 'string' && response.startsWith('**Erro:**');
+      const assistantMsg: Message = {
+        role: 'assistant',
+        content: response,
+        error: isError,
+      };
       updateMessages(activeConvId, msgs => [...msgs, assistantMsg]);
     } catch (err) {
       setLoading(false);
