@@ -333,13 +333,15 @@ class ToolAgent:
 
 
 class TaskPlanner:
-    """High-level task planner that decomposes complex tasks and executes them step by step.
+    """High-level task planner with checkpoint/resume, dependency graph, parallel execution.
 
     Flow:
-    1. Receive a natural-language task
-    2. LLM decomposes into a structured plan with verification criteria
-    3. Each step is executed via ToolAgent with auto-retry on failure
-    4. Final summary is returned
+    1. LLM decomposes task into steps (with optional depends_on)
+    2. Builds a DAG, executes independent steps in parallel
+    3. Each step verified; retries on failure
+    4. Auto-aborts after max_consecutive_failures
+    5. Checkpoints saved to .jarvis/plans/ for resume
+    6. Progress reported via callback for streaming
     """
 
     def __init__(
@@ -349,8 +351,10 @@ class TaskPlanner:
         model: str = "",
         provider: str = "ollama",
         max_retries_per_step: int = 3,
+        max_consecutive_failures: int = 3,
         on_step_start: Callable[[dict[str, Any]], None] | None = None,
         on_step_complete: Callable[[dict[str, Any]], None] | None = None,
+        on_progress: Callable[[dict[str, Any]], None] | None = None,
         on_token: Callable[[str], None] | None = None,
     ):
         self._llm = llm
@@ -358,79 +362,195 @@ class TaskPlanner:
         self._model = model
         self._provider = provider
         self._max_retries = max_retries_per_step
+        self._max_consecutive_failures = max_consecutive_failures
         self._on_step_start = on_step_start
         self._on_step_complete = on_step_complete
+        self._on_progress = on_progress
         self._on_token = on_token
         self._cancelled = False
+        self._results: list[dict[str, Any]] = []
+        self._plan: dict[str, Any] = {}
+        self._plan_id = ""
+
+        ws = tools.workspace_root or ""
+        self._checkpoint_dir = os.path.join(ws, ".jarvis", "plans") if ws else ""
 
     def cancel(self) -> None:
         self._cancelled = True
 
-    def execute(self, task: str) -> dict:
+    def execute(self, task: str, resume: bool = False) -> dict[str, Any]:
         self._cancelled = False
-        plan = self._decompose(task)
-        if not plan.get("steps"):
-            return {"success": False, "error": "Failed to decompose task", "results": []}
+        self._results = []
 
-        results: list[dict] = []
-        total_steps = len(plan["steps"])
+        if resume:
+            cp = self._load_latest()
+            if cp:
+                self._plan = cp["plan"]
+                self._results = cp.get("results", [])
+                self._plan_id = cp.get("plan_id", "")
+                logger.info("Resumed plan %s from step %d", self._plan_id, len(self._results))
 
-        for i, step in enumerate(plan["steps"]):
+        if not self._plan.get("steps"):
+            self._plan = self._decompose(task)
+            if not self._plan.get("steps"):
+                return {"success": False, "error": "Failed to decompose task", "results": []}
+            self._plan_id = self._plan.get("plan_id", str(uuid.uuid4()))
+            self._save()
+
+        steps = self._plan["steps"]
+        for i, s in enumerate(steps):
+            s["index"] = i
+        total = len(steps)
+        completed = len(self._results)
+
+        self._emit_progress("decomposing" if not resume else "resuming", completed, "", 0)
+
+        levels = self._build_levels(steps)
+        levels = [[s for s in lev if s["index"] >= completed] for lev in levels]
+        levels = [lev for lev in levels if lev]
+
+        consecutive_failures = 0
+
+        for level in levels:
             if self._cancelled:
                 break
 
-            step_goal = step.get("goal", step.get("step", f"Step {i+1}"))
-            verification = step.get("verification", "")
+            threads: list[threading.Thread] = []
+            level_out: dict[int, dict] = {}
+            lock = threading.Lock()
 
-            if self._on_step_start:
-                self._on_step_start({"index": i, "total": total_steps, "goal": step_goal})
+            def run_step(step: dict) -> None:
+                if self._cancelled:
+                    return
+                idx = step["index"]
+                goal = step.get("goal", f"Step {idx+1}")
+                verification = step.get("verification", "")
+                goal = self._apply_context(goal, idx)
+                verification = self._apply_context(verification, idx)
 
-            step_result = self._execute_step(step_goal, verification)
+                if self._on_step_start:
+                    self._on_step_start({"index": idx, "total": total, "goal": goal})
+                self._emit_progress("executing", idx, goal, consecutive_failures)
 
-            if self._on_step_complete:
-                self._on_step_complete({"index": i, "total": total_steps, "goal": step_goal, **step_result})
+                result = self._execute_step(goal, verification, idx)
 
-            results.append({
-                "goal": step_goal,
-                "success": step_result.get("success", False),
-                "output": step_result.get("output", ""),
-                "error": step_result.get("error"),
-                "retries": step_result.get("retries", 0),
-            })
+                with lock:
+                    level_out[idx] = result
 
-        success_count = sum(1 for r in results if r["success"])
-        return {
-            "success": success_count == len(results) and len(results) > 0,
+            for step in level:
+                t = threading.Thread(target=run_step, args=(step,), daemon=True)
+                threads.append(t)
+                t.start()
+
+            for t in threads:
+                t.join()
+
+            for step in level:
+                idx = step["index"]
+                result = level_out.get(idx, {
+                    "goal": step.get("goal", f"Step {idx+1}"),
+                    "success": False,
+                    "output": "",
+                    "error": "not executed",
+                    "retries": 0,
+                })
+                self._results.append(result)
+                if self._on_step_complete:
+                    self._on_step_complete({"index": idx, "total": total, **result})
+                consecutive_failures = 0 if result.get("success") else consecutive_failures + 1
+                self._save()
+
+                if consecutive_failures >= self._max_consecutive_failures and not self._cancelled:
+                    self._results.append({
+                        "goal": "",
+                        "success": False,
+                        "output": "",
+                        "error": f"Aborted after {consecutive_failures} consecutive failures",
+                        "retries": 0,
+                    })
+                    self._emit_progress("failed", idx, "", consecutive_failures)
+                    break
+
+        success_count = sum(1 for r in self._results if r["success"])
+        final_status = "cancelled" if self._cancelled else "completed"
+        self._emit_progress(final_status, len(self._results) - 1 if self._results else 0, "", consecutive_failures)
+
+        final: dict[str, Any] = {
+            "success": success_count == total and total > 0,
             "task": task,
-            "plan_summary": plan.get("summary", ""),
-            "total_steps": total_steps,
-            "completed_steps": len(results),
+            "plan_summary": self._plan.get("summary", ""),
+            "plan_id": self._plan_id,
+            "total_steps": total,
+            "completed_steps": len(self._results),
             "successful_steps": success_count,
-            "results": results,
+            "results": self._results,
             "cancelled": self._cancelled,
         }
+        if final["success"]:
+            self._clear()
+        return final
+
+    def _emit_progress(self, status: str, step: int, goal: str, fails: int) -> None:
+        if self._on_progress:
+            self._on_progress({
+                "plan_id": self._plan_id,
+                "task": self._plan.get("summary", ""),
+                "total_steps": len(self._plan.get("steps", [])),
+                "current_step": step,
+                "current_goal": goal,
+                "status": status,
+                "results": list(self._results),
+                "consecutive_failures": fails,
+                "cancelled": self._cancelled,
+            })
+
+    def _apply_context(self, text: str, current_index: int) -> str:
+        def repl(m: re.Match) -> str:
+            step_n = int(m.group(1))
+            field = m.group(2)
+            if step_n >= current_index or step_n >= len(self._results):
+                return m.group(0)
+            return str(self._results[step_n].get(field, ""))[:2000]
+        return re.sub(r'\{step_(\d+)\.(\w+)\}', repl, text)
+
+    def _build_levels(self, steps: list[dict]) -> list[list[dict]]:
+        n = len(steps)
+        in_degree = [0] * n
+        for i, s in enumerate(steps):
+            in_degree[i] = len(s.get("depends_on", []))
+        remaining = set(range(n))
+        levels: list[list[dict]] = []
+        while remaining:
+            cur = [i for i in remaining if in_degree[i] == 0]
+            if not cur:
+                cur = list(remaining)
+            levels.append([steps[i] for i in cur])
+            remaining -= set(cur)
+            for i in cur:
+                for j in remaining:
+                    if i in steps[j].get("depends_on", []):
+                        in_degree[j] -= 1
+        return levels
 
     def _decompose(self, task: str) -> dict:
-        system = """You are a **Task Planner**. Your job is to decompose complex software engineering tasks into clear, sequential steps.
+        system = """You are a **Task Planner**. Decompose complex software engineering tasks into clear steps.
 
-Respond with a JSON object ONLY:
+Respond with JSON:
 ```json
 {
   "summary": "Brief overview of what needs to be done",
   "steps": [
     {
       "goal": "Clear description of what to accomplish in this step",
-      "verification": "How to verify this step succeeded (file exists, test passes, etc.)"
+      "verification": "How to verify success (file exists, test passes, etc.)",
+      "depends_on": [0, 2]
     }
   ]
 }
 ```
-
-Guidelines:
-- Break the task into 3-8 atomic steps
-- Each step should be achievable with the available tools (read/write files, execute commands, git, search, etc.)
-- Steps should be in logical order (read before write, implement before test)
-- Be specific about verification criteria
+- "depends_on" is OPTIONAL; list 0-based step indices this step depends on. Omit if none.
+- Break into 3-8 atomic steps in logical order.
+- Each step should use available tools (read/write files, execute commands, git).
 """
         req = LLMRequest(
             provider=LLMProvider(self._provider),
@@ -443,23 +563,23 @@ Guidelines:
         try:
             resp = self._llm.generate(req)
             text = resp.content.strip()
-            json_match = re.search(r'```(?:json)?\s*\n?(\{[\s\S]*?\})\n?\s*```', text)
-            if json_match:
-                data = json.loads(json_match.group(1))
-            else:
-                data = json.loads(text)
+            m = re.search(r'```(?:json)?\s*\n?(\{[\s\S]*?\})\n?\s*```', text)
+            data = json.loads(m.group(1)) if m else json.loads(text)
             if not isinstance(data.get("steps"), list):
                 data["steps"] = []
+            for s in data["steps"]:
+                s.setdefault("depends_on", [])
             return data
         except Exception as e:
             logger.exception("Task decomposition failed")
             return {"summary": "", "steps": [], "error": str(e)}
 
-    def _execute_step(self, goal: str, verification: str) -> dict:
+    def _execute_step(self, goal: str, verification: str, step_index: int) -> dict:
         last_error = ""
+        output = ""
         for attempt in range(1, self._max_retries + 1):
             if self._cancelled:
-                return {"success": False, "output": "", "error": "Cancelled", "retries": attempt - 1}
+                return {"success": False, "output": output, "error": "Cancelled", "retries": attempt - 1}
 
             agent = ToolAgent(
                 llm=self._llm,
@@ -470,13 +590,16 @@ Guidelines:
                 on_token=self._on_token,
             )
 
+            ctx = ""
+            for prev in self._results:
+                idx = self._results.index(prev)
+                ctx += f"\n  Step {idx} ({prev.get('goal', '?')[:60]}): {'PASS' if prev.get('success') else 'FAIL'}"
+
             query = f"""Goal: {goal}
-
-{"Verification: " + verification if verification else ""}
-
+Verification: {verification}
+Previous steps:{ctx}
 {"Previous attempt failed: " + last_error if last_error else ""}
-
-Use the available tools to accomplish this goal. When done, explain what was accomplished and how it meets the goal."""
+Use available tools to accomplish this goal. When done, explain what was accomplished."""
             result = agent.execute(query)
             output = result.get("content", "")
 
@@ -484,28 +607,18 @@ Use the available tools to accomplish this goal. When done, explain what was acc
                 check = self._verify(verification)
                 if check.get("passed"):
                     return {"success": True, "output": output, "retries": attempt - 1}
-                else:
-                    last_error = f"Verification failed: {check.get('details', 'Unknown')}\nAgent output: {output[:500]}"
+                last_error = f"Verification: {check.get('details', '?')}\nOutput: {output[:500]}"
             else:
                 return {"success": True, "output": output, "retries": attempt - 1}
 
-        return {"success": False, "output": output if 'output' in locals() else "", "error": last_error, "retries": self._max_retries}
+        return {"success": False, "output": output, "error": last_error, "retries": self._max_retries}
 
     def _verify(self, criteria: str) -> dict:
-        system = """You are a **Verification Assistant**. Given a verification criterion and context, determine if it passed.
-
-Respond with JSON:
-```json
-{"passed": true/false, "details": "Explanation of the verification result"}
-```
-"""
-        messages = [
-            LLMMessage(role="user", content=f"Verify: {criteria}\n\nUse available tools to check (read files, run commands, etc.)"),
-        ]
+        system = "Verify the criterion. Respond JSON: {\"passed\": true/false, \"details\": \"...\"}"
         req = LLMRequest(
             provider=LLMProvider(self._provider),
             model=self._model,
-            messages=messages,
+            messages=[LLMMessage(role="user", content=f"Verify: {criteria}\n\nUse available tools to check (read files, run commands, etc.).")],
             system=system,
             temperature=0.1,
             max_tokens=2048,
@@ -513,12 +626,84 @@ Respond with JSON:
         try:
             resp = self._llm.generate(req)
             text = resp.content.strip()
-            json_match = re.search(r'```(?:json)?\s*\n?(\{[\s\S]*?\})\n?\s*```', text)
-            if json_match:
-                data = json.loads(json_match.group(1))
-            else:
-                data = json.loads(text)
+            m = re.search(r'```(?:json)?\s*\n?(\{[\s\S]*?\})\n?\s*```', text)
+            data = json.loads(m.group(1)) if m else json.loads(text)
             return {"passed": data.get("passed", False), "details": data.get("details", "")}
         except Exception:
-            return {"passed": True, "details": "Verification skipped (parse error)"}
+            return {"passed": True, "details": "Skipped (parse error)"}
+
+    # -- Checkpoint I/O --
+
+    def _checkpoint_path(self) -> str:
+        if not self._checkpoint_dir:
+            return ""
+        return os.path.join(self._checkpoint_dir, f"{self._plan_id}.json")
+
+    def _save(self) -> None:
+        path = self._checkpoint_path()
+        if not path:
+            return
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        data = {
+            "plan_id": self._plan_id,
+            "plan": self._plan,
+            "results": self._results,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+    def _load_latest(self) -> dict | None:
+        if not self._checkpoint_dir or not os.path.isdir(self._checkpoint_dir):
+            return None
+        files = sorted(os.listdir(self._checkpoint_dir), reverse=True)
+        for fname in files:
+            if fname.endswith(".json"):
+                try:
+                    with open(os.path.join(self._checkpoint_dir, fname)) as f:
+                        return json.load(f)
+                except Exception:
+                    continue
+        return None
+
+    def _clear(self) -> None:
+        path = self._checkpoint_path()
+        if path and os.path.isfile(path):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+
+    @staticmethod
+    def list_checkpoints(workspace: str) -> list[dict]:
+        cp_dir = os.path.join(workspace, ".jarvis", "plans")
+        if not os.path.isdir(cp_dir):
+            return []
+        results = []
+        for fname in sorted(os.listdir(cp_dir), reverse=True):
+            if fname.endswith(".json"):
+                try:
+                    with open(os.path.join(cp_dir, fname)) as f:
+                        data = json.load(f)
+                    results.append({
+                        "plan_id": data.get("plan_id", fname[:-5]),
+                        "task": data.get("plan", {}).get("summary", ""),
+                        "total_steps": len(data.get("plan", {}).get("steps", [])),
+                        "completed_steps": len(data.get("results", [])),
+                        "updated_at": data.get("updated_at", ""),
+                    })
+                except Exception:
+                    continue
+        return results
+
+    @staticmethod
+    def load_checkpoint(workspace: str, plan_id: str) -> dict | None:
+        path = os.path.join(workspace, ".jarvis", "plans", f"{plan_id}.json")
+        if not os.path.isfile(path):
+            return None
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except Exception:
+            return None
 

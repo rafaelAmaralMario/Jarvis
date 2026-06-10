@@ -154,7 +154,12 @@ export interface JarvisBridge {
   toolAgentAnswer(questionId: string, answer: string): Promise<ToolAgentAnswerResult>;
   toolAgentExecuteStream(query: string, convId?: string): Promise<StreamTask>;
   toolAgentGetStream(taskId: string): Promise<StreamState>;
-  taskPlannerExecute(query: string): Promise<TaskPlannerResult>;
+  taskPlannerExecute(query: string, resume?: boolean): Promise<TaskPlannerResult>;
+  plannerExecuteStream(query: string, resumePlanId?: string): Promise<{ taskId: string }>;
+  plannerGetProgress(taskId: string): Promise<PlannerProgress>;
+  plannerCancel(taskId: string): Promise<{ success: boolean }>;
+  plannerListCheckpoints(): Promise<PlannerCheckpoint[]>;
+  plannerResumeCheckpoint(planId: string): Promise<{ taskId: string }>;
 
   copyToClipboard(text: string): Promise<boolean>;
   revealInExplorer(path: string): Promise<boolean>;
@@ -690,11 +695,34 @@ export interface TaskPlannerResult {
   success: boolean;
   task: string;
   plan_summary: string;
+  plan_id: string;
   total_steps: number;
   completed_steps: number;
   successful_steps: number;
   results: TaskPlannerStepResult[];
   cancelled: boolean;
+}
+
+export interface PlannerProgress {
+  plan_id: string;
+  task: string;
+  total_steps: number;
+  current_step: number;
+  current_goal: string;
+  status: string;
+  results: TaskPlannerStepResult[];
+  consecutive_failures: number;
+  cancelled: boolean;
+  done: boolean;
+  error?: string | null;
+}
+
+export interface PlannerCheckpoint {
+  plan_id: string;
+  task: string;
+  total_steps: number;
+  completed_steps: number;
+  updated_at: string;
 }
 
 export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'settings' | 'git';

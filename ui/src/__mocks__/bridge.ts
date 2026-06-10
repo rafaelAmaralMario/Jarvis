@@ -27,6 +27,11 @@ interface MockBridge {
   toolAgentExecute: ReturnType<typeof vi.fn>;
   toolAgentAnswer: ReturnType<typeof vi.fn>;
   taskPlannerExecute: ReturnType<typeof vi.fn>;
+  plannerExecuteStream: ReturnType<typeof vi.fn>;
+  plannerGetProgress: ReturnType<typeof vi.fn>;
+  plannerCancel: ReturnType<typeof vi.fn>;
+  plannerListCheckpoints: ReturnType<typeof vi.fn>;
+  plannerResumeCheckpoint: ReturnType<typeof vi.fn>;
 }
 
 const handlers = new Map<string, MessageHandler[]>();
@@ -73,12 +78,30 @@ export const mockBridge: MockBridge = {
     success: true,
     task: 'mock task',
     plan_summary: 'Mock plan',
+    plan_id: 'mock-plan-id',
     total_steps: 1,
     completed_steps: 1,
     successful_steps: 1,
     results: [{ goal: 'mock step', success: true, output: 'done', retries: 0 }],
     cancelled: false,
   }),
+  plannerExecuteStream: vi.fn().mockResolvedValue({ taskId: 'mock-planner-task' }),
+  plannerGetProgress: vi.fn().mockResolvedValue({
+    plan_id: 'mock-plan-id',
+    task: 'mock task',
+    total_steps: 1,
+    current_step: 0,
+    current_goal: '',
+    status: 'completed',
+    results: [{ goal: 'mock step', success: true, output: 'done', retries: 0 }],
+    consecutive_failures: 0,
+    cancelled: false,
+    done: true,
+    error: null,
+  }),
+  plannerCancel: vi.fn().mockResolvedValue({ success: true }),
+  plannerListCheckpoints: vi.fn().mockResolvedValue([]),
+  plannerResumeCheckpoint: vi.fn().mockResolvedValue({ taskId: 'mock-resume-task' }),
 };
 
 beforeEach(() => {

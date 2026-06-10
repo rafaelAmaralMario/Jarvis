@@ -11,7 +11,7 @@ import type {
   PermissionInfo, AuditEntry, SecretInfo, ModelServerStatus, UpdateStatus,
   ConversationSummary, ChatMessage,
   ToolDefinition, ToolCallResult, ToolAgentResponse, ToolAgentAnswerResult,
-  StreamTask, StreamState, TaskPlannerResult,
+  StreamTask, StreamState, TaskPlannerResult, PlannerProgress, PlannerCheckpoint,
 } from '@/types';
 
 declare global {
@@ -285,7 +285,12 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     toolAgentAnswer: (questionId, answer) => send('toolAgentAnswer', questionId, answer) as Promise<ToolAgentAnswerResult>,
     toolAgentExecuteStream: (query, convId) => send('toolAgentExecuteStream', query, convId) as Promise<StreamTask>,
     toolAgentGetStream: (taskId) => send('toolAgentGetStream', taskId) as Promise<StreamState>,
-    taskPlannerExecute: (query) => send('taskPlannerExecute', query) as Promise<TaskPlannerResult>,
+    taskPlannerExecute: (query, resume) => send('taskPlannerExecute', query, resume) as Promise<TaskPlannerResult>,
+    plannerExecuteStream: (query, resumePlanId) => send('plannerExecuteStream', query, resumePlanId) as Promise<{ taskId: string }>,
+    plannerGetProgress: (taskId) => send('plannerGetProgress', taskId) as Promise<PlannerProgress>,
+    plannerCancel: (taskId) => send('plannerCancel', taskId) as Promise<{ success: boolean }>,
+    plannerListCheckpoints: () => send('plannerListCheckpoints') as Promise<PlannerCheckpoint[]>,
+    plannerResumeCheckpoint: (planId) => send('plannerResumeCheckpoint', planId) as Promise<{ taskId: string }>,
 
     copyToClipboard: (text) => send('copyToClipboard', text) as Promise<boolean>,
     revealInExplorer: (path) => send('revealInExplorer', path) as Promise<boolean>,

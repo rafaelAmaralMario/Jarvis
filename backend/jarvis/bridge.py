@@ -26,7 +26,7 @@ from jarvis.ollama_client import OllamaClient
 from jarvis.orchestration_manager import OrchestrationConfig, OrchestrationManager
 from jarvis.security_manager import SecurityManager
 from jarvis.terminal_manager import TerminalManager
-from jarvis.tool_agent import ToolAgent
+from jarvis.tool_agent import ToolAgent, TaskPlanner
 from jarvis.tool_manager import ToolManager
 from jarvis.workflow_engine import WorkflowEngine
 from jarvis.workspace_manager import WorkspaceManager
@@ -848,16 +848,89 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
             return {"done": True, "error": "Task not found"}
         return dict(stream)
 
-    def taskPlannerExecute(self, query: str) -> dict:
-        from jarvis.tool_agent import TaskPlanner
+    def taskPlannerExecute(self, query: str, resume: bool = False) -> dict:
         planner = TaskPlanner(
             llm=self._llm,
-            tools=self._tool_manager or ToolManager(),
+            tools=self._tool_manager,
             model=self._model,
             provider=self._provider,
             on_token=lambda t: None,
         )
-        return planner.execute(query)
+        return planner.execute(query, resume=resume)
+
+    _planner_streams: dict[str, dict] = {}
+
+    def plannerExecuteStream(self, query: str, resume_plan_id: str = "") -> dict:
+        task_id = str(uuid.uuid4())
+        stream: dict = {
+            "plan_id": resume_plan_id or "",
+            "task": "",
+            "total_steps": 0,
+            "current_step": 0,
+            "current_goal": "",
+            "status": "starting",
+            "results": [],
+            "consecutive_failures": 0,
+            "cancelled": False,
+            "done": False,
+            "error": None,
+        }
+        JARVISBridge._planner_streams[task_id] = stream
+
+        def _run() -> None:
+            try:
+                def on_progress(p: dict) -> None:
+                    stream.update(p)
+
+                planner = TaskPlanner(
+                    llm=self._llm,
+                    tools=self._tool_manager,
+                    model=self._model,
+                    provider=self._provider,
+                    on_progress=on_progress,
+                )
+
+                if resume_plan_id:
+                    cp = TaskPlanner.load_checkpoint(self._tool_manager.workspace_root or "", resume_plan_id)
+                    if cp:
+                        result = planner.execute(cp.get("plan", {}).get("summary", ""), resume=True)
+                    else:
+                        stream["error"] = f"Checkpoint {resume_plan_id} not found"
+                        return
+                else:
+                    result = planner.execute(query)
+
+                stream["status"] = "completed" if result.get("success") else "failed"
+            except Exception as e:
+                logger.exception("plannerExecuteStream failed")
+                stream["error"] = str(e)
+            finally:
+                stream["done"] = True
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        return {"taskId": task_id}
+
+    def plannerGetProgress(self, task_id: str) -> dict:
+        stream = JARVISBridge._planner_streams.get(task_id)
+        if not stream:
+            return {"done": True, "error": "Task not found"}
+        return dict(stream)
+
+    def plannerCancel(self, task_id: str) -> dict:
+        stream = JARVISBridge._planner_streams.get(task_id)
+        if stream:
+            stream["cancelled"] = True
+            stream["status"] = "cancelled"
+            stream["done"] = True
+        return {"success": True}
+
+    def plannerListCheckpoints(self) -> list:
+        ws = self._tool_manager.workspace_root or ""
+        return TaskPlanner.list_checkpoints(ws)
+
+    def plannerResumeCheckpoint(self, plan_id: str) -> dict:
+        return self.plannerExecuteStream("", resume_plan_id=plan_id)
 
     # ========================================================================
     # Knowledge handlers
