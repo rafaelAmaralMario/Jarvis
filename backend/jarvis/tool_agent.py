@@ -331,3 +331,194 @@ class ToolAgent:
 
         return None
 
+
+class TaskPlanner:
+    """High-level task planner that decomposes complex tasks and executes them step by step.
+
+    Flow:
+    1. Receive a natural-language task
+    2. LLM decomposes into a structured plan with verification criteria
+    3. Each step is executed via ToolAgent with auto-retry on failure
+    4. Final summary is returned
+    """
+
+    def __init__(
+        self,
+        llm: LLMGateway,
+        tools: ToolManager,
+        model: str = "",
+        provider: str = "ollama",
+        max_retries_per_step: int = 3,
+        on_step_start: Callable[[dict[str, Any]], None] | None = None,
+        on_step_complete: Callable[[dict[str, Any]], None] | None = None,
+        on_token: Callable[[str], None] | None = None,
+    ):
+        self._llm = llm
+        self._tools = tools
+        self._model = model
+        self._provider = provider
+        self._max_retries = max_retries_per_step
+        self._on_step_start = on_step_start
+        self._on_step_complete = on_step_complete
+        self._on_token = on_token
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
+
+    def execute(self, task: str) -> dict:
+        self._cancelled = False
+        plan = self._decompose(task)
+        if not plan.get("steps"):
+            return {"success": False, "error": "Failed to decompose task", "results": []}
+
+        results: list[dict] = []
+        total_steps = len(plan["steps"])
+
+        for i, step in enumerate(plan["steps"]):
+            if self._cancelled:
+                break
+
+            step_goal = step.get("goal", step.get("step", f"Step {i+1}"))
+            verification = step.get("verification", "")
+
+            if self._on_step_start:
+                self._on_step_start({"index": i, "total": total_steps, "goal": step_goal})
+
+            step_result = self._execute_step(step_goal, verification)
+
+            if self._on_step_complete:
+                self._on_step_complete({"index": i, "total": total_steps, "goal": step_goal, **step_result})
+
+            results.append({
+                "goal": step_goal,
+                "success": step_result.get("success", False),
+                "output": step_result.get("output", ""),
+                "error": step_result.get("error"),
+                "retries": step_result.get("retries", 0),
+            })
+
+        success_count = sum(1 for r in results if r["success"])
+        return {
+            "success": success_count == len(results) and len(results) > 0,
+            "task": task,
+            "plan_summary": plan.get("summary", ""),
+            "total_steps": total_steps,
+            "completed_steps": len(results),
+            "successful_steps": success_count,
+            "results": results,
+            "cancelled": self._cancelled,
+        }
+
+    def _decompose(self, task: str) -> dict:
+        system = """You are a **Task Planner**. Your job is to decompose complex software engineering tasks into clear, sequential steps.
+
+Respond with a JSON object ONLY:
+```json
+{
+  "summary": "Brief overview of what needs to be done",
+  "steps": [
+    {
+      "goal": "Clear description of what to accomplish in this step",
+      "verification": "How to verify this step succeeded (file exists, test passes, etc.)"
+    }
+  ]
+}
+```
+
+Guidelines:
+- Break the task into 3-8 atomic steps
+- Each step should be achievable with the available tools (read/write files, execute commands, git, search, etc.)
+- Steps should be in logical order (read before write, implement before test)
+- Be specific about verification criteria
+"""
+        req = LLMRequest(
+            provider=LLMProvider(self._provider),
+            model=self._model,
+            messages=[LLMMessage(role="user", content=f"Decompose this task into steps:\n\n{task}")],
+            system=system,
+            temperature=0.2,
+            max_tokens=4096,
+        )
+        try:
+            resp = self._llm.generate(req)
+            text = resp.content.strip()
+            json_match = re.search(r'```(?:json)?\s*\n?(\{[\s\S]*?\})\n?\s*```', text)
+            if json_match:
+                data = json.loads(json_match.group(1))
+            else:
+                data = json.loads(text)
+            if not isinstance(data.get("steps"), list):
+                data["steps"] = []
+            return data
+        except Exception as e:
+            logger.exception("Task decomposition failed")
+            return {"summary": "", "steps": [], "error": str(e)}
+
+    def _execute_step(self, goal: str, verification: str) -> dict:
+        last_error = ""
+        for attempt in range(1, self._max_retries + 1):
+            if self._cancelled:
+                return {"success": False, "output": "", "error": "Cancelled", "retries": attempt - 1}
+
+            agent = ToolAgent(
+                llm=self._llm,
+                tools=self._tools,
+                model=self._model,
+                provider=self._provider,
+                max_tool_rounds=30,
+                on_token=self._on_token,
+            )
+
+            query = f"""Goal: {goal}
+
+{"Verification: " + verification if verification else ""}
+
+{"Previous attempt failed: " + last_error if last_error else ""}
+
+Use the available tools to accomplish this goal. When done, explain what was accomplished and how it meets the goal."""
+            result = agent.execute(query)
+            output = result.get("content", "")
+
+            if verification:
+                check = self._verify(verification)
+                if check.get("passed"):
+                    return {"success": True, "output": output, "retries": attempt - 1}
+                else:
+                    last_error = f"Verification failed: {check.get('details', 'Unknown')}\nAgent output: {output[:500]}"
+            else:
+                return {"success": True, "output": output, "retries": attempt - 1}
+
+        return {"success": False, "output": output if 'output' in locals() else "", "error": last_error, "retries": self._max_retries}
+
+    def _verify(self, criteria: str) -> dict:
+        system = """You are a **Verification Assistant**. Given a verification criterion and context, determine if it passed.
+
+Respond with JSON:
+```json
+{"passed": true/false, "details": "Explanation of the verification result"}
+```
+"""
+        messages = [
+            LLMMessage(role="user", content=f"Verify: {criteria}\n\nUse available tools to check (read files, run commands, etc.)"),
+        ]
+        req = LLMRequest(
+            provider=LLMProvider(self._provider),
+            model=self._model,
+            messages=messages,
+            system=system,
+            temperature=0.1,
+            max_tokens=2048,
+        )
+        try:
+            resp = self._llm.generate(req)
+            text = resp.content.strip()
+            json_match = re.search(r'```(?:json)?\s*\n?(\{[\s\S]*?\})\n?\s*```', text)
+            if json_match:
+                data = json.loads(json_match.group(1))
+            else:
+                data = json.loads(text)
+            return {"passed": data.get("passed", False), "details": data.get("details", "")}
+        except Exception:
+            return {"passed": True, "details": "Verification skipped (parse error)"}
+

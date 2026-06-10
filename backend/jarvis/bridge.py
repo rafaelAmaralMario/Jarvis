@@ -848,6 +848,17 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
             return {"done": True, "error": "Task not found"}
         return dict(stream)
 
+    def taskPlannerExecute(self, query: str) -> dict:
+        from jarvis.tool_agent import TaskPlanner
+        planner = TaskPlanner(
+            llm=self._llm,
+            tools=self._tool_manager or ToolManager(),
+            model=self._model,
+            provider=self._provider,
+            on_token=lambda t: None,
+        )
+        return planner.execute(query)
+
     # ========================================================================
     # Knowledge handlers
     # ========================================================================

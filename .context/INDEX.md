@@ -6,3 +6,5 @@
 | 002 | Resposta do Usuario e Cancelamento | 2026-06-10T06:55:00-03:00 | active | — | — |
 | 003 | Streaming por Polling | 2026-06-10T07:00:00-03:00 | active | — | — |
 | 004 | Confirmacao de Permissao (ask/danger) | 2026-06-10T07:05:00-03:00 | active | — | — |
+| 005 | Web Search e Fetch Tools | 2026-06-10T07:10:00-03:00 | active | — | — |
+| 006 | Task Planner | 2026-06-10T07:20:00-03:00 | active | — | — |

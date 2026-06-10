@@ -26,6 +26,7 @@ interface MockBridge {
   toolsSetWorkspace: ReturnType<typeof vi.fn>;
   toolAgentExecute: ReturnType<typeof vi.fn>;
   toolAgentAnswer: ReturnType<typeof vi.fn>;
+  taskPlannerExecute: ReturnType<typeof vi.fn>;
 }
 
 const handlers = new Map<string, MessageHandler[]>();
@@ -68,6 +69,16 @@ export const mockBridge: MockBridge = {
   toolsSetWorkspace: vi.fn().mockResolvedValue(true),
   toolAgentExecute: vi.fn().mockResolvedValue({ success: true, output: 'mock agent output' }),
   toolAgentAnswer: vi.fn().mockResolvedValue({ success: true, content: 'mock answer result' }),
+  taskPlannerExecute: vi.fn().mockResolvedValue({
+    success: true,
+    task: 'mock task',
+    plan_summary: 'Mock plan',
+    total_steps: 1,
+    completed_steps: 1,
+    successful_steps: 1,
+    results: [{ goal: 'mock step', success: true, output: 'done', retries: 0 }],
+    cancelled: false,
+  }),
 };
 
 beforeEach(() => {

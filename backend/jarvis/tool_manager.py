@@ -12,6 +12,7 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable
+from urllib.parse import quote_plus
 
 logger = logging.getLogger(__name__)
 
@@ -251,6 +252,34 @@ class ToolManager:
                 },
                 risk=RiskLevel.SAFE,
             ),
+            "web_search": ToolDefinition(
+                name="web_search",
+                description="Search the web for the given query and return a list of results with titles, snippets, and URLs.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search query"},
+                        "max_results": {"type": "number", "description": "Maximum results to return", "default": 5},
+                    },
+                    "required": ["query"],
+                },
+                risk=RiskLevel.SAFE,
+                examples=["web_search query='python asyncio tutorial'"],
+            ),
+            "web_fetch": ToolDefinition(
+                name="web_fetch",
+                description="Fetch the content of a URL and return it as text (HTML stripped). Useful for reading documentation, articles, or API responses.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string", "description": "URL to fetch"},
+                        "max_length": {"type": "number", "description": "Maximum characters to return", "default": 10000},
+                    },
+                    "required": ["url"],
+                },
+                risk=RiskLevel.SAFE,
+                examples=["web_fetch url='https://example.com/docs'"],
+            ),
         }
 
     def _resolve_path(self, path: str) -> str:
@@ -477,3 +506,76 @@ class ToolManager:
             output=f"[AGUARDANDO RESPOSTA DO USUÁRIO] {args['question']}",
             data={"question": args["question"], "pending": True},
         )
+
+    def _handle_web_search(self, args: dict[str, Any]) -> ToolResult:
+        query = args["query"]
+        max_results = int(args.get("max_results", 5))
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+
+            url = "https://html.duckduckgo.com/html/"
+            resp = requests.post(url, data={"q": query}, timeout=15, verify=False, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) JARVIS/1.0",
+            })
+            resp.raise_for_status()
+
+            soup = BeautifulSoup(resp.text, "html.parser")
+            results = []
+            for link in soup.select(".result__a"):
+                title = link.get_text(strip=True)
+                href = link.get("href", "")
+                if not href.startswith("http"):
+                    continue
+                snippet_el = link.find_parent(".result") or link.find_parent("div")
+                snippet = ""
+                if snippet_el:
+                    snip = snippet_el.select_one(".result__snippet")
+                    if snip:
+                        snippet = snip.get_text(strip=True)
+                results.append(f"- [{title}]({href})\n  {snippet}" if snippet else f"- [{title}]({href})")
+                if len(results) >= max_results:
+                    break
+
+            if not results:
+                output = f"No results found for '{query}'"
+            else:
+                output = f"## Search results for: {query}\n\n" + "\n".join(results)
+            return ToolResult(success=True, output=output, data={"results": results, "count": len(results)})
+        except ImportError:
+            return ToolResult(success=False, error="Missing dependencies: requests and beautifulsoup4")
+        except Exception as e:
+            return ToolResult(success=False, error=f"Web search failed: {e}")
+
+    def _handle_web_fetch(self, args: dict[str, Any]) -> ToolResult:
+        url = args["url"]
+        max_length = int(args.get("max_length", 10000))
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+
+            resp = requests.get(url, timeout=15, verify=False, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) JARVIS/1.0",
+            })
+            resp.raise_for_status()
+
+            content_type = resp.headers.get("content-type", "")
+            if "application/json" in content_type:
+                try:
+                    data = resp.json()
+                    text = json.dumps(data, indent=2, ensure_ascii=False)
+                except Exception:
+                    text = resp.text
+            else:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
+                    tag.decompose()
+                text = soup.get_text(separator="\n", strip=True)
+
+            if len(text) > max_length:
+                text = text[:max_length] + "\n\n[...truncated]"
+            return ToolResult(success=True, output=text, data={"url": url, "length": len(text)})
+        except ImportError:
+            return ToolResult(success=False, error="Missing dependencies: requests and beautifulsoup4")
+        except Exception as e:
+            return ToolResult(success=False, error=f"Web fetch failed: {e}")

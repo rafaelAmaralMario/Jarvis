@@ -154,6 +154,7 @@ export interface JarvisBridge {
   toolAgentAnswer(questionId: string, answer: string): Promise<ToolAgentAnswerResult>;
   toolAgentExecuteStream(query: string, convId?: string): Promise<StreamTask>;
   toolAgentGetStream(taskId: string): Promise<StreamState>;
+  taskPlannerExecute(query: string): Promise<TaskPlannerResult>;
 
   copyToClipboard(text: string): Promise<boolean>;
   revealInExplorer(path: string): Promise<boolean>;
@@ -675,6 +676,25 @@ export interface StreamState {
   cancelled: boolean;
   done: boolean;
   error?: string | null;
+}
+
+export interface TaskPlannerStepResult {
+  goal: string;
+  success: boolean;
+  output: string;
+  error?: string;
+  retries: number;
+}
+
+export interface TaskPlannerResult {
+  success: boolean;
+  task: string;
+  plan_summary: string;
+  total_steps: number;
+  completed_steps: number;
+  successful_steps: number;
+  results: TaskPlannerStepResult[];
+  cancelled: boolean;
 }
 
 export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'settings' | 'git';

@@ -11,7 +11,7 @@ import type {
   PermissionInfo, AuditEntry, SecretInfo, ModelServerStatus, UpdateStatus,
   ConversationSummary, ChatMessage,
   ToolDefinition, ToolCallResult, ToolAgentResponse, ToolAgentAnswerResult,
-  StreamTask, StreamState,
+  StreamTask, StreamState, TaskPlannerResult,
 } from '@/types';
 
 declare global {
@@ -285,6 +285,7 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     toolAgentAnswer: (questionId, answer) => send('toolAgentAnswer', questionId, answer) as Promise<ToolAgentAnswerResult>,
     toolAgentExecuteStream: (query, convId) => send('toolAgentExecuteStream', query, convId) as Promise<StreamTask>,
     toolAgentGetStream: (taskId) => send('toolAgentGetStream', taskId) as Promise<StreamState>,
+    taskPlannerExecute: (query) => send('taskPlannerExecute', query) as Promise<TaskPlannerResult>,
 
     copyToClipboard: (text) => send('copyToClipboard', text) as Promise<boolean>,
     revealInExplorer: (path) => send('revealInExplorer', path) as Promise<boolean>,
