@@ -309,24 +309,90 @@ Antes de avançar para novas features, estes bugs da Fase 1 precisam ser corrigi
 
 ---
 
-## 🔷 Prioridades Recomendadas
+## 🎯 Ordem Recomendada de Implementação
 
-| Ordem | Task | Esforço | Impacto | Depende de |
-|-------|------|---------|---------|------------|
-| 1 | T1: ModelServerStatus fix | ~30min | 🔴 Bug crítico | — |
-| 2 | T2: Chat timeout fix | ~1h | 🔴 Bug crítico | T1 |
-| 3 | T3: Models list/Start fix | ~30min | 🔴 Bug crítico | T1 |
-| 4 | T7: General Settings | ~1-2h | 🟡 UX | — |
-| 5 | T5: Context Menu | ~2-3h | 🟡 Feature | — |
-| 6 | T6: Task Planner UI | ~3-4h | 🟢 Feature | — |
-| 7 | T4: Workspace Unification | ~4-6h | 🟢 Feature | T5 |
-| 8 | T8: Auto-Healing + Memory | ~6-8h | 🟢 Feature | T6 |
-| 9 | T9: Plugins | ~3-4h | 🟢 Feature | T8 (security) |
-| 10 | T11: Editor Fase 3 | ~4-6h | 🟡 Feature | T4 |
-| 11 | T10: Terminal Polish | ~3-5h | 🟡 Feature | — |
-| 12 | T12: Git Integration | ~6-10h | 🔴 Feature | T4, T5 |
+### Bloco 1 — Bugs Críticos (2h)
+*Antes de qualquer feature nova, estes bugs precisam ser corrigidos — eles afetam a experiência central do chat e models.*
 
-**Estimativa total:** ~40-60h de desenvolvimento para completar tudo acima.
+| # | Task | Esforço | Por que nesta ordem |
+|---|------|---------|-------------------|
+| 1 | **T1: ModelServerStatus** | 30min | Base para todas as outras: se o status do Ollama é fake, nada de IA funciona |
+| 2 | **T2: Chat timeout** | 1h | Chat travando é o bug mais visível para o usuário. Precisa do status correto (T1) |
+| 3 | **T3: Models list/Start** | 30min | Se `listModels` falha silenciosamente, o usuário não sabe que precisa iniciar o Ollama. Depende de T1 |
+
+**Resultado:** Chat + Models funcionando de forma confiável. Base sólida para features.
+
+### Bloco 2 — Features Rápidas (4h)
+*Features de baixo esforço e alto impacto na experiência do usuário. Não dependem de nada e podem ser feitas em paralelo.*
+
+| # | Task | Esforço | Por que nesta ordem |
+|---|------|---------|-------------------|
+| 4 | **T7: General Settings** | 1-2h | Settings atual está vazio — dá impressão de app incompleto. Sem dependências |
+| 5 | **T5: Context Menu** | 2-3h | Pré-requisito para T4 (Workspace). Menos de 3h de implementação |
+
+### Bloco 3 — Task Planner UI (4h)
+*Backend do TaskPlanner já está 100% pronto e funcional. Só falta a interface.*
+
+| # | Task | Esforço | Por que nesta ordem |
+|---|------|---------|-------------------|
+| 6 | **T6: Task Planner UI** | 3-4h | Backend já feito (checkpoint/resume, streaming, parallel steps). Falta só o frontend. Sem dependências |
+
+**Resultado:** Usuário pode usar o TaskPlanner pelo chat para tarefas complexas.
+
+### Bloco 4 — Unificação Workspace/Editor (6h)
+*Feature mais impactante visualmente. Transforma a experiência de navegação no projeto.*
+
+| # | Task | Esforço | Por que nesta ordem |
+|---|------|---------|-------------------|
+| 7 | **T4: Workspace Unification** | 4-6h | Requer T5 (Context Menu) funcionando. É a maior mudança visual do projeto |
+
+**Resultado:** Experiência VS Code completa — file tree, ícones, drag & drop, busca.
+
+### Bloco 5 — Pós-Unificação (tasks paralelizáveis)
+*Com o workspace unificado e o task planner funcional, podemos escalar em várias frentes.*
+
+| # | Task | Esforço | Por que nesta ordem |
+|---|------|---------|-------------------|
+| 8 | **T8: Auto-Healing + Memory** | 6-8h | Requer T6 (Task Planner UI) para mostrar progresso do auto-healing |
+| 9 | **T9: Plugins** | 3-4h | Requer sistema de segurança (T8 inclui permission system) |
+| 10 | **T11: Editor Fase 3** | 4-6h | Search/Replace, Command Palette, Markdown Preview. Independe de outras tasks |
+| 11 | **T10: Terminal Polish** | 3-5h | Abas, split, Ctrl+`. Pode ser feito paralelo ao T8/T9/T11 |
+| 12 | **T12: Git Integration** | 6-10h | Git Gutter, diff UI, branch explorer. Requer T4 + T5 |
+
+**Estimativa total:** ~40-60h de desenvolvimento para completar todos os 12 blocos.
+
+### Diagrama de Dependências
+
+```
+Bloco 1 (Bugs)
+  ├─ T1 ─→ T2
+  └─ T1 ─→ T3
+               Bloco 2 (Rápidas)
+               ├─ T7 (independente)
+               └─ T5 ─────────────────────────┐
+                    Bloco 3                     │
+                    └─ T6 ──→ T8               │
+                                               ▼
+                                        Bloco 4
+                                        └─ T4 ←─┘
+                                               │
+                                   Bloco 5 (Paralelo)
+                                   ├─ T8 ←── T6
+                                   ├─ T9 ←── T8
+                                   ├─ T11 (indep)
+                                   ├─ T10 (indep)
+                                   └─ T12 ←── T4 + T5
+```
+
+### Critério de Parada por Bloco
+
+| Bloco | Critério para avançar |
+|-------|----------------------|
+| 1 — Bugs | chat não trava mais + models listam corretamente + start Ollama funciona |
+| 2 — Rápidas | settings populados + context menu funcional em arquivos/pastas |
+| 3 — Planner | usuário pode iniciar task, ver progresso, cancelar, resumir checkpoint |
+| 4 — Unificação | workspace parece VS Code (tree, ícones, busca, drag) |
+| 5 — Escalar | auto-healing recupera falhas, plugins carregam, editor busca, terminal split
 
 ---
 
