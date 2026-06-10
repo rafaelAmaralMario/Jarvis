@@ -152,7 +152,7 @@ export interface JarvisBridge {
   toolsSetWorkspace(path: string): Promise<boolean>;
   toolAgentExecute(query: string, convId?: string): Promise<ToolAgentResponse>;
   toolAgentAnswer(questionId: string, answer: string): Promise<ToolAgentAnswerResult>;
-  toolAgentExecuteStream(query: string, convId?: string): Promise<StreamTask>;
+  toolAgentExecuteStream(query: string, convId?: string, history?: {role: string; content: string}[], agentId?: string): Promise<StreamTask>;
   toolAgentGetStream(taskId: string): Promise<StreamState>;
   taskPlannerExecute(query: string, resume?: boolean): Promise<TaskPlannerResult>;
   plannerExecuteStream(query: string, resumePlanId?: string): Promise<{ taskId: string }>;
@@ -160,6 +160,11 @@ export interface JarvisBridge {
   plannerCancel(taskId: string): Promise<{ success: boolean }>;
   plannerListCheckpoints(): Promise<PlannerCheckpoint[]>;
   plannerResumeCheckpoint(planId: string): Promise<{ taskId: string }>;
+
+  selfImprovementStream(action?: string): Promise<StreamTask>;
+  selfImprovementGetStream(taskId: string): Promise<SIProgress>;
+  selfImprovementAnswer(questionId: string, answer: string): Promise<{ success: boolean }>;
+  selfImprovementCancel(taskId: string): Promise<{ success: boolean }>;
 
   copyToClipboard(text: string): Promise<boolean>;
   revealInExplorer(path: string): Promise<boolean>;
@@ -677,6 +682,17 @@ export interface StreamState {
   content: string;
   toolCalls: ToolAgentCall[];
   toolResults: ToolAgentResult[];
+  pendingQuestion?: PendingQuestion | null;
+  cancelled: boolean;
+  done: boolean;
+  error?: string | null;
+}
+
+export interface SIProgress {
+  step: string;
+  status: string;
+  detail: string;
+  progress: number;
   pendingQuestion?: PendingQuestion | null;
   cancelled: boolean;
   done: boolean;

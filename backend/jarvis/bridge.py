@@ -27,6 +27,7 @@ from jarvis.orchestration_manager import OrchestrationConfig, OrchestrationManag
 from jarvis.security_manager import SecurityManager
 from jarvis.terminal_manager import TerminalManager
 from jarvis.tool_agent import ToolAgent, TaskPlanner
+from jarvis.self_improvement import SelfImprovement
 from jarvis.tool_manager import ToolManager
 from jarvis.workflow_engine import WorkflowEngine
 from jarvis.workspace_manager import WorkspaceManager
@@ -101,6 +102,7 @@ class JARVISBridge:
         self._chat = ChatManager(db) if db else None
         self._tools = ToolManager(workspace_root=workspace.get_roots()[0] if workspace and workspace.get_roots() else None)
         self._tool_agent: ToolAgent | None = None
+        self._si_instance: SelfImprovement | None = None
 
     # ========================================================================
     # Module handlers
@@ -778,7 +780,7 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
 
     _streams: dict[str, dict] = {}
 
-    def toolAgentExecuteStream(self, query: str, conv_id: str = "") -> dict:
+    def toolAgentExecuteStream(self, query: str, conv_id: str = "", history: list | None = None, agent_id: str = "") -> dict:
         task_id = str(uuid.uuid4())
         JARVISBridge._streams[task_id] = {
             "content": "",
@@ -794,11 +796,22 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
             try:
                 agent_model = ""
                 agent_provider = "ollama"
-                if self._agents:
+                agent_system = None
+
+                if agent_id and self._agents:
+                    agent = self._agents.get_agent(agent_id)
+                    if agent:
+                        agent_model = agent.model or ""
+                        agent_provider = getattr(agent, "provider", "ollama")
+                        if agent.system_prompt:
+                            agent_system = agent.system_prompt
+                elif self._agents:
                     default = self._agents.get_default_agent()
                     if default:
-                        agent_model = default.model
+                        agent_model = default.model or ""
                         agent_provider = getattr(default, "provider", "ollama")
+                        if default.system_prompt:
+                            agent_system = default.system_prompt
 
                 tool_calls_log: list[dict] = []
                 tool_results_log: list[dict] = []
@@ -815,7 +828,7 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                     tool_results_log.append(tr)
                     stream["toolResults"] = list(tool_results_log)
 
-                self._tool_agent = ToolAgent(
+                agent_instance = ToolAgent(
                     llm=self._llm,
                     tools=self._tools,
                     model=agent_model,
@@ -825,7 +838,26 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                     on_tool_result=on_tool_result,
                 )
 
-                result = self._tool_agent.execute(query)
+                if agent_system:
+                    agent_system += "\n\nAvailable tools:\n{tool_descriptions}\n\nCurrent workspace: {workspace}"
+                    if "{tool_descriptions}" not in agent_system:
+                        agent_system += "\n\n{tool_descriptions}\n\nCurrent workspace: {workspace}"
+
+                self._tool_agent = agent_instance
+
+                history_list = []
+                if history:
+                    for msg in history:
+                        role = msg.get("role", "user")
+                        content = msg.get("content", "")
+                        if role in ("user", "assistant") and content:
+                            history_list.append({"role": role, "content": content})
+
+                result = agent_instance.execute(
+                    query,
+                    history=history_list if history_list else None,
+                    system_override=agent_system,
+                )
                 stream["content"] = result.get("content", "")
                 stream["pendingQuestion"] = result.get("pendingQuestion")
                 stream["cancelled"] = result.get("cancelled", False)
@@ -929,6 +961,149 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
 
     def plannerResumeCheckpoint(self, plan_id: str) -> dict:
         return self.plannerExecuteStream("", resume_plan_id=plan_id)
+
+    # ========================================================================
+    # Self-Improvement (streaming)
+    # ========================================================================
+
+    _sistreams: dict[str, dict] = {}
+
+    def selfImprovementStream(self, action: str = "full_cycle") -> dict:
+        task_id = str(uuid.uuid4())
+        JARVISBridge._sistreams[task_id] = {
+            "step": "init",
+            "status": "starting",
+            "detail": "",
+            "progress": 0.0,
+            "pendingQuestion": None,
+            "done": False,
+            "error": None,
+        }
+
+        def _run():
+            try:
+                agent_model = self._model or ""
+                agent_provider = self._provider or "ollama"
+
+                si = SelfImprovement(
+                    llm=self._llm,
+                    tools=self._tools,
+                    model=agent_model,
+                    provider=agent_provider,
+                    on_token=lambda t: None,
+                    on_progress=lambda p: JARVISBridge._sistreams[task_id].update(p),
+                )
+
+                def _on_answer(qid: str, ans: str):
+                    si.answer_question(qid, ans)
+
+                self._si_instance = si
+
+                if action == "analyze":
+                    result = si.analyze()
+                    JARVISBridge._sistreams[task_id].update({
+                        "step": "analyze", "status": "completed",
+                        "detail": json.dumps(result, ensure_ascii=False)[:5000],
+                        "progress": 1.0, "done": True,
+                        "result": result,
+                    })
+                elif action == "propose_and_execute":
+                    proposal = si.analyze()
+                    if proposal.get("steps"):
+                        self._emit_si_progress(task_id, "proposal", "ready",
+                                               json.dumps(proposal, indent=2, ensure_ascii=False)[:5000])
+                        JARVISBridge._sistreams[task_id].update({
+                            "pendingQuestion": {
+                                "questionId": "si_proposal",
+                                "question": (
+                                    f"**Proposta de Melhoria**\n\n"
+                                    f"**{proposal.get('summary', 'N/A')}**\n"
+                                    f"Prioridade: {proposal.get('priority', 'N/A')}\n"
+                                    f"Passos: {len(proposal.get('steps', []))}\n"
+                                    f"{proposal.get('rationale', '')}\n\n"
+                                    f"Deseja executar? (sim/não)"
+                                ),
+                                "toolName": "self_improvement",
+                            }
+                        })
+                        si._answer_event = threading.Event()
+                        si._answer_data = None
+                        si._answer_event.wait(timeout=600)
+                        if si._cancelled:
+                            JARVISBridge._sistreams[task_id].update({
+                                "step": "cancelled", "status": "cancelled", "done": True,
+                            })
+                            return
+                        if si._answer_data and si._answer_data[1].strip().lower() in ("sim", "s", "yes", "y"):
+                            JARVISBridge._sistreams[task_id].update({"pendingQuestion": None})
+                            exec_result = si.execute_proposal(proposal)
+                            JARVISBridge._sistreams[task_id].update({
+                                "step": "executed", "status": "completed",
+                                "detail": json.dumps(exec_result, ensure_ascii=False)[:5000],
+                                "progress": 1.0, "done": True,
+                                "result": {"proposal": proposal, "execution": exec_result},
+                            })
+                        else:
+                            JARVISBridge._sistreams[task_id].update({
+                                "step": "rejected", "status": "completed", "done": True,
+                            })
+                    else:
+                        JARVISBridge._sistreams[task_id].update({
+                            "step": "failed", "status": "error", "done": True,
+                            "error": "No improvement steps generated",
+                        })
+                else:
+                    result = si.full_cycle()
+                    JARVISBridge._sistreams[task_id].update({
+                        "step": "completed", "status": "completed",
+                        "detail": json.dumps(result, ensure_ascii=False)[:5000],
+                        "progress": 1.0, "done": True,
+                        "result": result,
+                    })
+
+            except Exception as e:
+                logger.exception("selfImprovementStream failed")
+                JARVISBridge._sistreams[task_id]["error"] = str(e)
+            finally:
+                JARVISBridge._sistreams[task_id]["done"] = True
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        return {"taskId": task_id}
+
+    def _emit_si_progress(self, task_id: str, step: str, status: str, detail: str, progress: float = 0.0):
+        JARVISBridge._sistreams[task_id].update({
+            "step": step, "status": status, "detail": detail, "progress": progress,
+        })
+
+    def selfImprovementGetStream(self, task_id: str) -> dict:
+        stream = JARVISBridge._sistreams.get(task_id)
+        if not stream:
+            return {"done": True, "error": "Task not found"}
+        d = dict(stream)
+        if "result" in d:
+            del d["result"]
+        return d
+
+    def selfImprovementAnswer(self, question_id: str, answer: str) -> dict:
+        try:
+            if self._si_instance:
+                self._si_instance.answer_question(question_id, answer)
+                return {"success": True}
+            return {"success": False, "error": "No active improvement session"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def selfImprovementCancel(self, task_id: str) -> dict:
+        try:
+            if self._si_instance:
+                self._si_instance.cancel()
+            if task_id and task_id in JARVISBridge._sistreams:
+                JARVISBridge._sistreams[task_id]["done"] = True
+                JARVISBridge._sistreams[task_id]["cancelled"] = True
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     # ========================================================================
     # Knowledge handlers

@@ -213,7 +213,8 @@ export function AiPanel({ fullView }: AiPanelProps) {
     updateMessages(activeConvId, msgs => [...msgs, { role: 'assistant', content: '', toolCalls: [], toolResults: [] }]);
 
     try {
-      const stream = await bridge.toolAgentExecuteStream(text, activeConvId);
+      const history = activeConv?.messages.slice(0, -1).map(m => ({ role: m.role, content: m.content })) || [];
+      const stream = await bridge.toolAgentExecuteStream(text, activeConvId, history, selectedAgentId || undefined);
       streamTaskRef.current = stream.taskId;
 
       let pendingQuestionResult: PendingQuestion | null = null;
@@ -630,11 +631,42 @@ export function AiPanel({ fullView }: AiPanelProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             className="flex justify-start"
           >
-            <div className="max-w-[90%] space-y-2 w-full">
-              <div className="bg-amber-950/20 text-amber-400 border border-amber-900/40 rounded-xl rounded-bl-sm px-3.5 py-2.5 text-sm">
-                <div className="font-semibold text-xs mb-1">🤖 O agente precisa de sua resposta:</div>
-                <div>{pendingQuestion.question}</div>
-              </div>
+            <div className="max-w-[90%] space-y-3 w-full">
+              {pendingQuestion.toolName && pendingQuestion.toolName !== 'ask_user' ? (
+                <div className="bg-amber-950/20 border border-amber-900/40 rounded-xl px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 text-xs font-bold">!</span>
+                    <span className="text-sm font-semibold text-amber-400">Permissão Necessária</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 text-xs">
+                    <span className="text-amber-400/60">Ferramenta:</span>
+                    <span className="text-amber-200 font-mono">{pendingQuestion.toolName}</span>
+                    {(pendingQuestion.question.match(/`([^`]+)`/g) || []).slice(0, 3).map((_, i) => (
+                      <span key={i} className="text-amber-400/60 truncate">{i === 0 ? 'Argumentos:' : ''}</span>
+                    ))}
+                  </div>
+                  <p className="text-xs text-amber-300/80">{pendingQuestion.question}</p>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => { setAnswerInput('sim'); handleAnswer(); }}
+                      className="px-3 py-1.5 rounded-lg bg-green-600/80 text-white text-xs font-medium hover:bg-green-600 transition-colors"
+                    >
+                      ✓ Permitir
+                    </button>
+                    <button
+                      onClick={() => { setAnswerInput('não'); handleAnswer(); }}
+                      className="px-3 py-1.5 rounded-lg bg-destructive/80 text-white text-xs font-medium hover:bg-destructive transition-colors"
+                    >
+                      ✕ Negar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-amber-950/20 text-amber-400 border border-amber-900/40 rounded-xl rounded-bl-sm px-3.5 py-2.5 text-sm">
+                  <div className="font-semibold text-xs mb-1">🤖 O agente precisa de sua resposta:</div>
+                  <div className="whitespace-pre-wrap">{pendingQuestion.question}</div>
+                </div>
+              )}
               <div className="flex gap-2">
                 <input
                   type="text"

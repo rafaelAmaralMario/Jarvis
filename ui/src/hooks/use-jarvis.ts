@@ -11,7 +11,7 @@ import type {
   PermissionInfo, AuditEntry, SecretInfo, ModelServerStatus, UpdateStatus,
   ConversationSummary, ChatMessage,
   ToolDefinition, ToolCallResult, ToolAgentResponse, ToolAgentAnswerResult,
-  StreamTask, StreamState, TaskPlannerResult, PlannerProgress, PlannerCheckpoint,
+  StreamTask, StreamState, SIProgress, TaskPlannerResult, PlannerProgress, PlannerCheckpoint,
 } from '@/types';
 
 declare global {
@@ -283,7 +283,7 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     toolsSetWorkspace: (path) => send('toolsSetWorkspace', path) as Promise<boolean>,
     toolAgentExecute: (query, convId) => send('toolAgentExecute', query, convId) as Promise<ToolAgentResponse>,
     toolAgentAnswer: (questionId, answer) => send('toolAgentAnswer', questionId, answer) as Promise<ToolAgentAnswerResult>,
-    toolAgentExecuteStream: (query, convId) => send('toolAgentExecuteStream', query, convId) as Promise<StreamTask>,
+    toolAgentExecuteStream: (query, convId, history, agentId) => send('toolAgentExecuteStream', query, convId, history, agentId) as Promise<StreamTask>,
     toolAgentGetStream: (taskId) => send('toolAgentGetStream', taskId) as Promise<StreamState>,
     taskPlannerExecute: (query, resume) => send('taskPlannerExecute', query, resume) as Promise<TaskPlannerResult>,
     plannerExecuteStream: (query, resumePlanId) => send('plannerExecuteStream', query, resumePlanId) as Promise<{ taskId: string }>,
@@ -291,6 +291,11 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     plannerCancel: (taskId) => send('plannerCancel', taskId) as Promise<{ success: boolean }>,
     plannerListCheckpoints: () => send('plannerListCheckpoints') as Promise<PlannerCheckpoint[]>,
     plannerResumeCheckpoint: (planId) => send('plannerResumeCheckpoint', planId) as Promise<{ taskId: string }>,
+
+    selfImprovementStream: (action) => send('selfImprovementStream', action) as Promise<StreamTask>,
+    selfImprovementGetStream: (taskId) => send('selfImprovementGetStream', taskId) as Promise<SIProgress>,
+    selfImprovementAnswer: (questionId, answer) => send('selfImprovementAnswer', questionId, answer) as Promise<{ success: boolean }>,
+    selfImprovementCancel: (taskId) => send('selfImprovementCancel', taskId) as Promise<{ success: boolean }>,
 
     copyToClipboard: (text) => send('copyToClipboard', text) as Promise<boolean>,
     revealInExplorer: (path) => send('revealInExplorer', path) as Promise<boolean>,

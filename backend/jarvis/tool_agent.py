@@ -16,7 +16,7 @@ from jarvis.tool_manager import ToolManager, ToolResult, RiskLevel
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_TOOL_AGENT_SYSTEM = """You are **JARVIS Computer Use Agent**, an autonomous AI assistant that can interact with the user's computer.
+_DEFAULT_TOOL_AGENT_SYSTEM = """You are **JARVIS Computer Use Agent**, an autonomous AI assistant that can interact with the user's computer and execute tasks using tools.
 
 You have access to the following tools:
 
@@ -24,27 +24,26 @@ You have access to the following tools:
 
 ## How to use tools
 
-When you need to use a tool, respond with a JSON block:
+When you need to use a tool, respond with a tool call JSON block.
+The ONLY format accepted is:
 
 ```json
-{{
-  "tool": "tool_name",
-  "args": {{
-    "param1": "value1"
-  }}
-}}
+{{"tool": "tool_name", "args": {{"param1": "value1"}}}}
 ```
 
-You will receive the tool's output and can decide what to do next.
+Place this JSON block on its own line. Do NOT nest it inside other JSON.
+After calling a tool, you will receive its output and can decide what to do next.
 
-## Guidelines
+## Critical Rules
 
-1. **Plan first**: Think about what needs to be done before choosing tools.
-2. **Use tools liberally**: Read files before editing, check git status before committing.
-3. **Ask the user**: Use `ask_user` when you need clarification or approval for dangerous operations.
-4. **Show your work**: Explain what you're doing and why.
-5. **Handle errors gracefully**: If a tool fails, try a different approach.
-6. **Complete the task**: Don't stop until the user's request is fully satisfied.
+1. **USE TOOLS TO GET THINGS DONE.** Do not just describe what needs to be done — actually do it using tools.
+2. **Read files before editing them.** Use `read_file` to understand existing code before `write_file`.
+3. **Run commands to verify.** After creating/modifying files, use `execute_command` to run tests or lint.
+4. **Respond in natural language between tool calls.** Explain what you're about to do.
+5. **One tool call per response.** Do NOT output multiple JSON blocks. Wait for the result before the next call.
+6. **Never simulate tool execution.** Always use the actual tool. If a tool fails, try a different approach.
+7. **Handle errors gracefully.** If `execute_command` fails, check the error and fix the issue.
+8. **Complete the task fully.** Do not stop until the user's request is fully satisfied.
 
 Current workspace: {workspace}
 """
@@ -99,15 +98,23 @@ class ToolAgent:
         self._cancelled = True
         self._answer_event.set()
 
-    def execute(self, query: str) -> dict:
+    def execute(self, query: str, history: list[dict] | None = None, system_override: str | None = None) -> dict:
         workspace = self._tools.workspace_root or "Not set"
         tool_descriptions = self._format_tool_descriptions()
 
-        self._messages = [{"role": "user", "content": query}]
-        self._system = _DEFAULT_TOOL_AGENT_SYSTEM.format(
-            tool_descriptions=tool_descriptions,
-            workspace=workspace,
-        )
+        self._messages = list(history) if history else []
+        self._messages.append({"role": "user", "content": query})
+
+        if system_override:
+            self._system = system_override.format(
+                tool_descriptions=tool_descriptions,
+                workspace=workspace,
+            )
+        else:
+            self._system = _DEFAULT_TOOL_AGENT_SYSTEM.format(
+                tool_descriptions=tool_descriptions,
+                workspace=workspace,
+            )
         self._tool_rounds = 0
         self._full_response = ""
 
@@ -309,26 +316,20 @@ class ToolAgent:
         return "\n".join(lines)
 
     def _extract_tool_call(self, text: str) -> dict[str, Any] | None:
-        json_pattern = r'```(?:json)?\s*\n?(\{[\s\S]*?"tool"[\s\S]*?\})\n?\s*```'
-        match = re.search(json_pattern, text)
-        if match:
-            try:
-                data = json.loads(match.group(1))
-                if "tool" in data:
-                    return data
-            except json.JSONDecodeError:
-                pass
-
-        brace_pattern = r'\{[\s\S]*?"tool"[\s\S]*?\}'
-        match = re.search(brace_pattern, text)
-        if match:
-            try:
-                data = json.loads(match.group(0))
-                if "tool" in data:
-                    return data
-            except json.JSONDecodeError:
-                pass
-
+        patterns = [
+            r'```(?:json)?\s*\n?(\{[\s\S]*?"tool"[\s\S]*?\})\n?\s*```',
+            r'`({.*?"tool".*?})`',
+            r'\{[\s\S]*?"tool"[\s\S]*?"args"[\s\S]*?\}',
+        ]
+        for pat in patterns:
+            match = re.search(pat, text)
+            if match:
+                try:
+                    data = json.loads(match.group(1) if match.lastindex else match.group(0))
+                    if isinstance(data, dict) and "tool" in data:
+                        return data
+                except (json.JSONDecodeError, KeyError):
+                    continue
         return None
 
 

@@ -26,6 +26,10 @@ interface MockBridge {
   toolsSetWorkspace: ReturnType<typeof vi.fn>;
   toolAgentExecute: ReturnType<typeof vi.fn>;
   toolAgentAnswer: ReturnType<typeof vi.fn>;
+  selfImprovementStream: ReturnType<typeof vi.fn>;
+  selfImprovementGetStream: ReturnType<typeof vi.fn>;
+  selfImprovementAnswer: ReturnType<typeof vi.fn>;
+  selfImprovementCancel: ReturnType<typeof vi.fn>;
   taskPlannerExecute: ReturnType<typeof vi.fn>;
   plannerExecuteStream: ReturnType<typeof vi.fn>;
   plannerGetProgress: ReturnType<typeof vi.fn>;
@@ -74,6 +78,10 @@ export const mockBridge: MockBridge = {
   toolsSetWorkspace: vi.fn().mockResolvedValue(true),
   toolAgentExecute: vi.fn().mockResolvedValue({ success: true, output: 'mock agent output' }),
   toolAgentAnswer: vi.fn().mockResolvedValue({ success: true, content: 'mock answer result' }),
+  selfImprovementStream: vi.fn().mockResolvedValue({ taskId: 'mock-si-task' }),
+  selfImprovementGetStream: vi.fn().mockResolvedValue({ step: 'completed', status: 'completed', detail: '', progress: 1.0, cancelled: false, done: true, error: null }),
+  selfImprovementAnswer: vi.fn().mockResolvedValue({ success: true }),
+  selfImprovementCancel: vi.fn().mockResolvedValue({ success: true }),
   taskPlannerExecute: vi.fn().mockResolvedValue({
     success: true,
     task: 'mock task',
