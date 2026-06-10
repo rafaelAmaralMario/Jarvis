@@ -98,6 +98,34 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
         id: 'open-project', label: 'Abrir Projeto...', icon: '📂',
         onClick: () => onOpenProject?.(),
       });
+      items.push({ id: 'divider-ai-root', label: '', divider: true, onClick: () => {} });
+      items.push({
+        id: 'analyze-project', label: 'Analisar Projeto', icon: '📊',
+        onClick: () => {
+          const root = roots?.[0] || '';
+          window.dispatchEvent(new CustomEvent('jarvis:send-to-chat', {
+            detail: { message: `Analise o projeto em ${root}. Resuma a arquitetura, tecnologias usadas, e sugira melhorias.` }
+          }));
+        },
+      });
+      items.push({
+        id: 'suggest-features', label: 'Suggest Features', icon: '💡',
+        onClick: () => {
+          const root = roots?.[0] || '';
+          window.dispatchEvent(new CustomEvent('jarvis:send-to-chat', {
+            detail: { message: `Analise o projeto em ${root} e sugira novas features baseadas no código existente. Crie um arquivo SUGGESTIONS.md com as recomendações.` }
+          }));
+        },
+      });
+      items.push({
+        id: 'create-env', label: 'Criar .env.example', icon: '🔐',
+        onClick: () => {
+          const root = roots?.[0] || '';
+          window.dispatchEvent(new CustomEvent('jarvis:send-to-chat', {
+            detail: { message: `Analise o projeto em ${root} e crie um arquivo .env.example com todas as variáveis de ambiente necessárias baseadas no código fonte.` }
+          }));
+        },
+      });
       return items;
     }
 
@@ -119,6 +147,39 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
         id: 'delete', label: 'Excluir', icon: '✕', danger: true,
         onClick: () => { if (confirm(`Delete "${entry.name}"?`)) onDeleteFile(entry.path); },
       });
+      items.push({ id: 'divider-ai-dir', label: '', divider: true, onClick: () => {} });
+      items.push({
+        id: 'review-project', label: 'Revisar Projeto', icon: '🔍',
+        onClick: () => {
+          window.dispatchEvent(new CustomEvent('jarvis:send-to-chat', {
+            detail: { message: `Revise o projeto em ${entry.path}. Analise a estrutura, padrões de código, e sugira melhorias.` }
+          }));
+        },
+      });
+      items.push({
+        id: 'create-tests', label: 'Criar Testes', icon: '🧪',
+        onClick: () => {
+          window.dispatchEvent(new CustomEvent('jarvis:send-to-chat', {
+            detail: { message: `Crie testes para os arquivos em ${entry.path}. Siga os padrões de teste existentes no projeto.` }
+          }));
+        },
+      });
+      items.push({
+        id: 'create-docs', label: 'Criar Documentação', icon: '📝',
+        onClick: () => {
+          window.dispatchEvent(new CustomEvent('jarvis:send-to-chat', {
+            detail: { message: `Crie documentação para o código em ${entry.path}. Inclua README, comentários de API, e exemplos de uso.` }
+          }));
+        },
+      });
+      items.push({
+        id: 'refactor', label: 'Refatorar', icon: '🔧',
+        onClick: () => {
+          window.dispatchEvent(new CustomEvent('jarvis:send-to-chat', {
+            detail: { message: `Refatore o código em ${entry.path}. Melhore a legibilidade, remova duplicação, e aplique boas práticas.` }
+          }));
+        },
+      });
     } else {
       items.push({
         id: 'open', label: 'Abrir', icon: '▶',
@@ -132,6 +193,15 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
       items.push({
         id: 'delete', label: 'Excluir', icon: '✕', danger: true,
         onClick: () => { if (confirm(`Delete "${entry.name}"?`)) onDeleteFile(entry.path); },
+      });
+      items.push({ id: 'divider-ai-file', label: '', divider: true, onClick: () => {} });
+      items.push({
+        id: 'send-to-chat', label: 'Enviar para o Chat', icon: '💬',
+        onClick: () => {
+          window.dispatchEvent(new CustomEvent('jarvis:send-to-chat', {
+            detail: { message: `Analise o arquivo ${entry.path}:\n\n\`\`\`\n${entry.path}\n\`\`\`\n\nExplique o que este arquivo faz e sugira melhorias.` }
+          }));
+        },
       });
     }
 

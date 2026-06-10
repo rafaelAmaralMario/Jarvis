@@ -25,9 +25,20 @@ export function App() {
       e.preventDefault();
     };
     window.addEventListener('contextmenu', preventContext);
+
+    const viewHandler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.view) setActiveView(detail.view as ActivityView);
+      if (detail?.message) {
+        setActiveView('ai');
+      }
+    };
+    window.addEventListener('jarvis:send-to-chat', viewHandler);
+
     return () => {
       window.removeEventListener('keydown', handler);
       window.removeEventListener('contextmenu', preventContext);
+      window.removeEventListener('jarvis:send-to-chat', viewHandler);
     };
   }, []);
 

@@ -125,6 +125,17 @@ export function AiPanel({ fullView }: AiPanelProps) {
   }, [activeConvId]);
 
   useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.message) {
+        setInput(detail.message);
+      }
+    };
+    window.addEventListener('jarvis:send-to-chat', handler);
+    return () => window.removeEventListener('jarvis:send-to-chat', handler);
+  }, []);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeConv?.messages, loading]);
 
