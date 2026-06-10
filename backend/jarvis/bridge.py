@@ -166,10 +166,8 @@ class JARVISBridge:
         except Exception as e:
             msg = str(e)
             if "connection" in msg.lower() or "refused" in msg.lower():
-                logger.warning(
-                    "Ollama server não está rodando. "
-                    "Inicie com 'ollama serve' ou pela interface Settings -> Models."
-                )
+                logger.warning("Ollama não respondeu — tentando iniciar servidor...")
+                self.startModelServer()
             else:
                 logger.warning("listModels failed: %s", msg)
             return []
@@ -1846,7 +1844,14 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                     pid = int(result.stdout.strip().split("\n")[0])
 
             if process_found:
-                ping_ok = OllamaClient().ping()
+                try:
+                    ping_client = OllamaClient()
+                    ping_client._client.timeout = httpx.Timeout(3.0)
+                    ping_ok = ping_client.ping()
+                    ping_client.close()
+                except Exception:
+                    ping_ok = False
+
                 if ping_ok:
                     status["running"] = True
                     status["pid"] = pid
@@ -1862,21 +1867,34 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                     os.path.expandvars(r"%LOCALAPPDATA%\Programs\Ollama\ollama.exe"),
                     os.path.expandvars(r"%PROGRAMFILES%\Ollama\ollama.exe"),
                     os.path.expandvars(r"%PROGRAMFILES(X86)%\Ollama\ollama.exe"),
+                    os.path.expandvars(r"%USERPROFILE%\AppData\Local\Programs\Ollama\ollama.exe"),
                 ]
                 for p in paths:
                     if os.path.exists(p):
-                        status["command"] = f'"{p}" serve'
+                        status["command"] = p
                         break
                 else:
-                    status["command"] = "ollama serve"
+                    status["command"] = self._find_ollama_in_path()
             else:
-                status["command"] = "ollama serve"
+                status["command"] = self._find_ollama_in_path()
 
         except Exception as e:
             status["error"] = str(e)
-            status["command"] = "ollama serve"
+            status["command"] = self._find_ollama_in_path()
 
         return status
+
+    def _find_ollama_in_path(self) -> str:
+        try:
+            result = subprocess.run(
+                ["where" if sys.platform == "win32" else "which", "ollama"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.stdout.strip():
+                return result.stdout.strip().split("\n")[0]
+        except Exception:
+            pass
+        return "ollama serve"
 
     def startModelServer(self) -> bool:
         try:
@@ -1886,16 +1904,16 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
             cmd = status.get("command", "ollama serve")
             if sys.platform == "win32":
                 subprocess.Popen(
-                    ["powershell", "-NoProfile", "-Command",
-                     f"Start-Process -WindowStyle Hidden '{cmd}'"],
-                    shell=True,
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
                 )
             else:
                 subprocess.Popen(
-                    cmd.split() if " " not in cmd else cmd,
+                    [cmd] if " " not in cmd else cmd.split(),
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
-                    shell=True,
                 )
             return True
         except Exception as e:

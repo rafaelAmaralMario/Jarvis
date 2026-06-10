@@ -206,9 +206,17 @@ export function AiPanel({ fullView }: AiPanelProps) {
       streamTaskRef.current = stream.taskId;
 
       let pendingQuestionResult: PendingQuestion | null = null;
+      const startTime = Date.now();
+      const POLL_TIMEOUT = 180_000;
 
       // Poll for stream state
       while (true) {
+        if (Date.now() - startTime > POLL_TIMEOUT) {
+          bridge.cancelGeneration();
+          setError('Tempo limite excedido (3 min). A resposta foi interrompida.');
+          break;
+        }
+
         const state = await bridge.toolAgentGetStream(stream.taskId);
 
         // Update the placeholder message

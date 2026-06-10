@@ -61,7 +61,11 @@ export function StatusBar({ moduleCount, modelName }: StatusBarProps) {
           v{latestVersion} disponível
         </motion.a>
       )}
-      <span className="flex items-center gap-1.5 mr-2">
+      <span
+        className="flex items-center gap-1.5 mr-2 cursor-pointer hover:opacity-80 transition-opacity"
+        onClick={() => { if (!serverStatus?.running) window.location.hash = '#settings/models'; }}
+        title={serverStatus?.error || (serverStatus?.running ? `PID ${serverStatus.pid}` : 'Clique para configurar')}
+      >
         <span className={`w-1.5 h-1.5 rounded-full ${serverStatus?.running ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
         <span className={serverStatus?.running ? 'text-green-200' : 'text-red-200'}>
           Ollama {serverStatus?.running ? 'on' : 'off'}

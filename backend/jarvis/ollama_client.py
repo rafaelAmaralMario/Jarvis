@@ -38,12 +38,12 @@ class OllamaError(Exception):
 
 
 class OllamaClient:
-    def __init__(self, base_url: str = "http://localhost:11434"):
+    def __init__(self, base_url: str = "http://localhost:11434", timeout: float = 120.0):
         base_url = base_url or "http://localhost:11434"
         if base_url.endswith("/"):
             base_url = base_url[:-1]
         self._base_url = base_url
-        self._client = httpx.Client(base_url=base_url, timeout=30.0)
+        self._client = httpx.Client(base_url=base_url, timeout=timeout)
 
     def close(self) -> None:
         self._client.close()
