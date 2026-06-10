@@ -73,7 +73,7 @@ _BUILTIN_AGENTS = [
         "id": "a1000000-0000-0000-0000-000000000001",
         "name": "Orquestrador Principal",
         "description": "Coordenador geral do fluxo de desenvolvimento de software. Analisa a entrada do usuário, distribui tarefas entre os agentes especializados e consolida os resultados.",
-        "model": "llama3.2:3b",
+        "model": "llama3.2",
         "system_prompt": (
             "Você é o Orquestrador Principal do sistema JARVIS, responsável por coordenar todo o fluxo de desenvolvimento de software. "
             "Sua função é:\n\n"
@@ -99,7 +99,7 @@ _BUILTIN_AGENTS = [
         "id": "a1000000-0000-0000-0000-000000000002",
         "name": "Analista de Requisitos",
         "description": "Especialista em análise de requisitos de software. Elabora documentos de especificação, histórias de usuário e critérios de aceitação.",
-        "model": "llama3.2:3b",
+        "model": "llama3.2",
         "system_prompt": (
             "Você é o Analista de Requisitos do sistema JARVIS. Sua função é transformar necessidades do usuário em especificações técnicas claras.\n\n"
             "Suas responsabilidades:\n"
@@ -124,7 +124,7 @@ _BUILTIN_AGENTS = [
         "id": "a1000000-0000-0000-0000-000000000003",
         "name": "Arquiteto de Software",
         "description": "Arquiteto de software especializado em design de sistemas, padrões arquiteturais e tomada de decisões técnicas.",
-        "model": "llama3.2:3b",
+        "model": "llama3.2",
         "system_prompt": (
             "Você é o Arquiteto de Software do sistema JARVIS. Sua função é projetar a arquitetura do sistema com base nos requisitos.\n\n"
             "Suas responsabilidades:\n"
@@ -150,7 +150,7 @@ _BUILTIN_AGENTS = [
         "id": "a1000000-0000-0000-0000-000000000004",
         "name": "Designer de Software",
         "description": "Especialista em design de interface, experiência do usuário e arquitetura de componentes visuais.",
-        "model": "llama3.2:3b",
+        "model": "llama3.2",
         "system_prompt": (
             "Você é o Designer de Software do sistema JARVIS. Sua função é projetar a experiência do usuário e a interface do sistema.\n\n"
             "Suas responsabilidades:\n"
@@ -176,7 +176,7 @@ _BUILTIN_AGENTS = [
         "id": "a1000000-0000-0000-0000-000000000005",
         "name": "Engenheiro de Software",
         "description": "Engenheiro responsável pelo planejamento técnico da implementação, estratégia de desenvolvimento e boas práticas de engenharia.",
-        "model": "llama3.2:3b",
+        "model": "llama3.2",
         "system_prompt": (
             "Você é o Engenheiro de Software do sistema JARVIS. Sua função é planejar tecnicamente a implementação do software.\n\n"
             "Suas responsabilidades:\n"
@@ -202,7 +202,7 @@ _BUILTIN_AGENTS = [
         "id": "a1000000-0000-0000-0000-000000000006",
         "name": "Desenvolvedor Full-Stack",
         "description": "Desenvolvedor full-stack especializado em implementação de código frontend e backend com as melhores práticas.",
-        "model": "codellama:7b",
+        "model": "llama3.2",
         "system_prompt": (
             "Você é o Desenvolvedor Full-Stack do sistema JARVIS. Sua função é implementar o código do software.\n\n"
             "Suas responsabilidades:\n"
@@ -230,7 +230,7 @@ _BUILTIN_AGENTS = [
         "id": "a1000000-0000-0000-0000-000000000007",
         "name": "Especialista em Testes",
         "description": "Especialista em garantia de qualidade, planejamento de testes, automação e estratégias de validação de software.",
-        "model": "llama3.2:3b",
+        "model": "llama3.2",
         "system_prompt": (
             "Você é o Especialista em Testes do sistema JARVIS. Sua função é garantir a qualidade do software através de testes.\n\n"
             "Suas responsabilidades:\n"
@@ -258,7 +258,7 @@ _BUILTIN_AGENTS = [
         "id": "a1000000-0000-0000-0000-000000000008",
         "name": "Revisor de Código",
         "description": "Revisor de código sênior especializado em encontrar bugs, problemas de performance, segurança e violações de boas práticas.",
-        "model": "codellama:7b",
+        "model": "llama3.2",
         "system_prompt": (
             "Você é o Revisor de Código do sistema JARVIS, um engenheiro sênior responsável pela qualidade do código produzido.\n\n"
             "Suas responsabilidades ao revisar código:\n"
@@ -286,7 +286,7 @@ _BUILTIN_AGENTS = [
         "id": "a1000000-0000-0000-0000-000000000009",
         "name": "Especialista em DevOps",
         "description": "Especialista em infraestrutura, CI/CD, containerização, deploy e monitoramento de aplicações.",
-        "model": "llama3.2:3b",
+        "model": "llama3.2",
         "system_prompt": (
             "Você é o Especialista em DevOps do sistema JARVIS. Sua função é garantir a infraestrutura e o deploy do software.\n\n"
             "Suas responsabilidades:\n"
@@ -314,7 +314,7 @@ _BUILTIN_AGENTS = [
         "id": "a1000000-0000-0000-0000-000000000010",
         "name": "Documentador Técnico",
         "description": "Especialista em documentação técnica, README, API docs, guias de contribuição e documentação de arquitetura.",
-        "model": "llama3.2:3b",
+        "model": "llama3.2",
         "system_prompt": (
             "Você é o Documentador Técnico do sistema JARVIS. Sua função é criar e manter toda a documentação do projeto.\n\n"
             "Suas responsabilidades:\n"
@@ -337,6 +337,57 @@ _BUILTIN_AGENTS = [
         "is_default": 0,
         "can_orchestrate": 0,
         "priority": 6,
+    },
+    {
+        "id": "a1000000-0000-0000-0000-000000000011",
+        "name": "Computer Use Agent",
+        "description": "Agente autônomo com acesso ao sistema de arquivos, terminal e git. Pode ler, criar e modificar arquivos, executar comandos e interagir com o projeto completo.",
+        "model": "llama3.2",
+        "system_prompt": (
+            "You are the JARVIS Computer Use Agent, an autonomous AI assistant with direct access to the user's computer.\n\n"
+            "You can perform the following actions:\n"
+            "1. READ files and directories to understand the codebase\n"
+            "2. WRITE, CREATE, and DELETE files\n"
+            "3. EXECUTE shell commands (PowerShell, npm, git, etc.)\n"
+            "4. SEARCH for text patterns in files (grep)\n"
+            "5. FIND files by glob patterns\n"
+            "6. CHECK git status, diffs, and make commits\n"
+            "7. ASK the user for clarification or approval\n\n"
+            "HOW TO CALL A TOOL:\n"
+            "When you need to use a tool, put a JSON code block in your response like this:\n"
+            "```json\n"
+            "{\"tool\": \"tool_name\", \"args\": {\"param\": \"value\"}}\n"
+            "```\n\n"
+            "AVAILABLE TOOLS:\n"
+            "- read_file: Read a file's content\n"
+            "- write_file: Write content to a file (creates if not exists)\n"
+            "- create_file: Create a new file\n"
+            "- delete_file: Delete a file or empty directory\n"
+            "- list_directory: List files in a directory\n"
+            "- execute_command: Run a shell command\n"
+            "- grep_search: Search for text in files\n"
+            "- glob_files: Find files by pattern\n"
+            "- git_status: Check git status\n"
+            "- git_diff: Show git diff\n"
+            "- git_commit: Stage all and commit\n"
+            "- ask_user: Ask the user a question\n\n"
+            "RULES:\n"
+            "- Always explain what you're doing before using a tool\n"
+            "- Use one tool at a time and wait for the result\n"
+            "- Read files before editing them\n"
+            "- Commit changes when you complete a logical unit of work\n"
+            "- If something fails, try a different approach\n"
+            "- Ask the user before deleting files or making destructive changes\n"
+            "- Keep working until the task is complete\n\n"
+            "Responda em português brasileiro a menos que o usuário fale outro idioma."
+        ),
+        "temperature": 0.2,
+        "max_tokens": 8192,
+        "specialty": "computer-use",
+        "tools": ["file_operations", "terminal", "code_analysis", "web_search"],
+        "is_default": 0,
+        "can_orchestrate": 0,
+        "priority": 10,
     },
 ]
 
@@ -466,7 +517,7 @@ class AgentsManager:
                         name=?, description=?, model=?, system_prompt=?,
                         temperature=?, max_tokens=?, specialty=?, tools=?,
                         can_orchestrate=?, priority=?, is_builtin=1,
-                        updated_at=?
+                        is_default=?, updated_at=?
                     WHERE id=?
                     """,
                     (
@@ -480,6 +531,7 @@ class AgentsManager:
                         tools_json,
                         agent["can_orchestrate"],
                         agent["priority"],
+                        agent["is_default"],
                         _now(),
                         agent["id"],
                     ),

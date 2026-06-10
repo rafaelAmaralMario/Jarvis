@@ -5,10 +5,13 @@ import logging
 import os
 import subprocess
 import sys
+import threading
+import uuid
 from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from jarvis.agents_manager import AgentsManager, CreateAgentDTO
+from jarvis.chat_manager import ChatManager
 from jarvis.database import Database
 from jarvis.editor_manager import EditorManager
 from jarvis.git_manager import GitManager
@@ -23,21 +26,28 @@ from jarvis.ollama_client import OllamaClient
 from jarvis.orchestration_manager import OrchestrationConfig, OrchestrationManager
 from jarvis.security_manager import SecurityManager
 from jarvis.terminal_manager import TerminalManager
+from jarvis.tool_agent import ToolAgent
+from jarvis.tool_manager import ToolManager
 from jarvis.workflow_engine import WorkflowEngine
 from jarvis.workspace_manager import WorkspaceManager
 
 logger = logging.getLogger(__name__)
 
 
+def _snake_to_camel(name: str) -> str:
+    parts = name.split("_")
+    return parts[0] + "".join(p.capitalize() for p in parts[1:])
+
+
 def _serialize(obj: Any) -> Any:
     if obj is None:
         return None
     if is_dataclass(obj):
-        return {k: _serialize(v) for k, v in asdict(obj).items()}
+        return {_snake_to_camel(k): _serialize(v) for k, v in asdict(obj).items()}
     if isinstance(obj, list):
         return [_serialize(item) for item in obj]
     if isinstance(obj, dict):
-        return {k: _serialize(v) for k, v in obj.items()}
+        return {_snake_to_camel(k): _serialize(v) for k, v in obj.items()}
     if isinstance(obj, Enum):
         return obj.value
     return obj
@@ -87,6 +97,10 @@ class JARVISBridge:
         self._mcp = mcp
         self._workflows = workflows
         self._security = security
+        self._db = db
+        self._chat = ChatManager(db) if db else None
+        self._tools = ToolManager(workspace_root=workspace.get_roots()[0] if workspace and workspace.get_roots() else None)
+        self._tool_agent: ToolAgent | None = None
 
     # ========================================================================
     # Module handlers
@@ -479,7 +493,10 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
         if not self._workspace:
             return False
         try:
-            return self._workspace.open_workspace(path)
+            result = self._workspace.open_workspace(path)
+            if result:
+                self._tools.set_workspace_root(path)
+            return result
         except Exception as e:
             logger.warning("openWorkspace(%s) failed: %s", path, e)
             return False
@@ -488,7 +505,10 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
         if not self._workspace:
             return False
         try:
-            return self._workspace.add_root(path)
+            result = self._workspace.add_root(path)
+            if result:
+                self._tools.set_workspace_root(path)
+            return result
         except Exception as e:
             logger.warning("addRoot(%s) failed: %s", path, e)
             return False
@@ -593,7 +613,240 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
             return None
 
     def cancelGeneration(self) -> bool:
-        return True
+        try:
+            if self._tool_agent:
+                self._tool_agent.cancel()
+                return True
+            return True
+        except Exception as e:
+            logger.warning("cancelGeneration failed: %s", e)
+            return False
+
+    # ========================================================================
+    # Chat handlers (persistent conversations)
+    # ========================================================================
+
+    def chatListConversations(self) -> list:
+        if not self._chat:
+            return []
+        try:
+            return _serialize(self._chat.list_conversations())
+        except Exception as e:
+            logger.warning("chatListConversations failed: %s", e)
+            return []
+
+    def chatGetMessages(self, conv_id: str) -> list:
+        if not self._chat:
+            return []
+        try:
+            return _serialize(self._chat.get_messages(conv_id))
+        except Exception as e:
+            logger.warning("chatGetMessages(%s) failed: %s", conv_id, e)
+            return []
+
+    def chatCreateConversation(self, title: str = "Nova conversa", agent_id: str = "", model: str = "") -> dict:
+        if not self._chat:
+            return {}
+        try:
+            return _serialize(self._chat.create_conversation(title, agent_id or None, model))
+        except Exception as e:
+            logger.warning("chatCreateConversation failed: %s", e)
+            return {}
+
+    def chatSaveMessage(self, conv_id: str, role: str, content: str, agent_id: str = "", model: str = "", tokens_used: int = 0, latency_ms: int = 0) -> dict:
+        if not self._chat:
+            return {}
+        try:
+            return _serialize(self._chat.save_message(conv_id, role, content, agent_id or None, model or None, tokens_used, latency_ms))
+        except Exception as e:
+            logger.warning("chatSaveMessage failed: %s", e)
+            return {}
+
+    def chatDeleteConversation(self, conv_id: str) -> bool:
+        if not self._chat:
+            return False
+        try:
+            return self._chat.delete_conversation(conv_id)
+        except Exception as e:
+            logger.warning("chatDeleteConversation(%s) failed: %s", conv_id, e)
+            return False
+
+    def chatAutoTitle(self, conv_id: str, first_message: str) -> str:
+        if not self._chat:
+            return first_message[:60]
+        try:
+            return self._chat.auto_title(conv_id, first_message)
+        except Exception as e:
+            logger.warning("chatAutoTitle failed: %s", e)
+            return first_message[:60]
+
+    # ========================================================================
+    # Tool system handlers (Computer Use)
+    # ========================================================================
+
+    def toolsList(self) -> list:
+        try:
+            return self._tools.list_tools()
+        except Exception as e:
+            logger.warning("toolsList failed: %s", e)
+            return []
+
+    def toolsGetRisk(self, name: str) -> str:
+        try:
+            return self._tools.get_risk(name).value
+        except Exception:
+            return "danger"
+
+    def toolsExecute(self, name: str, args: dict) -> dict:
+        try:
+            result = self._tools.execute(name, args)
+            return {
+                "success": result.success,
+                "output": result.output,
+                "error": result.error,
+                "data": result.data,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def toolsSetWorkspace(self, path: str) -> bool:
+        try:
+            self._tools.set_workspace_root(path)
+            return True
+        except Exception as e:
+            logger.warning("toolsSetWorkspace(%s) failed: %s", path, e)
+            return False
+
+    def toolAgentExecute(self, query: str, conv_id: str = "") -> dict:
+        if not self._llm:
+            return {"content": "**Erro:** LLM não configurado.", "toolCalls": [], "conversationId": conv_id}
+        try:
+            agent_model = ""
+            agent_provider = "ollama"
+            if self._agents:
+                default = self._agents.get_default_agent()
+                if default:
+                    agent_model = default.model
+                    agent_provider = getattr(default, "provider", "ollama")
+
+            tool_calls_log: list[dict] = []
+            tool_results_log: list[dict] = []
+
+            def on_tool_call(tc: dict) -> None:
+                tool_calls_log.append(tc)
+
+            def on_tool_result(tr: dict) -> None:
+                tool_results_log.append(tr)
+
+            self._tool_agent = ToolAgent(
+                llm=self._llm,
+                tools=self._tools,
+                model=agent_model,
+                provider=agent_provider,
+                on_tool_call=on_tool_call,
+                on_tool_result=on_tool_result,
+            )
+
+            result = self._tool_agent.execute(query)
+
+            return {
+                "content": result.get("content", ""),
+                "toolCalls": tool_calls_log,
+                "toolResults": tool_results_log,
+                "conversationId": conv_id,
+                "pendingQuestion": result.get("pendingQuestion"),
+                "cancelled": result.get("cancelled", False),
+            }
+        except Exception as e:
+            logger.exception("toolAgentExecute failed")
+            self._tool_agent = None
+            return {"content": f"**Erro:** {e}", "toolCalls": [], "conversationId": conv_id}
+
+    def toolAgentAnswer(self, question_id: str, answer: str) -> dict:
+        try:
+            if not self._tool_agent:
+                return {"success": False, "error": "Nenhum agente em execução.", "content": ""}
+
+            self._tool_agent.answer_question(question_id, answer)
+
+            return {"success": True, "content": "", "pendingQuestion": None}
+        except Exception as e:
+            logger.exception("toolAgentAnswer failed")
+            return {"success": False, "error": str(e), "content": ""}
+
+    # ========================================================================
+    # Streaming execution (thread-based polling)
+    # ========================================================================
+
+    _streams: dict[str, dict] = {}
+
+    def toolAgentExecuteStream(self, query: str, conv_id: str = "") -> dict:
+        task_id = str(uuid.uuid4())
+        JARVISBridge._streams[task_id] = {
+            "content": "",
+            "toolCalls": [],
+            "toolResults": [],
+            "pendingQuestion": None,
+            "cancelled": False,
+            "done": False,
+            "error": None,
+        }
+
+        def _run():
+            try:
+                agent_model = ""
+                agent_provider = "ollama"
+                if self._agents:
+                    default = self._agents.get_default_agent()
+                    if default:
+                        agent_model = default.model
+                        agent_provider = getattr(default, "provider", "ollama")
+
+                tool_calls_log: list[dict] = []
+                tool_results_log: list[dict] = []
+                stream = JARVISBridge._streams[task_id]
+
+                def on_token(token: str) -> None:
+                    stream["content"] += token
+
+                def on_tool_call(tc: dict) -> None:
+                    tool_calls_log.append(tc)
+                    stream["toolCalls"] = list(tool_calls_log)
+
+                def on_tool_result(tr: dict) -> None:
+                    tool_results_log.append(tr)
+                    stream["toolResults"] = list(tool_results_log)
+
+                self._tool_agent = ToolAgent(
+                    llm=self._llm,
+                    tools=self._tools,
+                    model=agent_model,
+                    provider=agent_provider,
+                    on_token=on_token,
+                    on_tool_call=on_tool_call,
+                    on_tool_result=on_tool_result,
+                )
+
+                result = self._tool_agent.execute(query)
+                stream["content"] = result.get("content", "")
+                stream["pendingQuestion"] = result.get("pendingQuestion")
+                stream["cancelled"] = result.get("cancelled", False)
+
+            except Exception as e:
+                logger.exception("toolAgentExecuteStream failed")
+                JARVISBridge._streams[task_id]["error"] = str(e)
+            finally:
+                JARVISBridge._streams[task_id]["done"] = True
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        return {"taskId": task_id}
+
+    def toolAgentGetStream(self, task_id: str) -> dict:
+        stream = JARVISBridge._streams.get(task_id)
+        if not stream:
+            return {"done": True, "error": "Task not found"}
+        return dict(stream)
 
     # ========================================================================
     # Knowledge handlers
@@ -1436,21 +1689,8 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
 
     def copyToClipboard(self, text: str) -> bool:
         try:
-            if sys.platform == "win32":
-                subprocess.run(
-                    ["powershell", "-NoProfile", "-Command", "Set-Clipboard", text],
-                    check=True, timeout=5,
-                )
-            elif sys.platform == "darwin":
-                subprocess.run(
-                    ["osascript", "-e", f'set the clipboard to "{text}"'],
-                    check=True, timeout=5,
-                )
-            else:
-                subprocess.run(
-                    ["xclip", "-selection", "clipboard"],
-                    input=text.encode(), check=True, timeout=5,
-                )
+            import pyperclip
+            pyperclip.copy(text)
             return True
         except Exception as e:
             logger.warning("copyToClipboard failed: %s", e)
