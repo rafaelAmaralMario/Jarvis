@@ -45,8 +45,10 @@ class ToolError(Exception):
 
 
 class ToolManager:
-    def __init__(self, workspace_root: str | None = None):
+    def __init__(self, workspace_root: str | None = None, knowledge_manager: Any = None):
         self._workspace_root = workspace_root
+        self._knowledge_manager = knowledge_manager
+        self._unattended: bool = False
         self._tools: dict[str, ToolDefinition] = {}
         self._register_tools()
 
@@ -56,6 +58,17 @@ class ToolManager:
 
     def set_workspace_root(self, path: str | None) -> None:
         self._workspace_root = path
+
+    def set_knowledge_manager(self, km: Any) -> None:
+        self._knowledge_manager = km
+
+    @property
+    def unattended(self) -> bool:
+        return self._unattended
+
+    @unattended.setter
+    def unattended(self, val: bool) -> None:
+        self._unattended = val
 
     def list_tools(self) -> list[dict[str, Any]]:
         return [
@@ -279,6 +292,75 @@ class ToolManager:
                 },
                 risk=RiskLevel.SAFE,
                 examples=["web_fetch url='https://example.com/docs'"],
+            ),
+            "download_file": ToolDefinition(
+                name="download_file",
+                description="Download a file from a URL and save it to the specified path. Supports images, videos, archives, etc.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string", "description": "URL of the file to download"},
+                        "path": {"type": "string", "description": "Local path to save the file (relative to workspace)"},
+                    },
+                    "required": ["url", "path"],
+                },
+                risk=RiskLevel.ASK,
+                examples=["download_file url='https://example.com/image.png' path='assets/image.png'"],
+            ),
+            "install_package": ToolDefinition(
+                name="install_package",
+                description="Install a package using npm, pip, or other package managers. Detects the project type automatically.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "package": {"type": "string", "description": "Package name to install"},
+                        "manager": {"type": "string", "description": "Package manager: 'npm', 'pip', 'pip3' (auto-detected if omitted)"},
+                        "dev": {"type": "boolean", "description": "Install as dev dependency (npm only)", "default": False},
+                    },
+                    "required": ["package"],
+                },
+                risk=RiskLevel.ASK,
+                examples=["install_package package='tailwindcss' manager='npm' dev=true", "install_package package='requests'"],
+            ),
+            "create_note": ToolDefinition(
+                name="create_note",
+                description="Create a knowledge note (documentation, plan, specification) in the Knowledge base. Notes are searchable and can be linked with [[wikilinks]].",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "Note title"},
+                        "content": {"type": "string", "description": "Note content in Markdown. Use [[Note Title]] for links to other notes."},
+                        "folder": {"type": "string", "description": "Folder path (e.g. '/projects/myapp')", "default": "/"},
+                        "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags for categorization"},
+                    },
+                    "required": ["title", "content"],
+                },
+                risk=RiskLevel.ASK,
+                examples=["create_note title='Architecture Overview' content='## System Design\n\nThe system uses...' folder='/projects/myapp'"],
+            ),
+            "list_notes": ToolDefinition(
+                name="list_notes",
+                description="List knowledge notes, optionally filtered by folder.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "folder": {"type": "string", "description": "Folder to filter by (e.g. '/projects/myapp')", "default": ""},
+                    },
+                    "required": [],
+                },
+                risk=RiskLevel.SAFE,
+            ),
+            "search_notes": ToolDefinition(
+                name="search_notes",
+                description="Search knowledge notes by text query. Returns matching notes with snippets.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search query"},
+                    },
+                    "required": ["query"],
+                },
+                risk=RiskLevel.SAFE,
             ),
         }
 
@@ -579,3 +661,108 @@ class ToolManager:
             return ToolResult(success=False, error="Missing dependencies: requests and beautifulsoup4")
         except Exception as e:
             return ToolResult(success=False, error=f"Web fetch failed: {e}")
+
+    def _handle_download_file(self, args: dict[str, Any]) -> ToolResult:
+        url = args["url"]
+        path = self._resolve_path(args["path"])
+        try:
+            import requests
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+            resp = requests.get(url, timeout=120, stream=True, verify=False, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) JARVIS/1.0",
+            })
+            resp.raise_for_status()
+            with open(path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            return ToolResult(success=True, output=f"Downloaded {url} → {path} ({len(resp.content)} bytes)")
+        except ImportError:
+            return ToolResult(success=False, error="Missing dependency: requests")
+        except Exception as e:
+            return ToolResult(success=False, error=f"Download failed: {e}")
+
+    def _handle_install_package(self, args: dict[str, Any]) -> ToolResult:
+        pkg = args["package"]
+        manager = args.get("manager", "")
+        dev = args.get("dev", False)
+        try:
+            if not manager:
+                if os.path.exists(os.path.join(self._workspace_root or ".", "package.json")):
+                    manager = "npm"
+                elif os.path.exists(os.path.join(self._workspace_root or ".", "requirements.txt")):
+                    manager = "pip"
+                elif os.path.exists(os.path.join(self._workspace_root or ".", "pyproject.toml")):
+                    manager = "pip"
+                else:
+                    manager = "npm"
+            if manager == "npm":
+                cmd = f"npm install {pkg}"
+                if dev:
+                    cmd += " --save-dev"
+            elif manager in ("pip", "pip3"):
+                cmd = f"{manager} install {pkg}"
+            else:
+                return ToolResult(success=False, error=f"Unknown package manager: {manager}")
+            result = subprocess.run(
+                cmd, shell=True, capture_output=True, text=True, timeout=120,
+                cwd=self._workspace_root or ".",
+            )
+            output = result.stdout.strip()
+            if result.stderr:
+                output += "\n--- stderr ---\n" + result.stderr.strip()
+            return ToolResult(success=result.returncode == 0, output=output or f"Installed {pkg}")
+        except subprocess.TimeoutExpired:
+            return ToolResult(success=False, error=f"Installation timed out")
+        except Exception as e:
+            return ToolResult(success=False, error=f"Install failed: {e}")
+
+    def _handle_create_note(self, args: dict[str, Any]) -> ToolResult:
+        if not self._knowledge_manager:
+            return ToolResult(success=False, error="Knowledge module not available")
+        try:
+            from jarvis.knowledge_manager import CreateNoteDTO
+            dto = CreateNoteDTO(
+                title=args["title"],
+                content=args["content"],
+                folder=args.get("folder", "/projects"),
+                tags=args.get("tags", []),
+            )
+            note = self._knowledge_manager.create_note(dto)
+            return ToolResult(
+                success=True,
+                output=f"Note created: **{note.title}** (id: `{note.id}`)\nFolder: {note.folder}\nTimestamp: {note.created_at}",
+                data={"note_id": note.id, "title": note.title, "folder": note.folder, "created_at": note.created_at},
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=f"Failed to create note: {e}")
+
+    def _handle_list_notes(self, args: dict[str, Any]) -> ToolResult:
+        if not self._knowledge_manager:
+            return ToolResult(success=False, error="Knowledge module not available")
+        try:
+            folder = args.get("folder", "")
+            notes = self._knowledge_manager.list_notes(folder)
+            if not notes:
+                return ToolResult(success=True, output="No notes found.")
+            lines = [f"### Notes in '{folder or 'all'}'"]
+            for n in notes:
+                updated = n.updated_at[:19] if n.updated_at else "?"
+                lines.append(f"- **{n.title}** (`{n.id}`) [{n.folder}] — updated {updated}")
+            return ToolResult(success=True, output="\n".join(lines), data={"count": len(notes)})
+        except Exception as e:
+            return ToolResult(success=False, error=f"Failed to list notes: {e}")
+
+    def _handle_search_notes(self, args: dict[str, Any]) -> ToolResult:
+        if not self._knowledge_manager:
+            return ToolResult(success=False, error="Knowledge module not available")
+        try:
+            query = args["query"]
+            results = self._knowledge_manager.search_notes(query)
+            if not results:
+                return ToolResult(success=True, output=f"No notes matching '{query}'")
+            lines = [f"### Search results for: {query}"]
+            for r in results:
+                lines.append(f"- **{r.title}** (score: {r.score:.2f})\n  {r.snippet}")
+            return ToolResult(success=True, output="\n".join(lines), data={"count": len(results)})
+        except Exception as e:
+            return ToolResult(success=False, error=f"Failed to search notes: {e}")

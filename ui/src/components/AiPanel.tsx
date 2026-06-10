@@ -109,6 +109,7 @@ export function AiPanel({ fullView }: AiPanelProps) {
   const [pendingQuestion, setPendingQuestion] = useState<PendingQuestion | null>(null);
   const [answerInput, setAnswerInput] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
+  const [unattended, setUnattended] = useState(() => localStorage.getItem('jarvis_unattended') === 'true');
   const streamTaskRef = useRef<string | null>(null);
 
   const activeConv = conversations.find(c => c.id === activeConvId);
@@ -134,6 +135,10 @@ export function AiPanel({ fullView }: AiPanelProps) {
     window.addEventListener('jarvis:send-to-chat', handler);
     return () => window.removeEventListener('jarvis:send-to-chat', handler);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('jarvis_unattended', String(unattended));
+  }, [unattended]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -214,7 +219,7 @@ export function AiPanel({ fullView }: AiPanelProps) {
 
     try {
       const history = activeConv?.messages.slice(0, -1).map(m => ({ role: m.role, content: m.content })) || [];
-      const stream = await bridge.toolAgentExecuteStream(text, activeConvId, history, selectedAgentId || undefined);
+      const stream = await bridge.toolAgentExecuteStream(text, activeConvId, history, selectedAgentId || undefined, unattended);
       streamTaskRef.current = stream.taskId;
 
       let pendingQuestionResult: PendingQuestion | null = null;
@@ -722,6 +727,22 @@ export function AiPanel({ fullView }: AiPanelProps) {
             {error}
           </div>
         )}
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={unattended}
+              onChange={(e) => setUnattended(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-border accent-primary cursor-pointer"
+            />
+            <span className={`text-[10px] font-medium uppercase tracking-wider ${unattended ? 'text-amber-400' : 'text-muted-foreground'}`}>
+              {unattended ? '🔓 Não Assistido' : '🔒 Assistido'}
+            </span>
+          </label>
+          {unattended && (
+            <span className="text-[9px] text-amber-500/60 italic">agente tem permissão total</span>
+          )}
+        </div>
         <div className="flex gap-2 items-end">
           <div className="flex-1 relative">
             <input

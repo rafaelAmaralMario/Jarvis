@@ -101,6 +101,8 @@ class JARVISBridge:
         self._db = db
         self._chat = ChatManager(db) if db else None
         self._tools = ToolManager(workspace_root=workspace.get_roots()[0] if workspace and workspace.get_roots() else None)
+        if knowledge:
+            self._tools.set_knowledge_manager(knowledge)
         self._tool_agent: ToolAgent | None = None
         self._si_instance: SelfImprovement | None = None
 
@@ -780,7 +782,7 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
 
     _streams: dict[str, dict] = {}
 
-    def toolAgentExecuteStream(self, query: str, conv_id: str = "", history: list | None = None, agent_id: str = "") -> dict:
+    def toolAgentExecuteStream(self, query: str, conv_id: str = "", history: list | None = None, agent_id: str = "", unattended: bool = False) -> dict:
         task_id = str(uuid.uuid4())
         JARVISBridge._streams[task_id] = {
             "content": "",
@@ -828,6 +830,7 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                     tool_results_log.append(tr)
                     stream["toolResults"] = list(tool_results_log)
 
+                self._tools.unattended = unattended
                 agent_instance = ToolAgent(
                     llm=self._llm,
                     tools=self._tools,
@@ -836,6 +839,7 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                     on_token=on_token,
                     on_tool_call=on_tool_call,
                     on_tool_result=on_tool_result,
+                    unattended=unattended,
                 )
 
                 if agent_system:

@@ -152,7 +152,7 @@ export interface JarvisBridge {
   toolsSetWorkspace(path: string): Promise<boolean>;
   toolAgentExecute(query: string, convId?: string): Promise<ToolAgentResponse>;
   toolAgentAnswer(questionId: string, answer: string): Promise<ToolAgentAnswerResult>;
-  toolAgentExecuteStream(query: string, convId?: string, history?: {role: string; content: string}[], agentId?: string): Promise<StreamTask>;
+  toolAgentExecuteStream(query: string, convId?: string, history?: {role: string; content: string}[], agentId?: string, unattended?: boolean): Promise<StreamTask>;
   toolAgentGetStream(taskId: string): Promise<StreamState>;
   taskPlannerExecute(query: string, resume?: boolean): Promise<TaskPlannerResult>;
   plannerExecuteStream(query: string, resumePlanId?: string): Promise<{ taskId: string }>;

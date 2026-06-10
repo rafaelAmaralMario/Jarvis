@@ -73,9 +73,11 @@ class ToolAgent:
         on_token: Callable[[str], None] | None = None,
         on_tool_call: Callable[[dict[str, Any]], None] | None = None,
         on_tool_result: Callable[[dict[str, Any]], None] | None = None,
+        unattended: bool = False,
     ):
         self._llm = llm
         self._tools = tools
+        self._unattended = unattended
         self._model = model
         self._provider = provider
         self._max_tool_rounds = max_tool_rounds
@@ -215,7 +217,9 @@ class ToolAgent:
             else:
                 # Permission check for non-safe tools
                 tool_risk = self._tools.get_risk(tool_name)
-                if tool_risk in (RiskLevel.ASK, RiskLevel.DANGER):
+                if self._unattended:
+                    result = self._tools.execute(tool_name, tool_args)
+                elif tool_risk in (RiskLevel.ASK, RiskLevel.DANGER):
                     risk_label = "PERIGOSA" if tool_risk == RiskLevel.DANGER else "requer confirmação"
                     question_text = (
                         f"Permitir execução da ferramenta **{tool_name}** ({risk_label})?\n\n"
