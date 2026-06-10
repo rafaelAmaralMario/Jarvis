@@ -128,6 +128,18 @@ class OllamaClient:
         resp = self._client.post("/api/generate", json=body, timeout=120.0)
         t2 = time.monotonic()
 
+        if resp.status_code == 404:
+            try:
+                err_data = resp.json()
+                err_msg = err_data.get("error", "")
+            except Exception:
+                err_msg = resp.text
+            raise OllamaError(
+                f"Modelo '{req.model}' não encontrado. "
+                f"Disponíveis: {[m.name for m in self.list_models()]}. "
+                f"Detalhe: {err_msg}"
+            )
+
         resp.raise_for_status()
         data = resp.json()
 
@@ -157,6 +169,17 @@ class OllamaClient:
             body["system"] = req.system
 
         with self._client.stream("POST", "/api/generate", json=body, timeout=120.0) as resp:
+            if resp.status_code == 404:
+                try:
+                    err_data = resp.json()
+                    err_msg = err_data.get("error", "")
+                except Exception:
+                    err_msg = ""
+                raise OllamaError(
+                    f"Modelo '{req.model}' não encontrado. "
+                    f"Disponíveis: {[m.name for m in self.list_models()]}. "
+                    f"Detalhe: {err_msg}"
+                )
             resp.raise_for_status()
             for line in resp.iter_lines():
                 if not line:

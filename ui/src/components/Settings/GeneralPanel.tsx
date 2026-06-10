@@ -30,9 +30,12 @@ export function GeneralPanel() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    bridge.getConfig().then((cfg: any) => {
-      if (cfg) {
-        setSettings(prev => ({ ...prev, ...cfg }));
+    bridge.editorGetSettings().then((cfg: Record<string, string>) => {
+      if (cfg?.general) {
+        try {
+          const parsed = JSON.parse(cfg.general);
+          setSettings(prev => ({ ...prev, ...parsed }));
+        } catch { /* ignore malformed json */ }
       }
     });
   }, [bridge]);

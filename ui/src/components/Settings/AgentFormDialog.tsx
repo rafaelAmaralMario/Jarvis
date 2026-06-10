@@ -14,7 +14,7 @@ export function AgentFormDialog({ open, agent, models, onClose, onSave }: AgentF
   const [form, setForm] = useState<CreateAgentDTO>({
     name: '',
     description: '',
-    model: 'llama3.2:3b',
+    model: 'llama3.2',
     systemPrompt: '',
     temperature: 0.7,
     maxTokens: 2048,
@@ -25,24 +25,25 @@ export function AgentFormDialog({ open, agent, models, onClose, onSave }: AgentF
   });
 
   useEffect(() => {
+    const dm = models.length > 0 ? models[0] : 'llama3.2';
     if (agent) {
       setForm({
-        name: agent.name,
-        description: agent.description,
-        model: agent.model,
-        systemPrompt: agent.systemPrompt,
-        temperature: agent.temperature,
-        maxTokens: agent.maxTokens,
-        specialty: agent.specialty,
-        tools: agent.tools,
-        canOrchestrate: agent.canOrchestrate,
-        priority: agent.priority,
+        name: agent.name ?? '',
+        description: agent.description ?? '',
+        model: agent.model ?? dm,
+        systemPrompt: agent.systemPrompt ?? '',
+        temperature: agent.temperature ?? 0.7,
+        maxTokens: agent.maxTokens ?? 2048,
+        specialty: agent.specialty ?? 'general',
+        tools: agent.tools ?? [],
+        canOrchestrate: agent.canOrchestrate ?? true,
+        priority: agent.priority ?? 5,
       });
     } else {
       setForm({
         name: '',
         description: '',
-        model: 'llama3.2:3b',
+        model: dm,
         systemPrompt: '',
         temperature: 0.7,
         maxTokens: 2048,
@@ -52,7 +53,7 @@ export function AgentFormDialog({ open, agent, models, onClose, onSave }: AgentF
         priority: 5,
       });
     }
-  }, [agent, open]);
+  }, [agent, open, models]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,7 +112,7 @@ export function AgentFormDialog({ open, agent, models, onClose, onSave }: AgentF
                     onChange={(e) => setForm({ ...form, model: e.target.value })}
                     className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                   >
-                    {(models.length > 0 ? models : ['llama3.2:3b']).map((m) => (
+                    {(models.length > 0 ? models : ['llama3.2']).map((m) => (
                       <option key={m} value={m}>{m}</option>
                     ))}
                   </select>

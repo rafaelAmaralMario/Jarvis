@@ -45,14 +45,14 @@ export function AgentCard({ agent, onEdit, onDelete, onSetDefault, index = 0 }: 
       <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mb-3">
         <span><strong className="text-foreground/60">Model:</strong> {agent.model}</span>
         <span><strong className="text-foreground/60">Temp:</strong> {agent.temperature}</span>
-        <span><strong className="text-foreground/60">Max tokens:</strong> {agent.maxTokens}</span>
-        {agent.tools.length > 0 && (
+        <span><strong className="text-foreground/60">Max tokens:</strong> {agent.maxTokens ?? '-'}</span>
+        {agent.tools?.length > 0 && (
           <span><strong className="text-foreground/60">Tools:</strong> {agent.tools.join(', ')}</span>
         )}
       </div>
 
       <div className="text-xs text-muted-foreground/70 bg-muted/50 px-3 py-2 rounded-lg italic border-l-2 border-border mb-4 line-clamp-2">
-        &ldquo;{agent.systemPrompt.slice(0, 120)}{agent.systemPrompt.length > 120 ? '...' : ''}&rdquo;
+        &ldquo;{(agent.systemPrompt ?? '').slice(0, 120)}{(agent.systemPrompt ?? '').length > 120 ? '...' : ''}&rdquo;
       </div>
 
       <div className="flex gap-2">

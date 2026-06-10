@@ -4,7 +4,6 @@ import { ActivityBar } from '@/components/ActivityBar';
 import { Sidebar } from '@/components/Sidebar';
 import { MainArea } from '@/components/MainArea';
 import { TerminalPanel } from '@/components/Terminal/TerminalPanel';
-import { AiPanel } from '@/components/AiPanel';
 import { StatusBar } from '@/components/StatusBar';
 import type { ActivityView } from '@/types';
 
@@ -50,7 +49,7 @@ export function App() {
         />
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-hidden">
-            <MainArea activeView={activeView} onViewChange={setActiveView} />
+            <MainArea activeView={activeView} />
           </div>
           {showTerminal && (
             <div
@@ -79,7 +78,6 @@ export function App() {
             </div>
           )}
         </div>
-        <AiPanel />
       </div>
       <StatusBar
         moduleCount={3}

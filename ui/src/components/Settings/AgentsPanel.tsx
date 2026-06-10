@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Agent, CreateAgentDTO } from '@/types';
 import { AgentCard } from './AgentCard';
@@ -9,6 +9,7 @@ import { useJarvis } from '@/hooks/use-jarvis';
 export function AgentsPanel() {
   const bridge = useJarvis();
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -17,11 +18,23 @@ export function AgentsPanel() {
 
   useEffect(() => {
     setLoading(true);
-    bridge.listAgents()
-      .then(list => setAgents(list))
+    Promise.all([
+      bridge.listAgents(),
+      bridge.listModels().then(models => models.map(m => m.name)).catch(() => [] as string[]),
+    ])
+      .then(([list, models]) => {
+        setAgents(list);
+        setAvailableModels(models);
+      })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
   }, [bridge]);
+
+  const modelOptions = useMemo(() => {
+    const fromAgents = agents.map(a => a.model);
+    const all = [...new Set([...availableModels, ...fromAgents])];
+    return all.filter(Boolean).sort();
+  }, [availableModels, agents]);
 
   const handleEdit = (agent: Agent) => {
     setEditingAgent(agent);
@@ -129,7 +142,7 @@ export function AgentsPanel() {
       <AgentFormDialog
         open={dialogOpen}
         agent={editingAgent}
-        models={agents.map(a => a.model).filter((v, i, s) => s.indexOf(v) === i)}
+        models={modelOptions}
         onClose={() => { setDialogOpen(false); setEditingAgent(null); }}
         onSave={handleSave}
       />

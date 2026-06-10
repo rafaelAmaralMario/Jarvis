@@ -3,12 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { FileEntry, Project } from '@/types';
 import { useJarvis } from '@/hooks/use-jarvis';
 import { FileTree } from './FileTree';
-import { FileTabs } from './FileTabs';
+import { MonacoWrapper } from '@/components/Editor/MonacoWrapper';
+import { EditorTabs } from '@/components/Editor/EditorTabs';
 
 const spring = { type: 'spring' as const, stiffness: 300, damping: 30 };
 
 interface WorkspacePanelProps {
-  onOpenInEditor?: (path: string) => void;
+  fileToOpen?: string;
 }
 
 interface OpenTab {
@@ -18,7 +19,7 @@ interface OpenTab {
   changed: boolean;
 }
 
-export function WorkspacePanel({ onOpenInEditor }: WorkspacePanelProps) {
+export function WorkspacePanel({ fileToOpen }: WorkspacePanelProps) {
   const bridge = useJarvis();
   const [_roots, setRoots] = useState<string[]>([]);
   const [tree, setTree] = useState<FileEntry[]>([]);
@@ -31,6 +32,33 @@ export function WorkspacePanel({ onOpenInEditor }: WorkspacePanelProps) {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
   const [recentFiles, setRecentFiles] = useState<FileEntry[]>([]);
+  const [editorSettings, setEditorSettings] = useState({
+    fontSize: 14,
+    tabSize: 4,
+    wordWrap: 'off',
+    theme: 'vs-dark',
+    minimap: true,
+    lineNumbers: 'on',
+    autoSave: true,
+    autoSaveDelay: 2000,
+  });
+
+  function detectLanguage(filename: string): string {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    const langMap: Record<string, string> = {
+      ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
+      py: 'python', rs: 'rust', go: 'go', java: 'java',
+      cpp: 'cpp', c: 'c', h: 'c', hpp: 'cpp',
+      cs: 'csharp', swift: 'swift', kotlin: 'kotlin',
+      html: 'html', css: 'css', scss: 'scss', less: 'less',
+      json: 'json', xml: 'xml', yaml: 'yaml', yml: 'yaml',
+      md: 'markdown', sql: 'sql', sh: 'shell', bash: 'shell',
+      dockerfile: 'dockerfile', tf: 'terraform', rb: 'ruby',
+      php: 'php', r: 'r', scala: 'scala', lua: 'lua',
+      toml: 'ini', ini: 'ini', cfg: 'ini',
+    };
+    return langMap[ext] || 'plaintext';
+  }
 
   // Folder picker dialog state
   const [folderInput, setFolderInput] = useState('');
@@ -71,6 +99,29 @@ export function WorkspacePanel({ onOpenInEditor }: WorkspacePanelProps) {
   useEffect(() => {
     loadWorkspace();
   }, [loadWorkspace]);
+
+  useEffect(() => {
+    if (fileToOpen) {
+      handleSelectFile(fileToOpen);
+    }
+  }, [fileToOpen]);
+
+  useEffect(() => {
+    bridge.editorGetSettings().then(raw => {
+      if (raw) {
+        setEditorSettings({
+          fontSize: parseInt(raw.fontSize || '14', 10),
+          tabSize: parseInt(raw.tabSize || '4', 10),
+          wordWrap: raw.wordWrap || 'off',
+          theme: raw.theme || 'vs-dark',
+          minimap: raw.minimap !== 'false',
+          lineNumbers: raw.lineNumbers || 'on',
+          autoSave: raw.autoSave !== 'false',
+          autoSaveDelay: parseInt(raw.autoSaveDelay || '2000', 10),
+        });
+      }
+    }).catch(() => {});
+  }, [bridge]);
 
   async function loadTree(rootPath: string): Promise<FileEntry[]> {
     const entries = await bridge.listFiles(rootPath);
@@ -113,13 +164,7 @@ export function WorkspacePanel({ onOpenInEditor }: WorkspacePanelProps) {
   async function handleSelectFile(path: string) {
     setSelectedPath(path);
 
-    // Open in editor view
-    if (onOpenInEditor) {
-      onOpenInEditor(path);
-      return;
-    }
-
-    // Fallback: open inline
+    // Open inline with Monaco
     const existing = openTabs.find(t => t.path === path);
     if (existing) {
       setActiveTab(path);
@@ -167,14 +212,13 @@ export function WorkspacePanel({ onOpenInEditor }: WorkspacePanelProps) {
     }
   }
 
-  async function handleCreateFile(parentDir: string, name?: string) {
-    const fileName = name || prompt('File name:');
-    if (!fileName) return;
+  async function handleCreateFile(parentDir: string, name: string) {
+    if (!name) return;
     try {
-      if (fileName.includes('/')) {
-        await bridge.createFileWithPath(parentDir ? parentDir + '/' + fileName : fileName);
+      if (name.includes('/')) {
+        await bridge.createFileWithPath(parentDir ? parentDir + '/' + name : name);
       } else {
-        await bridge.createFile(fileName, parentDir || '');
+        await bridge.createFile(name, parentDir || '');
       }
       await loadWorkspace();
     } catch (err) {
@@ -182,11 +226,10 @@ export function WorkspacePanel({ onOpenInEditor }: WorkspacePanelProps) {
     }
   }
 
-  async function handleCreateFolder(parentDir: string, name?: string) {
-    const folderName = name || prompt('Folder name:');
-    if (!folderName) return;
+  async function handleCreateFolder(parentDir: string, name: string) {
+    if (!name) return;
     try {
-      await bridge.createDirectory(folderName, parentDir || '');
+      await bridge.createDirectory(name, parentDir || '');
       await loadWorkspace();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -202,13 +245,13 @@ export function WorkspacePanel({ onOpenInEditor }: WorkspacePanelProps) {
     }
   }
 
-  async function handleRename(oldPath: string, currentName: string) {
-    const newName = prompt('New name:', currentName);
-    if (!newName || newName === currentName) return;
+  async function handleRename(oldPath: string, newName: string) {
+    if (!newName) return;
+    const parts = oldPath.split(/[/\\]/);
+    const oldName = parts[parts.length - 1];
+    if (newName === oldName) return;
     try {
       await bridge.renamePath(oldPath, newName);
-      // Update tabs
-      const parts = oldPath.split(/[/\\]/);
       parts[parts.length - 1] = newName;
       const newPath = parts.join('/');
       setOpenTabs(prev => prev.map(t => t.path === oldPath ? { ...t, path: newPath, name: newName } : t));
@@ -351,8 +394,15 @@ export function WorkspacePanel({ onOpenInEditor }: WorkspacePanelProps) {
           )}
         </div>
 
-        <FileTabs
-          tabs={openTabs.map(t => ({ path: t.path, name: t.name }))}
+        <EditorTabs
+          tabs={openTabs.map(t => ({
+            path: t.path,
+            name: t.name,
+            language: '',
+            size: 0,
+            lastModified: 0,
+            isDirty: t.changed,
+          }))}
           activeTab={activeTab}
           onSelectTab={(path) => {
             setActiveTab(path);
@@ -366,14 +416,16 @@ export function WorkspacePanel({ onOpenInEditor }: WorkspacePanelProps) {
           {activeTab && currentTab ? (
             <div className="flex-1 flex flex-col">
               <div className="flex-1 relative">
-                <textarea
+                <MonacoWrapper
                   value={editingContent}
-                  onChange={(e) => {
-                    setEditingContent(e.target.value);
+                  language={detectLanguage(currentTab.name)}
+                  path={currentTab.path}
+                  onChange={(value) => {
+                    setEditingContent(value);
                     setOpenTabs(prev => prev.map(t => t.path === activeTab ? { ...t, changed: true } : t));
                   }}
-                  className="absolute inset-0 w-full h-full p-4 bg-background text-sm text-foreground font-mono resize-none border-none outline-none leading-relaxed"
-                  spellCheck={false}
+                  onSave={() => handleSaveFile(activeTab)}
+                  settings={editorSettings}
                 />
               </div>
               <div className="flex items-center justify-between px-4 py-1.5 border-t border-border text-[10px] text-muted-foreground bg-card">

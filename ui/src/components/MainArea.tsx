@@ -1,24 +1,46 @@
-import { lazy, useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { lazy, Suspense, useState, useEffect, Component, type ReactNode } from 'react';
 import type { ActivityView } from '@/types';
 import { useJarvis } from '@/hooks/use-jarvis';
 import { GitPanel } from '@/components/Git/GitPanel';
+import { AiPanel } from '@/components/AiPanel';
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex-1 flex items-center justify-center text-muted-foreground p-8">
+          <div className="text-center">
+            <p className="text-3xl mb-2">⚠️</p>
+            <p className="text-sm">Algo deu errado ao carregar esta página.</p>
+            <button
+              onClick={() => this.setState({ hasError: false })}
+              className="mt-3 px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const SettingsPage = lazy(() => import('@/components/Settings/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const KnowledgePanel = lazy(() => import('@/components/Knowledge/KnowledgePanel').then(m => ({ default: m.KnowledgePanel })));
 const WorkspacePanel = lazy(() => import('@/components/Workspace/WorkspacePanel').then(m => ({ default: m.WorkspacePanel })));
-const EditorPanel = lazy(() => import('@/components/Editor/EditorPanel').then(m => ({ default: m.EditorPanel })));
 
 interface MainAreaProps {
   activeView: ActivityView;
-  onViewChange: (view: ActivityView) => void;
 }
 
-const spring = { type: 'spring' as const, stiffness: 300, damping: 25 };
-
-export function MainArea({ activeView, onViewChange }: MainAreaProps) {
+export function MainArea({ activeView }: MainAreaProps) {
   const jarvis = useJarvis();
-  const [fileToOpen, setFileToOpen] = useState<string | undefined>();
   const [gitRepoPath, setGitRepoPath] = useState('');
 
   useEffect(() => {
@@ -50,54 +72,38 @@ export function MainArea({ activeView, onViewChange }: MainAreaProps) {
   }
 
   if (activeView === 'settings') {
-    return <SettingsPage />;
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm animate-pulse">Carregando...</div>}>
+          <SettingsPage />
+        </Suspense>
+      </ErrorBoundary>
+    );
   }
 
   if (activeView === 'knowledge') {
-    return <KnowledgePanel />;
+    return (
+      <Suspense fallback={<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm animate-pulse">Carregando...</div>}>
+        <KnowledgePanel />
+      </Suspense>
+    );
   }
 
-  if (activeView === 'ide') {
-    return <WorkspacePanel onOpenInEditor={handleOpenInEditor} />;
-  }
-
-  if (activeView === 'editor') {
-    return <EditorPanel fileToOpen={fileToOpen} />;
+  if (activeView === 'ide' || activeView === 'editor') {
+    return (
+      <Suspense fallback={<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm animate-pulse">Carregando...</div>}>
+        <WorkspacePanel />
+      </Suspense>
+    );
   }
 
   if (activeView === 'ai') {
-    return (
-      <motion.main
-        layout
-        className="flex-1 flex items-center justify-center bg-background"
-      >
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeView}
-            initial={{ opacity: 0, y: 20, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.98 }}
-            transition={spring}
-            className="text-center"
-          >
-            <motion.div
-              animate={{ y: [0, -8, 0] }}
-              transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
-              className="text-6xl mb-4"
-            >
-              🧠
-            </motion.div>
-            <h1 className="text-2xl font-bold text-foreground mb-2">JARVIS</h1>
-            <p className="text-muted-foreground">Assistente IA Multi-Agent</p>
-          </motion.div>
-        </AnimatePresence>
-      </motion.main>
-    );
+    return <AiPanel fullView />;
   }
 
   if (activeView === 'automation') {
     return (
-      <div className="flex-1 p-8 overflow-y-auto">
+      <div className="h-full overflow-y-auto p-8">
         <h1 className="text-lg font-semibold mb-4">⚡ Workflows & Automation</h1>
         <p className="text-sm text-muted-foreground mb-6">Configure and run automation workflows. Go to Settings → Workflows to manage.</p>
         <div className="grid gap-4 max-w-2xl">
@@ -122,9 +128,4 @@ export function MainArea({ activeView, onViewChange }: MainAreaProps) {
   }
 
   return null;
-
-  function handleOpenInEditor(path: string) {
-    setFileToOpen(path);
-    onViewChange('editor');
-  }
 }

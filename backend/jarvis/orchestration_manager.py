@@ -8,7 +8,7 @@ from typing import Callable
 from jarvis.agents_manager import AgentsManager, Agent
 from jarvis.database import Database
 from jarvis.models_manager import ModelsManager
-from jarvis.ollama_client import OllamaClient, OllamaGenerateRequest
+from jarvis.ollama_client import OllamaClient, OllamaError, OllamaGenerateRequest
 
 
 @dataclass
@@ -187,11 +187,16 @@ class OrchestrationManager:
         return self._execute_agent(agent, query)
 
     def _execute_agent(self, agent: Agent, query: str) -> str:
+        return self._execute_agent_with_fallback(agent, query, agent.model)
+
+    def _execute_agent_with_fallback(
+        self, agent: Agent, query: str, model: str
+    ) -> str:
         system = agent.system_prompt
         if system:
             system += "\n\nResponda em markdown."
         req = OllamaGenerateRequest(
-            model=agent.model,
+            model=model,
             prompt=query,
             system=system,
             temperature=agent.temperature,
@@ -201,11 +206,44 @@ class OrchestrationManager:
         try:
             result = self._ollama.generate(req)
             return result.response
+        except OllamaError:
+            fallback = self._pick_available_model()
+            if fallback and fallback != model:
+                return (
+                    f"*Modelo '{model}' não disponível. "
+                    f"Usando '{fallback}' como alternativa.*\n\n"
+                    f"{self._execute_agent_with_fallback(agent, query, fallback)}"
+                )
+            return (
+                f"**Erro:** Nenhum modelo disponível no Ollama. "
+                f"Modelos instalados: {[m.name for m in self._ollama.list_models()]}. "
+                f"Configure um modelo em Settings → Models."
+            )
         except Exception as e:
             msg = str(e).lower()
             if "connect" in msg or "refused" in msg:
                 return f"**Erro:** Não foi possível conectar ao Ollama em localhost:11434. Verifique se `ollama serve` está rodando."
             return f"**Erro ao executar agente '{agent.name}':** {e}"
+
+    _PREFERRED_MODELS = [
+        "llama3.2", "llama3.1", "llama3", "phi4", "phi3",
+        "mistral", "qwen2.5", "gemma3", "gemma2",
+    ]
+
+    def _pick_available_model(self) -> str | None:
+        try:
+            models = self._ollama.list_models()
+            if not models:
+                return None
+            available_names = {m.name for m in models}
+            for preferred in self._PREFERRED_MODELS:
+                for name in available_names:
+                    if name.startswith(preferred):
+                        return name
+            return models[0].name
+        except Exception:
+            pass
+        return None
 
     def _orchestrator_plan(self, query: str) -> tuple[str, list[str]]:
         pool = self._agents.get_orchestration_pool()
@@ -245,6 +283,17 @@ class OrchestrationManager:
         try:
             result = self._ollama.generate(req)
             response = result.response.strip()
+        except OllamaError:
+            fallback_model = self._pick_available_model()
+            if fallback_model and fallback_model != model:
+                req.model = fallback_model
+                try:
+                    result = self._ollama.generate(req)
+                    response = result.response.strip()
+                except Exception:
+                    response = ", ".join(
+                        a.name for a in pool[: self._config.max_agents_per_query]
+                    )
             agent_names = [
                 name.strip()
                 for name in response.split(",")
@@ -274,7 +323,7 @@ class OrchestrationManager:
         )
 
         pool = self._agents.get_orchestration_pool()
-        model = pool[0].model if pool else "llama3.2:3b"
+        model = pool[0].model if pool else "llama3.2"
 
         req = OllamaGenerateRequest(
             model=model,
@@ -286,6 +335,16 @@ class OrchestrationManager:
         try:
             result = self._ollama.generate(req)
             return result.response
+        except OllamaError:
+            fallback = self._pick_available_model()
+            if fallback and fallback != model:
+                req.model = fallback
+                try:
+                    result = self._ollama.generate(req)
+                    return result.response
+                except Exception:
+                    pass
+            return "✅ Aprovado (critico indisponivel)"
         except Exception:
             return "✅ Aprovado (critico indisponivel)"
 

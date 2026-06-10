@@ -31,7 +31,7 @@ export function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('models');
 
   return (
-    <div className="flex-1 flex overflow-hidden">
+    <div className="h-full flex overflow-hidden">
       <div className="w-52 border-r border-border bg-sidebar flex-shrink-0 py-3">
         <div className="px-4 pb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Settings

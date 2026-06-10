@@ -110,6 +110,16 @@ class OllamaLLMClient(BaseLLMClient):
         t1 = time.monotonic()
         resp = self._client.post("/api/generate", json=body, timeout=120.0)
         t2 = time.monotonic()
+        if resp.status_code == 404:
+            try:
+                err_data = resp.json()
+                err_msg = err_data.get("error", "")
+            except Exception:
+                err_msg = resp.text
+            raise LLMError(
+                f"Modelo '{req.model}' não encontrado no Ollama. "
+                f"Detalhe: {err_msg}"
+            )
         resp.raise_for_status()
         data = resp.json()
         return LLMResponse(
@@ -126,6 +136,17 @@ class OllamaLLMClient(BaseLLMClient):
         body = self._build_request_body(req)
         body["stream"] = True
         with self._client.stream("POST", "/api/generate", json=body, timeout=120.0) as resp:
+            if resp.status_code == 404:
+                try:
+                    err_data = resp.json()
+                    err_msg = err_data.get("error", "")
+                except Exception:
+                    err_msg = ""
+                raise LLMError(
+                    f"Modelo '{req.model}' não encontrado no Ollama. "
+                    f"Disponíveis: {[m.get('name') for m in self._client.get('/api/tags').json().get('models', [])]}. "
+                    f"Detalhe: {err_msg}"
+                )
             resp.raise_for_status()
             for line in resp.iter_lines():
                 if not line:

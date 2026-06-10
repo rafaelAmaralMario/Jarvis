@@ -20,6 +20,7 @@ a = Analysis(
     binaries=[],
     datas=[
         (UI_DIST_DIR, "ui/dist"),
+        (os.path.join(PROJECT_ROOT, "scripts", "jarvis.ico"), "scripts"),
     ],
     hiddenimports=[
         "jarvis.bridge",

@@ -14,8 +14,8 @@ SPEC_FILE = os.path.join(PROJECT_ROOT, "scripts", "jarvis.spec")
 
 def build_ui():
     print(":: Building React frontend...")
-    subprocess.run(["npm", "install"], cwd=UI_DIR, check=True)
-    subprocess.run(["npm", "run", "build"], cwd=UI_DIR, check=True)
+    subprocess.run("npm install", cwd=UI_DIR, shell=True, check=True)
+    subprocess.run("npm run build", cwd=UI_DIR, shell=True, check=True)
     ui_dist = os.path.join(UI_DIR, "dist")
     if not os.path.exists(ui_dist):
         print("ERROR: UI build failed — ui/dist/ not found")
@@ -42,7 +42,7 @@ def build_exe():
 def main():
     build_ui()
     build_exe()
-    print(f"\n✅ Build complete! Executable in: {os.path.join(DIST_DIR, 'JARVIS.exe')}")
+    print(f"\nOK - Build complete! Executable in: {os.path.join(DIST_DIR, 'JARVIS.exe')}")
 
 
 if __name__ == "__main__":

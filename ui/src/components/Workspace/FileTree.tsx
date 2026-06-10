@@ -8,9 +8,9 @@ interface FileTreeProps {
   entries: FileEntry[];
   onSelectFile: (path: string) => void;
   onDeleteFile: (path: string) => void;
-  onCreateFile: (parentDir: string, name?: string) => void;
-  onCreateFolder: (parentDir: string, name?: string) => void;
-  onRename: (oldPath: string, currentName: string) => void;
+  onCreateFile: (parentDir: string, name: string) => void;
+  onCreateFolder: (parentDir: string, name: string) => void;
+  onRename: (oldPath: string, newName: string) => void;
   selectedPath?: string;
   depth?: number;
   onCreateFileWithPath?: (fullPath: string) => void;
