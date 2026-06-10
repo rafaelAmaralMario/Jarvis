@@ -8,7 +8,10 @@ import type {
   LLMProviderInfo, LLMTestResult, LLMGenerateResponse,
   MCPServerInfo, MCPServerDetail, MCPToolInfo, MCPCallResult,
   WorkflowSummary, WorkflowDetail, WorkflowExecutionResult,
-  PermissionInfo, AuditEntry, SecretInfo, ModelServerStatus, UpdateStatus
+  PermissionInfo, AuditEntry, SecretInfo, ModelServerStatus, UpdateStatus,
+  ConversationSummary, ChatMessage,
+  ToolDefinition, ToolCallResult, ToolAgentResponse, ToolAgentAnswerResult,
+  StreamTask, StreamState,
 } from '@/types';
 
 declare global {
@@ -67,6 +70,20 @@ function createBridge(): JarvisBridge {
   getAvailableVersions: [],
   downloadAndInstall: { success: false, error: 'No bridge available', restart: false },
   sendMessage: '**Erro:** Backend não disponível. Inicie o aplicativo Python para usar o chat.',
+  chatListConversations: [],
+  chatGetMessages: [],
+  chatCreateConversation: { id: '', title: 'Nova conversa', model: '', createdAt: '', updatedAt: '', messageCount: 0 },
+  chatSaveMessage: { id: '', role: 'user', content: '', tokensUsed: 0, latencyMs: 0, createdAt: '' },
+  chatDeleteConversation: false,
+  chatAutoTitle: '',
+  toolsList: [],
+  toolsGetRisk: 'danger',
+  toolsExecute: { success: false, error: 'No bridge available', output: '', data: null },
+  toolsSetWorkspace: false,
+  toolAgentExecute: { content: '**Erro:** Backend não disponível.', toolCalls: [], toolResults: [], conversationId: '' },
+  toolAgentAnswer: { success: false, content: '**Erro:** Backend não disponível.', error: 'Backend not available' },
+  toolAgentExecuteStream: { taskId: '' },
+  toolAgentGetStream: { content: '', toolCalls: [], toolResults: [], cancelled: false, done: true, error: null },
   aiGenerateAgent: { error: 'Backend not available' },
   aiGenerateWorkflow: { error: 'Backend not available' },
 };
@@ -252,6 +269,22 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     securityGetSecret: (key) => send('securityGetSecret', key) as Promise<string>,
     securityDeleteSecret: (key) => send('securityDeleteSecret', key) as Promise<boolean>,
     securityListSecrets: (category) => send('securityListSecrets', category) as Promise<SecretInfo[]>,
+
+    chatListConversations: () => send('chatListConversations') as Promise<ConversationSummary[]>,
+    chatGetMessages: (convId) => send('chatGetMessages', convId) as Promise<ChatMessage[]>,
+    chatCreateConversation: (title, agentId, model) => send('chatCreateConversation', title, agentId, model) as Promise<ConversationSummary>,
+    chatSaveMessage: (convId, role, content, agentId, model, tokensUsed, latencyMs) => send('chatSaveMessage', convId, role, content, agentId, model, tokensUsed, latencyMs) as Promise<ChatMessage>,
+    chatDeleteConversation: (convId) => send('chatDeleteConversation', convId) as Promise<boolean>,
+    chatAutoTitle: (convId, firstMessage) => send('chatAutoTitle', convId, firstMessage) as Promise<string>,
+
+    toolsList: () => send('toolsList') as Promise<ToolDefinition[]>,
+    toolsGetRisk: (name) => send('toolsGetRisk', name) as Promise<string>,
+    toolsExecute: (name, args) => send('toolsExecute', name, args) as Promise<ToolCallResult>,
+    toolsSetWorkspace: (path) => send('toolsSetWorkspace', path) as Promise<boolean>,
+    toolAgentExecute: (query, convId) => send('toolAgentExecute', query, convId) as Promise<ToolAgentResponse>,
+    toolAgentAnswer: (questionId, answer) => send('toolAgentAnswer', questionId, answer) as Promise<ToolAgentAnswerResult>,
+    toolAgentExecuteStream: (query, convId) => send('toolAgentExecuteStream', query, convId) as Promise<StreamTask>,
+    toolAgentGetStream: (taskId) => send('toolAgentGetStream', taskId) as Promise<StreamState>,
 
     copyToClipboard: (text) => send('copyToClipboard', text) as Promise<boolean>,
     revealInExplorer: (path) => send('revealInExplorer', path) as Promise<boolean>,

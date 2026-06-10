@@ -10,6 +10,7 @@ const mockBridge = {
   readFile: vi.fn().mockResolvedValue(''),
   writeFile: vi.fn().mockResolvedValue(true),
   editorDetectLanguage: vi.fn().mockResolvedValue('plaintext'),
+  editorGetSettings: vi.fn().mockResolvedValue({ fontSize: 14, tabSize: 2, wordWrap: true, minimap: true, lineNumbers: true }),
 };
 
 vi.mock('@/hooks/use-jarvis', () => ({

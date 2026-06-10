@@ -25,6 +25,7 @@ vi.mock('@/hooks/use-jarvis', () => {
 
   const bridge = {
     listAgents: vi.fn().mockResolvedValue(mockAgents),
+    listModels: vi.fn().mockResolvedValue([]),
     createAgent: vi.fn().mockResolvedValue(mockAgents[0]),
     updateAgent: vi.fn().mockResolvedValue(mockAgents[0]),
     deleteAgent: vi.fn().mockResolvedValue(true),

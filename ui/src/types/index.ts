@@ -139,6 +139,22 @@ export interface JarvisBridge {
   securityDeleteSecret(key: string): Promise<boolean>;
   securityListSecrets(category?: string): Promise<SecretInfo[]>;
 
+  chatListConversations(): Promise<ConversationSummary[]>;
+  chatGetMessages(convId: string): Promise<ChatMessage[]>;
+  chatCreateConversation(title?: string, agentId?: string, model?: string): Promise<ConversationSummary>;
+  chatSaveMessage(convId: string, role: string, content: string, agentId?: string, model?: string, tokensUsed?: number, latencyMs?: number): Promise<ChatMessage>;
+  chatDeleteConversation(convId: string): Promise<boolean>;
+  chatAutoTitle(convId: string, firstMessage: string): Promise<string>;
+
+  toolsList(): Promise<ToolDefinition[]>;
+  toolsGetRisk(name: string): Promise<string>;
+  toolsExecute(name: string, args: Record<string, unknown>): Promise<ToolCallResult>;
+  toolsSetWorkspace(path: string): Promise<boolean>;
+  toolAgentExecute(query: string, convId?: string): Promise<ToolAgentResponse>;
+  toolAgentAnswer(questionId: string, answer: string): Promise<ToolAgentAnswerResult>;
+  toolAgentExecuteStream(query: string, convId?: string): Promise<StreamTask>;
+  toolAgentGetStream(taskId: string): Promise<StreamState>;
+
   copyToClipboard(text: string): Promise<boolean>;
   revealInExplorer(path: string): Promise<boolean>;
   getRelativePath(base: string, target: string): Promise<string>;
@@ -571,6 +587,94 @@ export interface ReleaseInfo {
   prerelease: boolean;
   download_url: string;
   filename: string;
+}
+
+export interface ConversationSummary {
+  id: string;
+  agentId?: string;
+  title: string;
+  model: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  agentId?: string;
+  model?: string;
+  tokensUsed: number;
+  latencyMs: number;
+  createdAt: string;
+}
+
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  risk: 'safe' | 'ask' | 'danger';
+  examples: string[];
+}
+
+export interface ToolCallResult {
+  success: boolean;
+  output: string;
+  error: string;
+  data: Record<string, unknown> | null;
+}
+
+export interface ToolAgentCall {
+  name: string;
+  args: Record<string, unknown>;
+  round: number;
+}
+
+export interface ToolAgentResult {
+  name: string;
+  args: Record<string, unknown>;
+  success: boolean;
+  output: string;
+  error: string;
+  round: number;
+}
+
+export interface PendingQuestion {
+  questionId: string;
+  question: string;
+  toolName: string;
+}
+
+export interface ToolAgentResponse {
+  content: string;
+  toolCalls: ToolAgentCall[];
+  toolResults: ToolAgentResult[];
+  conversationId: string;
+  pendingQuestion?: PendingQuestion | null;
+  cancelled?: boolean;
+}
+
+export interface ToolAgentAnswerResult {
+  success: boolean;
+  content: string;
+  error?: string;
+  pendingQuestion?: PendingQuestion | null;
+  cancelled?: boolean;
+}
+
+export interface StreamTask {
+  taskId: string;
+}
+
+export interface StreamState {
+  content: string;
+  toolCalls: ToolAgentCall[];
+  toolResults: ToolAgentResult[];
+  pendingQuestion?: PendingQuestion | null;
+  cancelled: boolean;
+  done: boolean;
+  error?: string | null;
 }
 
 export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'settings' | 'git';

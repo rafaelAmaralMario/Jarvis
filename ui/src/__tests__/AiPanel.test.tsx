@@ -11,6 +11,15 @@ const mockBridge = {
   listAgents: vi.fn().mockResolvedValue(mockAgents),
   sendMessage: vi.fn().mockResolvedValue('Resposta simulada'),
   cancelGeneration: vi.fn(),
+  chatListConversations: vi.fn().mockResolvedValue([]),
+  chatCreateConversation: vi.fn().mockResolvedValue({ id: '1', title: 'New Chat', createdAt: '', updatedAt: '' }),
+  chatDeleteConversation: vi.fn().mockResolvedValue(true),
+  chatAutoTitle: vi.fn().mockResolvedValue('Mock Title'),
+  toolsList: vi.fn().mockResolvedValue([]),
+  toolsExecute: vi.fn().mockResolvedValue({ success: true, output: '' }),
+  toolAgentExecute: vi.fn().mockResolvedValue({ success: true, output: '' }),
+  toolAgentAnswer: vi.fn().mockResolvedValue(true),
+  getOrchestrationConfig: vi.fn().mockResolvedValue({ enabled: true, orchestratorModel: '', criticEnabled: false, criticTemperature: 0.1, maxAgentsPerQuery: 3, showTrace: true }),
 };
 
 vi.mock('@/hooks/use-jarvis', () => ({
