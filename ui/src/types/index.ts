@@ -725,5 +725,5 @@ export interface PlannerCheckpoint {
   updated_at: string;
 }
 
-export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'settings' | 'git';
+export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'planner' | 'settings' | 'git';
 export type SettingsTab = 'general' | 'models' | 'assistant' | 'orchestration' | 'agents' | 'api-keys' | 'llm-providers' | 'mcp-servers' | 'workflows' | 'security' | 'updates';

@@ -3,6 +3,7 @@ import type { ActivityView } from '@/types';
 import { useJarvis } from '@/hooks/use-jarvis';
 import { GitPanel } from '@/components/Git/GitPanel';
 import { AiPanel } from '@/components/AiPanel';
+import { PlannerPanel } from '@/components/Planner/PlannerPanel';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   constructor(props: { children: ReactNode }) {
@@ -99,6 +100,10 @@ export function MainArea({ activeView }: MainAreaProps) {
 
   if (activeView === 'ai') {
     return <AiPanel fullView />;
+  }
+
+  if (activeView === 'planner') {
+    return <PlannerPanel />;
   }
 
   if (activeView === 'automation') {

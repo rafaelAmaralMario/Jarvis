@@ -13,6 +13,7 @@ const viewTitles: Record<ActivityView, string> = {
   editor: 'Editor',
   ai: 'Assistente IA',
   git: 'Git',
+  planner: 'Planner',
   automation: 'Automação',
   settings: 'Configurações',
 };

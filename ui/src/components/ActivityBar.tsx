@@ -8,6 +8,7 @@ const activityItems = [
   { id: 'ide' as ActivityView, icon: '📂', label: 'Workspace' },
   { id: 'editor' as ActivityView, icon: '⌨️', label: 'Editor' },
   { id: 'git' as ActivityView, icon: '⎇', label: 'Git' },
+  { id: 'planner' as ActivityView, icon: '📋', label: 'Planner' },
   { id: 'automation' as ActivityView, icon: '⚡', label: 'Automação' },
   { id: 'settings' as ActivityView, icon: '⚙️', label: 'Configurações' },
 ];
