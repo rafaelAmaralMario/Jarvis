@@ -574,6 +574,37 @@ class ToolManager:
                 }, "required": ["path", "sheets"]},
                 risk=RiskLevel.ASK,
             ),
+            "read_emails": ToolDefinition(
+                name="read_emails",
+                description="Read emails from IMAP inbox.",
+                parameters={"type": "object", "properties": {
+                    "folder": {"type": "string", "description": "IMAP folder (INBOX, etc.)", "default": "INBOX"},
+                    "limit": {"type": "number", "description": "Max emails to return", "default": 10},
+                    "search": {"type": "string", "description": "Optional search term"},
+                }, "required": []},
+                risk=RiskLevel.SAFE,
+            ),
+            "send_email": ToolDefinition(
+                name="send_email",
+                description="Send an email via SMTP.",
+                parameters={"type": "object", "properties": {
+                    "to": {"type": "string", "description": "Recipient email address"},
+                    "subject": {"type": "string", "description": "Email subject"},
+                    "body": {"type": "string", "description": "Email body (HTML supported)"},
+                    "html": {"type": "boolean", "description": "Send as HTML", "default": True},
+                }, "required": ["to", "subject", "body"]},
+                risk=RiskLevel.ASK,
+            ),
+            "reply_email": ToolDefinition(
+                name="reply_email",
+                description="Reply to an existing email thread.",
+                parameters={"type": "object", "properties": {
+                    "email_id": {"type": "string", "description": "Email ID to reply to"},
+                    "body": {"type": "string", "description": "Reply body content"},
+                    "folder": {"type": "string", "description": "Folder containing the email", "default": "INBOX"},
+                }, "required": ["email_id", "body"]},
+                risk=RiskLevel.ASK,
+            ),
         }
 
     def _resolve_path(self, path: str) -> str:
@@ -1294,3 +1325,40 @@ class ToolManager:
             return ToolResult(success=True, output=f"XLSX created: {path}", data=result)
         except Exception as e:
             return ToolResult(success=False, error=f"create_xlsx failed: {e}")
+
+    def _handle_read_emails(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.email_service import EmailService
+        try:
+            svc = EmailService()
+            result = svc.read_emails(args.get("folder", "INBOX"), args.get("limit", 10), args.get("search", ""))
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Email error"))
+            emails = result.get("emails", [])
+            if not emails:
+                return ToolResult(success=True, output="No emails found.")
+            lines = [f"- [{e['date']}] {e['from']}: {e['subject']}" for e in emails]
+            return ToolResult(success=True, output="\n".join(lines), data=result)
+        except Exception as e:
+            return ToolResult(success=False, error=f"Email error: {e}")
+
+    def _handle_send_email(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.email_service import EmailService
+        try:
+            svc = EmailService()
+            result = svc.send_email(args["to"], args["subject"], args["body"], args.get("html", True))
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Email error"))
+            return ToolResult(success=True, output=f"Email sent to {args['to']}: {args['subject']}")
+        except Exception as e:
+            return ToolResult(success=False, error=f"Email error: {e}")
+
+    def _handle_reply_email(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.email_service import EmailService
+        try:
+            svc = EmailService()
+            result = svc.reply_email(args["email_id"], args["body"], args.get("folder", "INBOX"))
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Email error"))
+            return ToolResult(success=True, output=f"Reply sent to {result.get('to', '')}")
+        except Exception as e:
+            return ToolResult(success=False, error=f"Email error: {e}")
