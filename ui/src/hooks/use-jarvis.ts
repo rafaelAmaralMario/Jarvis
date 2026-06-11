@@ -11,7 +11,7 @@ import type {
   PermissionInfo, AuditEntry, SecretInfo, ModelServerStatus, UpdateStatus,
   ConversationSummary, ChatMessage,
   ToolDefinition, ToolCallResult, ToolAgentResponse, ToolAgentAnswerResult,
-  StreamTask, StreamState, SIProgress, TaskPlannerResult, PlannerProgress, PlannerCheckpoint,
+  StreamTask, StreamState, SIProgress, LLMFallbackConfig, TaskPlannerResult, PlannerProgress, PlannerCheckpoint,
 } from '@/types';
 
 declare global {
@@ -296,6 +296,9 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     selfImprovementGetStream: (taskId) => send('selfImprovementGetStream', taskId) as Promise<SIProgress>,
     selfImprovementAnswer: (questionId, answer) => send('selfImprovementAnswer', questionId, answer) as Promise<{ success: boolean }>,
     selfImprovementCancel: (taskId) => send('selfImprovementCancel', taskId) as Promise<{ success: boolean }>,
+
+    llmGetFallbackConfig: (provider?) => send('llmGetFallbackConfig', provider) as Promise<LLMFallbackConfig[] | LLMFallbackConfig | null>,
+    llmSaveFallbackConfig: (config) => send('llmSaveFallbackConfig', config) as Promise<boolean>,
 
     copyToClipboard: (text) => send('copyToClipboard', text) as Promise<boolean>,
     revealInExplorer: (path) => send('revealInExplorer', path) as Promise<boolean>,

@@ -30,6 +30,8 @@ interface MockBridge {
   selfImprovementGetStream: ReturnType<typeof vi.fn>;
   selfImprovementAnswer: ReturnType<typeof vi.fn>;
   selfImprovementCancel: ReturnType<typeof vi.fn>;
+  llmGetFallbackConfig: ReturnType<typeof vi.fn>;
+  llmSaveFallbackConfig: ReturnType<typeof vi.fn>;
   taskPlannerExecute: ReturnType<typeof vi.fn>;
   plannerExecuteStream: ReturnType<typeof vi.fn>;
   plannerGetProgress: ReturnType<typeof vi.fn>;
@@ -82,6 +84,8 @@ export const mockBridge: MockBridge = {
   selfImprovementGetStream: vi.fn().mockResolvedValue({ step: 'completed', status: 'completed', detail: '', progress: 1.0, cancelled: false, done: true, error: null }),
   selfImprovementAnswer: vi.fn().mockResolvedValue({ success: true }),
   selfImprovementCancel: vi.fn().mockResolvedValue({ success: true }),
+  llmGetFallbackConfig: vi.fn().mockResolvedValue([]),
+  llmSaveFallbackConfig: vi.fn().mockResolvedValue(true),
   taskPlannerExecute: vi.fn().mockResolvedValue({
     success: true,
     task: 'mock task',

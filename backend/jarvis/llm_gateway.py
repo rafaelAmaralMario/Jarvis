@@ -2,6 +2,7 @@
 
 import glob
 import json
+import logging
 import os
 import threading
 import time
@@ -11,6 +12,8 @@ from enum import Enum
 from typing import Any, Callable
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class LLMProvider(Enum):
@@ -62,6 +65,30 @@ class LLMProviderConfig:
 
 class LLMError(Exception):
     pass
+
+
+class LLMFallbackError(LLMError):
+    pass
+
+
+@dataclass
+class LLMFallbackConfig:
+    provider: str = ""
+    fallback_order: list[str] = field(default_factory=list)
+    timeout_seconds: int = 30
+    model_overrides: list[dict] = field(default_factory=list)
+
+
+def copy_request(req: LLMRequest) -> LLMRequest:
+    return LLMRequest(
+        provider=req.provider,
+        model=req.model,
+        messages=list(req.messages),
+        system=req.system,
+        temperature=req.temperature,
+        max_tokens=req.max_tokens,
+        stream=req.stream,
+    )
 
 
 class BaseLLMClient(ABC):
@@ -489,6 +516,7 @@ class LLMGateway:
         self._db = db
         self._providers: dict[str, LLMProviderConfig] = {}
         self._default_provider = LLMProvider.OLLAMA
+        self._fallback_configs: dict[str, LLMFallbackConfig] = {}
         self._load_config()
 
     def _load_config(self):
@@ -523,6 +551,52 @@ class LLMGateway:
                 default_model="llama3.2",
                 enabled=True,
             )
+
+        self._load_fallback_config()
+
+    def _load_fallback_config(self):
+        rows = self._db.fetchall(
+            "SELECT provider, fallback_order, timeout_seconds, model_overrides"
+            " FROM llm_fallback_config"
+        )
+        for row in rows:
+            self._fallback_configs[row["provider"]] = LLMFallbackConfig(
+                provider=row["provider"],
+                fallback_order=json.loads(row["fallback_order"]) if row["fallback_order"] else [],
+                timeout_seconds=row["timeout_seconds"] or 30,
+                model_overrides=json.loads(row["model_overrides"]) if row["model_overrides"] else [],
+            )
+
+    def get_fallback_configs(self) -> list[dict]:
+        return [
+            {
+                "provider": cfg.provider,
+                "fallbackOrder": cfg.fallback_order,
+                "timeoutSeconds": cfg.timeout_seconds,
+                "modelOverrides": cfg.model_overrides,
+            }
+            for cfg in self._fallback_configs.values()
+        ]
+
+    def save_fallback_config(self, config: dict) -> bool:
+        self._db.execute(
+            """INSERT OR REPLACE INTO llm_fallback_config
+               (provider, fallback_order, timeout_seconds, model_overrides)
+               VALUES (?, ?, ?, ?)""",
+            (
+                config["provider"],
+                json.dumps(config.get("fallbackOrder", [])),
+                config.get("timeoutSeconds", 30),
+                json.dumps(config.get("modelOverrides", [])),
+            ),
+        )
+        self._fallback_configs[config["provider"]] = LLMFallbackConfig(
+            provider=config["provider"],
+            fallback_order=config.get("fallbackOrder", []),
+            timeout_seconds=config.get("timeoutSeconds", 30),
+            model_overrides=config.get("modelOverrides", []),
+        )
+        return True
 
     def save_provider(self, config: LLMProviderConfig) -> bool:
         self._db.execute(
@@ -599,6 +673,47 @@ class LLMGateway:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def _build_fallback_order(self, provider_str: str) -> list[str]:
+        fallback_cfg = self._fallback_configs.get(provider_str)
+        if fallback_cfg:
+            return [provider_str] + fallback_cfg.fallback_order
+        ordered = [provider_str]
+        for p in [LLMProvider.OPENAI, LLMProvider.ANTHROPIC, LLMProvider.NATIVE]:
+            p_str = p.value
+            if p_str != provider_str and p_str in self._providers and self._providers[p_str].enabled:
+                ordered.append(p_str)
+        return ordered
+
+    def _try_provider(self, provider_str: str, req: LLMRequest, timeout: int) -> LLMResponse:
+        cfg = self._providers.get(provider_str)
+        if not cfg or not cfg.enabled:
+            raise LLMError(f"Provider '{provider_str}' not configured or disabled")
+        attempt_req = copy_request(req)
+        attempt_req.provider = LLMProvider(provider_str)
+        if not attempt_req.model and cfg.default_model:
+            attempt_req.model = cfg.default_model
+        client = get_llm_client(cfg)
+        if isinstance(client, (OllamaLLMClient, OpenAIClient, AnthropicClient)):
+            import httpx
+            client._client.timeout = httpx.Timeout(timeout)
+        resp = client.generate(attempt_req)
+        resp.provider = LLMProvider(provider_str)
+        return resp
+
+    def _try_provider_stream(self, provider_str: str, req: LLMRequest, timeout: int, on_chunk: Callable[[str], None]) -> bool:
+        cfg = self._providers.get(provider_str)
+        if not cfg or not cfg.enabled:
+            raise LLMError(f"Provider '{provider_str}' not configured or disabled")
+        attempt_req = copy_request(req)
+        attempt_req.provider = LLMProvider(provider_str)
+        if not attempt_req.model and cfg.default_model:
+            attempt_req.model = cfg.default_model
+        client = get_llm_client(cfg)
+        if isinstance(client, (OllamaLLMClient, OpenAIClient, AnthropicClient)):
+            import httpx
+            client._client.timeout = httpx.Timeout(timeout)
+        return client.generate_stream(attempt_req, on_chunk)
+
     def generate(self, req: LLMRequest) -> LLMResponse:
         provider_str = req.provider.value if isinstance(req.provider, LLMProvider) else req.provider
         cfg = self._providers.get(provider_str)
@@ -612,8 +727,27 @@ class LLMGateway:
         if isinstance(req.provider, str):
             req.provider = LLMProvider(provider_str)
 
-        client = get_llm_client(cfg)
-        return client.generate(req)
+        primary = cfg.provider.value
+        ordered = self._build_fallback_order(primary)
+        fallback_cfg = self._fallback_configs.get(primary)
+        timeout = fallback_cfg.timeout_seconds if fallback_cfg else 30
+        errors: list[str] = []
+
+        for attempt_provider in ordered:
+            try:
+                resp = self._try_provider(attempt_provider, req, timeout)
+                if attempt_provider != primary:
+                    logger.info("Fallback ativo: %s -> %s para modelo %s", primary, attempt_provider, req.model)
+                return resp
+            except Exception as e:
+                errors.append(f"{attempt_provider}: {e}")
+                logger.warning("Provedor %s falhou: %s", attempt_provider, e)
+                continue
+
+        raise LLMError(
+            f"Todos os provedores falharam para modelo '{req.model}'. "
+            f"Erros: {'; '.join(errors)}"
+        )
 
     def generate_stream(self, req: LLMRequest, on_chunk: Callable[[str], None]) -> bool:
         provider_str = req.provider.value if isinstance(req.provider, LLMProvider) else req.provider
@@ -628,5 +762,24 @@ class LLMGateway:
         if isinstance(req.provider, str):
             req.provider = LLMProvider(provider_str)
 
-        client = get_llm_client(cfg)
-        return client.generate_stream(req, on_chunk)
+        primary = cfg.provider.value
+        ordered = self._build_fallback_order(primary)
+        fallback_cfg = self._fallback_configs.get(primary)
+        timeout = fallback_cfg.timeout_seconds if fallback_cfg else 30
+        errors: list[str] = []
+
+        for attempt_provider in ordered:
+            try:
+                result = self._try_provider_stream(attempt_provider, req, timeout, on_chunk)
+                if attempt_provider != primary:
+                    logger.info("Fallback ativo (stream): %s -> %s para modelo %s", primary, attempt_provider, req.model)
+                return result
+            except Exception as e:
+                errors.append(f"{attempt_provider}: {e}")
+                logger.warning("Provedor %s falhou: %s", attempt_provider, e)
+                continue
+
+        raise LLMError(
+            f"Todos os provedores falharam para modelo '{req.model}'. "
+            f"Erros: {'; '.join(errors)}"
+        )

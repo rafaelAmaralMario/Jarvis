@@ -257,6 +257,15 @@ MIGRATIONS: list[Migration] = [
         INSERT OR IGNORE INTO llm_providers (provider, api_url, default_model, enabled)
         VALUES ('ollama', 'http://localhost:11434', 'llama3.2', 1);
     """),
+    Migration(12, "llm-fallback-config", """
+        CREATE TABLE IF NOT EXISTS llm_fallback_config (
+            provider TEXT PRIMARY KEY,
+            fallback_order TEXT NOT NULL DEFAULT '[]',
+            timeout_seconds INTEGER NOT NULL DEFAULT 30,
+            model_overrides TEXT NOT NULL DEFAULT '[]',
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );
+    """),
     Migration(10, "secret-storage", """
         CREATE TABLE IF NOT EXISTS secret_storage (
             key TEXT PRIMARY KEY,

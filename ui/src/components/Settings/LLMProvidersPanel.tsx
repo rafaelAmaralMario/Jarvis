@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useJarvis } from '@/hooks/use-jarvis';
-import type { LLMProviderInfo } from '@/types';
+import type { LLMProviderInfo, LLMFallbackConfig, JarvisBridge } from '@/types';
 
 const PROVIDER_ICONS: Record<string, string> = {
   ollama: '🦙',
@@ -122,6 +122,19 @@ export function LLMProvidersPanel() {
         </div>
       )}
 
+      {/* Fallback config */}
+      <div className="p-4 rounded-xl border border-border/50 bg-muted/30">
+        <h3 className="text-sm font-semibold mb-2">🔄 Fallback Configuration</h3>
+        <p className="text-xs text-muted-foreground mb-2">
+          When a provider fails, JARVIS automatically tries fallback providers in order. Configure which providers serve as fallback and timeout limits.
+        </p>
+        <div className="space-y-2">
+          {providers.filter(p => p.enabled).map(p => (
+            <FallbackRow key={p.provider} provider={p.provider} bridge={bridge} />
+          ))}
+        </div>
+      </div>
+
       {/* NativeProvider setup guide */}
       <div className="p-4 rounded-xl border border-border/50 bg-muted/30">
         <h3 className="text-sm font-semibold mb-2">⚡ Native Provider Setup</h3>
@@ -136,6 +149,48 @@ export function LLMProvidersPanel() {
           <li>Select <strong>native</strong> in the AiPanel provider dropdown to use it</li>
         </ol>
       </div>
+    </div>
+  );
+}
+
+function FallbackRow({ provider, bridge }: { provider: string; bridge: JarvisBridge }) {
+  const [config, setConfig] = useState<LLMFallbackConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const c = await bridge.llmGetFallbackConfig(provider);
+      setConfig(c as LLMFallbackConfig | null);
+      setLoading(false);
+    })();
+  }, [provider]);
+
+  if (loading) return <div className="h-8 animate-pulse rounded bg-muted/50" />;
+
+  return (
+    <div className="flex items-center justify-between text-xs">
+      <span className="capitalize w-20 font-medium">{provider}</span>
+      <span className="text-muted-foreground">
+        {config ? config.fallbackOrder.join(' → ') : 'No fallback configured'}
+      </span>
+      <button
+        onClick={async () => {
+          const fallbackOrder = config?.fallbackOrder ?? [];
+          const order = prompt(`Fallback order (comma-separated):`, fallbackOrder.join(','));
+          if (order === null) return;
+          const parsed = order.split(',').map(s => s.trim()).filter(Boolean);
+          await bridge.llmSaveFallbackConfig({
+            provider,
+            fallbackOrder: parsed,
+            timeoutSeconds: config?.timeoutSeconds ?? 30,
+            modelOverrides: config?.modelOverrides ?? [],
+          });
+          setConfig({ provider, fallbackOrder: parsed, timeoutSeconds: config?.timeoutSeconds ?? 30, modelOverrides: config?.modelOverrides ?? [] });
+        }}
+        className="px-2 py-1 text-xs rounded-md border border-border hover:bg-accent"
+      >
+        Edit
+      </button>
     </div>
   );
 }

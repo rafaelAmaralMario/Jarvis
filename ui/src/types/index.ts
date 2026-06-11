@@ -166,6 +166,9 @@ export interface JarvisBridge {
   selfImprovementAnswer(questionId: string, answer: string): Promise<{ success: boolean }>;
   selfImprovementCancel(taskId: string): Promise<{ success: boolean }>;
 
+  llmGetFallbackConfig(provider?: string): Promise<LLMFallbackConfig[] | LLMFallbackConfig | null>;
+  llmSaveFallbackConfig(config: LLMFallbackConfig): Promise<boolean>;
+
   copyToClipboard(text: string): Promise<boolean>;
   revealInExplorer(path: string): Promise<boolean>;
   getRelativePath(base: string, target: string): Promise<string>;
@@ -699,6 +702,13 @@ export interface SIProgress {
   cancelled: boolean;
   done: boolean;
   error?: string | null;
+}
+
+export interface LLMFallbackConfig {
+  provider: string;
+  fallbackOrder: string[];
+  timeoutSeconds: number;
+  modelOverrides: { model: string; fallbackOrder: string[] }[];
 }
 
 export interface TaskPlannerStepResult {

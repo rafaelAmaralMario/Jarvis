@@ -979,6 +979,26 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
         return self.plannerExecuteStream("", resume_plan_id=plan_id)
 
     # ========================================================================
+    # Fallback config
+    # ========================================================================
+
+    def llmGetFallbackConfig(self, provider: str = "") -> list | dict | None:
+        if not self._llm:
+            return None
+        configs = self._llm.get_fallback_configs()
+        if provider:
+            for c in configs:
+                if c["provider"] == provider:
+                    return c
+            return None
+        return configs
+
+    def llmSaveFallbackConfig(self, config: dict) -> bool:
+        if not self._llm:
+            return False
+        return self._llm.save_fallback_config(config)
+
+    # ========================================================================
     # Self-Improvement (streaming)
     # ========================================================================
 
