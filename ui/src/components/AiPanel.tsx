@@ -112,6 +112,9 @@ export function AiPanel({ fullView }: AiPanelProps) {
   const [answerInput, setAnswerInput] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
   const [unattended, setUnattended] = useState(() => localStorage.getItem('jarvis_unattended') === 'true');
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const streamTaskRef = useRef<string | null>(null);
 
   const activeConv = conversations.find(c => c.id === activeConvId);
@@ -221,6 +224,42 @@ export function AiPanel({ fullView }: AiPanelProps) {
       c.id === convId ? { ...c, messages: updater(c.messages) } : c
     ));
   }, []);
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64 = (reader.result as string).split(',')[1];
+          const result = await bridge.audioTranscribe(base64, 'tiny');
+          if (result.success) {
+            setInput(prev => (prev ? prev + ' ' : '') + result.text);
+          }
+        };
+        reader.readAsDataURL(blob);
+      };
+      recorder.start();
+      setIsRecording(true);
+    } catch (e) {
+      setError('Microphone access denied');
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+  }
 
   async function handleSend() {
     const text = input.trim();
@@ -787,6 +826,20 @@ export function AiPanel({ fullView }: AiPanelProps) {
               className="w-full px-3.5 py-2.5 rounded-xl bg-muted text-foreground border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 disabled:opacity-50"
             />
           </div>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={isRecording ? stopRecording : startRecording}
+            disabled={loading}
+            className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-medium flex-shrink-0 shadow-sm transition-colors ${
+              isRecording
+                ? 'bg-red-950/30 text-red-400 border border-red-900/40 animate-pulse'
+                : 'bg-muted text-muted-foreground border border-border hover:bg-accent'
+            }`}
+            title={isRecording ? 'Stop recording' : 'Record audio'}
+          >
+            {isRecording ? '🔴' : '🎤'}
+          </motion.button>
           {loading ? (
             <motion.button
               whileHover={{ scale: 1.05 }}

@@ -175,6 +175,8 @@ export interface JarvisBridge {
   ggufCatalog(): Promise<GGUFModelCatalog[]>;
   ggufDiskUsage(): Promise<{ totalBytes: number; count: number; modelsDir: string }>;
 
+  audioTranscribe(audioBase64: string, model?: string): Promise<AudioTranscribeResult>;
+
   copyToClipboard(text: string): Promise<boolean>;
   revealInExplorer(path: string): Promise<boolean>;
   getRelativePath(base: string, target: string): Promise<string>;
@@ -715,6 +717,12 @@ export interface GGUFModelInfo {
   sizeBytes: number;
   path: string;
   modifiedAt: string;
+}
+
+export interface AudioTranscribeResult {
+  success: boolean;
+  text: string;
+  error?: string;
 }
 
 export interface GGUFModelCatalog {

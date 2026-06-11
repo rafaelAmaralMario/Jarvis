@@ -37,6 +37,7 @@ interface MockBridge {
   ggufDelete: ReturnType<typeof vi.fn>;
   ggufCatalog: ReturnType<typeof vi.fn>;
   ggufDiskUsage: ReturnType<typeof vi.fn>;
+  audioTranscribe: ReturnType<typeof vi.fn>;
   taskPlannerExecute: ReturnType<typeof vi.fn>;
   plannerExecuteStream: ReturnType<typeof vi.fn>;
   plannerGetProgress: ReturnType<typeof vi.fn>;
@@ -98,6 +99,7 @@ export const mockBridge: MockBridge = {
     { name: 'Llama 3.2 3B', repoId: 'bartowski/Llama-3.2-3B-Instruct-GGUF', filename: 'Llama-3.2-3B-Instruct-Q4_K_M.gguf', description: 'Mock', size: '~2 GB' },
   ]),
   ggufDiskUsage: vi.fn().mockResolvedValue({ totalBytes: 0, count: 0, modelsDir: '/mock/models' }),
+  audioTranscribe: vi.fn().mockResolvedValue({ success: true, text: 'mock transcription' }),
   taskPlannerExecute: vi.fn().mockResolvedValue({
     success: true,
     task: 'mock task',

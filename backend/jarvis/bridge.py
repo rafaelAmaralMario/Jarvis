@@ -1037,6 +1037,28 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
         return self._get_gguf_manager().get_disk_usage()
 
     # ========================================================================
+    # Audio transcription
+    # ========================================================================
+
+    def audioTranscribe(self, audio_base64: str, model: str = "tiny") -> dict:
+        import base64
+        import tempfile
+        try:
+            audio_bytes = base64.b64decode(audio_base64)
+        except Exception as e:
+            return {"success": False, "text": "", "error": f"Invalid audio data: {e}"}
+        tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        tmp.write(audio_bytes)
+        tmp.close()
+        try:
+            result = self._tools.execute("transcribe_audio", {"path": tmp.name, "model": model})
+            return {"success": result.success, "text": result.output, "error": result.error}
+        except Exception as e:
+            return {"success": False, "text": "", "error": str(e)}
+        finally:
+            os.unlink(tmp.name)
+
+    # ========================================================================
     # Self-Improvement (streaming)
     # ========================================================================
 

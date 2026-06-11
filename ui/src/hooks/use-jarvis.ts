@@ -11,7 +11,7 @@ import type {
   PermissionInfo, AuditEntry, SecretInfo, ModelServerStatus, UpdateStatus,
   ConversationSummary, ChatMessage,
   ToolDefinition, ToolCallResult, ToolAgentResponse, ToolAgentAnswerResult,
-  StreamTask, StreamState, SIProgress, LLMFallbackConfig, GGUFModelInfo, GGUFModelCatalog, TaskPlannerResult, PlannerProgress, PlannerCheckpoint,
+  StreamTask, StreamState, SIProgress, LLMFallbackConfig, GGUFModelInfo, GGUFModelCatalog, AudioTranscribeResult, TaskPlannerResult, PlannerProgress, PlannerCheckpoint,
 } from '@/types';
 
 declare global {
@@ -305,6 +305,8 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     ggufDelete: (name) => send('ggufDelete', name) as Promise<{ success: boolean }>,
     ggufCatalog: () => send('ggufCatalog') as Promise<GGUFModelCatalog[]>,
     ggufDiskUsage: () => send('ggufDiskUsage') as Promise<{ totalBytes: number; count: number; modelsDir: string }>,
+
+    audioTranscribe: (audioBase64, model?) => send('audioTranscribe', audioBase64, model) as Promise<AudioTranscribeResult>,
 
     copyToClipboard: (text) => send('copyToClipboard', text) as Promise<boolean>,
     revealInExplorer: (path) => send('revealInExplorer', path) as Promise<boolean>,

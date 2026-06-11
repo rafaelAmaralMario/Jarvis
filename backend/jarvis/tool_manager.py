@@ -375,6 +375,21 @@ class ToolManager:
                 },
                 risk=RiskLevel.SAFE,
             ),
+            "transcribe_audio": ToolDefinition(
+                name="transcribe_audio",
+                description="Transcribe an audio file (.wav/.mp3/.ogg) to text using Whisper.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Path to the audio file"},
+                        "model": {"type": "string", "description": "Model size: tiny, base, small, medium, large", "default": "tiny"},
+                        "language": {"type": "string", "description": "Language code (auto-detected if empty)", "default": ""},
+                    },
+                    "required": ["path"],
+                },
+                risk=RiskLevel.SAFE,
+                examples=["transcribe_audio path='audio.wav'", "transcribe_audio path='recording.mp3' model='base' language='pt'"],
+            ),
         }
 
     def _resolve_path(self, path: str) -> str:
@@ -798,3 +813,22 @@ class ToolManager:
             )
         except Exception as e:
             return ToolResult(success=False, error=f"Download failed: {e}")
+
+    def _handle_transcribe_audio(self, args: dict[str, Any]) -> ToolResult:
+        import faster_whisper
+        path = self._resolve_path(args["path"])
+        if not os.path.exists(path):
+            return ToolResult(success=False, error=f"File not found: {path}")
+        model_size = args.get("model", "tiny")
+        language = args.get("language") or None
+        try:
+            model = faster_whisper.WhisperModel(model_size, device="cpu", compute_type="int8")
+            segments, info = model.transcribe(path, language=language)
+            text = " ".join(seg.text for seg in segments)
+            return ToolResult(
+                success=True,
+                output=text,
+                data={"language": info.language, "duration": info.duration},
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=f"Transcription failed: {e}")
