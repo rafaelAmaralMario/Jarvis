@@ -33,6 +33,9 @@ ocr = [
 caldav = [
     "caldav>=1.0,<2",
 ]
+docs = [
+    "reportlab>=4.3,<5",
+]
 audio = [
     "piper-tts>=1.2,<2",
     "faster-whisper>=1.1,<2",

@@ -546,6 +546,34 @@ class ToolManager:
                 risk=RiskLevel.SAFE,
                 examples=["synthesize_speech text='Olá mundo'", "synthesize_speech text='Bom dia' voice='pt_BR-faber-medium'"],
             ),
+            "create_docx": ToolDefinition(
+                name="create_docx",
+                description="Create a formatted Word document (.docx).",
+                parameters={"type": "object", "properties": {
+                    "path": {"type": "string", "description": "Output file path"},
+                    "title": {"type": "string", "description": "Document title"},
+                    "sections": {"type": "array", "items": {"type": "object"}, "description": "List of sections, each with heading, content, type"},
+                }, "required": ["path", "sections"]},
+                risk=RiskLevel.ASK,
+            ),
+            "create_pdf": ToolDefinition(
+                name="create_pdf",
+                description="Create a PDF document with formatted text and tables.",
+                parameters={"type": "object", "properties": {
+                    "path": {"type": "string", "description": "Output file path"},
+                    "sections": {"type": "array", "items": {"type": "object"}, "description": "List of content sections"},
+                }, "required": ["path", "sections"]},
+                risk=RiskLevel.ASK,
+            ),
+            "create_xlsx": ToolDefinition(
+                name="create_xlsx",
+                description="Create an Excel spreadsheet with data and formulas.",
+                parameters={"type": "object", "properties": {
+                    "path": {"type": "string", "description": "Output file path"},
+                    "sheets": {"type": "array", "items": {"type": "object"}, "description": "List of sheets with headers, rows, formulas"},
+                }, "required": ["path", "sheets"]},
+                risk=RiskLevel.ASK,
+            ),
         }
 
     def _resolve_path(self, path: str) -> str:
@@ -1230,3 +1258,39 @@ class ToolManager:
                 return ToolResult(success=True, output="Áudio gerado (base64 inline)", data={"audioBase64": b64, "format": "wav"})
         except Exception as e:
             return ToolResult(success=False, error=f"TTS failed: {e}")
+
+    def _handle_create_docx(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.document_generator import DocumentGenerator
+        path = self._resolve_path(args["path"])
+        try:
+            gen = DocumentGenerator()
+            result = gen.create_docx(path, args.get("title", ""), args.get("sections", []))
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Failed"))
+            return ToolResult(success=True, output=f"DOCX created: {path}", data=result)
+        except Exception as e:
+            return ToolResult(success=False, error=f"create_docx failed: {e}")
+
+    def _handle_create_pdf(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.document_generator import DocumentGenerator
+        path = self._resolve_path(args["path"])
+        try:
+            gen = DocumentGenerator()
+            result = gen.create_pdf(path, args.get("sections", []))
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Failed"))
+            return ToolResult(success=True, output=f"PDF created: {path}", data=result)
+        except Exception as e:
+            return ToolResult(success=False, error=f"create_pdf failed: {e}")
+
+    def _handle_create_xlsx(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.document_generator import DocumentGenerator
+        path = self._resolve_path(args["path"])
+        try:
+            gen = DocumentGenerator()
+            result = gen.create_xlsx(path, args.get("sheets", []))
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Failed"))
+            return ToolResult(success=True, output=f"XLSX created: {path}", data=result)
+        except Exception as e:
+            return ToolResult(success=False, error=f"create_xlsx failed: {e}")
