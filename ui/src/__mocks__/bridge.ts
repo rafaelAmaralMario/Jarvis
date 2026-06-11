@@ -32,6 +32,11 @@ interface MockBridge {
   selfImprovementCancel: ReturnType<typeof vi.fn>;
   llmGetFallbackConfig: ReturnType<typeof vi.fn>;
   llmSaveFallbackConfig: ReturnType<typeof vi.fn>;
+  ggufDownload: ReturnType<typeof vi.fn>;
+  ggufList: ReturnType<typeof vi.fn>;
+  ggufDelete: ReturnType<typeof vi.fn>;
+  ggufCatalog: ReturnType<typeof vi.fn>;
+  ggufDiskUsage: ReturnType<typeof vi.fn>;
   taskPlannerExecute: ReturnType<typeof vi.fn>;
   plannerExecuteStream: ReturnType<typeof vi.fn>;
   plannerGetProgress: ReturnType<typeof vi.fn>;
@@ -86,6 +91,13 @@ export const mockBridge: MockBridge = {
   selfImprovementCancel: vi.fn().mockResolvedValue({ success: true }),
   llmGetFallbackConfig: vi.fn().mockResolvedValue([]),
   llmSaveFallbackConfig: vi.fn().mockResolvedValue(true),
+  ggufDownload: vi.fn().mockResolvedValue({ success: true, path: '/mock/path/model.gguf' }),
+  ggufList: vi.fn().mockResolvedValue([]),
+  ggufDelete: vi.fn().mockResolvedValue({ success: true }),
+  ggufCatalog: vi.fn().mockResolvedValue([
+    { name: 'Llama 3.2 3B', repoId: 'bartowski/Llama-3.2-3B-Instruct-GGUF', filename: 'Llama-3.2-3B-Instruct-Q4_K_M.gguf', description: 'Mock', size: '~2 GB' },
+  ]),
+  ggufDiskUsage: vi.fn().mockResolvedValue({ totalBytes: 0, count: 0, modelsDir: '/mock/models' }),
   taskPlannerExecute: vi.fn().mockResolvedValue({
     success: true,
     task: 'mock task',

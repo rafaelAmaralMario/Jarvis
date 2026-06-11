@@ -11,7 +11,7 @@ import type {
   PermissionInfo, AuditEntry, SecretInfo, ModelServerStatus, UpdateStatus,
   ConversationSummary, ChatMessage,
   ToolDefinition, ToolCallResult, ToolAgentResponse, ToolAgentAnswerResult,
-  StreamTask, StreamState, SIProgress, LLMFallbackConfig, TaskPlannerResult, PlannerProgress, PlannerCheckpoint,
+  StreamTask, StreamState, SIProgress, LLMFallbackConfig, GGUFModelInfo, GGUFModelCatalog, TaskPlannerResult, PlannerProgress, PlannerCheckpoint,
 } from '@/types';
 
 declare global {
@@ -299,6 +299,12 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
 
     llmGetFallbackConfig: (provider?) => send('llmGetFallbackConfig', provider) as Promise<LLMFallbackConfig[] | LLMFallbackConfig | null>,
     llmSaveFallbackConfig: (config) => send('llmSaveFallbackConfig', config) as Promise<boolean>,
+
+    ggufDownload: (repoId, filename) => send('ggufDownload', repoId, filename) as Promise<{ success: boolean; path?: string; error?: string }>,
+    ggufList: () => send('ggufList') as Promise<GGUFModelInfo[]>,
+    ggufDelete: (name) => send('ggufDelete', name) as Promise<{ success: boolean }>,
+    ggufCatalog: () => send('ggufCatalog') as Promise<GGUFModelCatalog[]>,
+    ggufDiskUsage: () => send('ggufDiskUsage') as Promise<{ totalBytes: number; count: number; modelsDir: string }>,
 
     copyToClipboard: (text) => send('copyToClipboard', text) as Promise<boolean>,
     revealInExplorer: (path) => send('revealInExplorer', path) as Promise<boolean>,

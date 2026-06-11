@@ -11,9 +11,11 @@ import { WorkflowsPanel } from './WorkflowsPanel';
 import { SecurityPanel } from './SecurityPanel';
 import { UpdatesPanel } from './UpdatesPanel';
 import { GeneralPanel } from './GeneralPanel';
+import { GGUFSettings } from './GGUFSettings';
 
 const TABS: { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'models', label: 'Models', icon: '📦' },
+  { id: 'gguf', label: 'GGUF', icon: '⬇️' },
   { id: 'agents', label: 'Agents', icon: '🤖' },
   { id: 'orchestration', label: 'Orquestração', icon: '🔀' },
   { id: 'api-keys', label: 'API Keys', icon: '🔑' },
@@ -77,6 +79,7 @@ export function SettingsPage() {
               className="h-full"
             >
               {activeTab === 'models' && <ModelsPanel />}
+              {activeTab === 'gguf' && <GGUFSettings />}
               {activeTab === 'agents' && <AgentsPanel />}
               {activeTab === 'orchestration' && <OrchestrationPanel />}
               {activeTab === 'api-keys' && <ApiKeyManager />}

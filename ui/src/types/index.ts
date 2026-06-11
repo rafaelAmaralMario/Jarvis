@@ -169,6 +169,12 @@ export interface JarvisBridge {
   llmGetFallbackConfig(provider?: string): Promise<LLMFallbackConfig[] | LLMFallbackConfig | null>;
   llmSaveFallbackConfig(config: LLMFallbackConfig): Promise<boolean>;
 
+  ggufDownload(repoId: string, filename: string): Promise<{ success: boolean; path?: string; error?: string }>;
+  ggufList(): Promise<GGUFModelInfo[]>;
+  ggufDelete(name: string): Promise<{ success: boolean }>;
+  ggufCatalog(): Promise<GGUFModelCatalog[]>;
+  ggufDiskUsage(): Promise<{ totalBytes: number; count: number; modelsDir: string }>;
+
   copyToClipboard(text: string): Promise<boolean>;
   revealInExplorer(path: string): Promise<boolean>;
   getRelativePath(base: string, target: string): Promise<string>;
@@ -704,6 +710,21 @@ export interface SIProgress {
   error?: string | null;
 }
 
+export interface GGUFModelInfo {
+  name: string;
+  sizeBytes: number;
+  path: string;
+  modifiedAt: string;
+}
+
+export interface GGUFModelCatalog {
+  name: string;
+  repoId: string;
+  filename: string;
+  description: string;
+  size: string;
+}
+
 export interface LLMFallbackConfig {
   provider: string;
   fallbackOrder: string[];
@@ -754,4 +775,4 @@ export interface PlannerCheckpoint {
 }
 
 export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'planner' | 'settings' | 'git';
-export type SettingsTab = 'general' | 'models' | 'assistant' | 'orchestration' | 'agents' | 'api-keys' | 'llm-providers' | 'mcp-servers' | 'workflows' | 'security' | 'updates';
+export type SettingsTab = 'general' | 'models' | 'gguf' | 'assistant' | 'orchestration' | 'agents' | 'api-keys' | 'llm-providers' | 'mcp-servers' | 'workflows' | 'security' | 'updates';

@@ -17,6 +17,7 @@ from jarvis.editor_manager import EditorManager
 from jarvis.git_manager import GitManager
 from jarvis.graph_builder import GraphBuilder
 from jarvis.knowledge_manager import CreateNoteDTO, KnowledgeManager
+from jarvis.gguf_manager import GGUFManager
 from jarvis.llm_gateway import LLMGateway, LLMRequest, LLMMessage
 from jarvis.mcp_manager import MCPManager
 from jarvis.models_manager import ModelMetadata, ModelSpecialty, ModelsManager
@@ -997,6 +998,43 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
         if not self._llm:
             return False
         return self._llm.save_fallback_config(config)
+
+    # ========================================================================
+    # GGUF model management
+    # ========================================================================
+
+    def _get_gguf_manager(self) -> GGUFManager:
+        models_dir = os.path.expanduser("~/.jarvis/models")
+        if self._llm:
+            providers = self._llm.get_providers()
+            for p in providers:
+                if p.get("provider") == "native" and p.get("apiUrl"):
+                    models_dir = p["apiUrl"]
+                    break
+        return GGUFManager(models_dir)
+
+    def ggufDownload(self, repo_id: str, filename: str) -> dict:
+        manager = self._get_gguf_manager()
+        if not manager.validate_remote_file(repo_id, filename):
+            return {"success": False, "error": "Remote file not found"}
+        try:
+            path = manager.download_model(repo_id, filename)
+            return {"success": bool(path), "path": path, "name": filename}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def ggufList(self) -> list:
+        return self._get_gguf_manager().list_models()
+
+    def ggufDelete(self, name: str) -> dict:
+        ok = self._get_gguf_manager().delete_model(name)
+        return {"success": ok}
+
+    def ggufCatalog(self) -> list:
+        return self._get_gguf_manager().get_catalog()
+
+    def ggufDiskUsage(self) -> dict:
+        return self._get_gguf_manager().get_disk_usage()
 
     # ========================================================================
     # Self-Improvement (streaming)

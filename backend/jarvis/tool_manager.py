@@ -362,6 +362,19 @@ class ToolManager:
                 },
                 risk=RiskLevel.SAFE,
             ),
+            "download_gguf": ToolDefinition(
+                name="download_gguf",
+                description="Download a GGUF model from Hugging Face Hub for local inference.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "repo_id": {"type": "string", "description": "Hugging Face repo ID (e.g. 'Qwen/Qwen2.5-1.5B-Instruct-GGUF')"},
+                        "filename": {"type": "string", "description": "GGUF filename to download (e.g. 'qwen2.5-1.5b-instruct-q4_k_m.gguf')"},
+                    },
+                    "required": ["repo_id", "filename"],
+                },
+                risk=RiskLevel.SAFE,
+            ),
         }
 
     def _resolve_path(self, path: str) -> str:
@@ -766,3 +779,22 @@ class ToolManager:
             return ToolResult(success=True, output="\n".join(lines), data={"count": len(results)})
         except Exception as e:
             return ToolResult(success=False, error=f"Failed to search notes: {e}")
+
+    def _handle_download_gguf(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.gguf_manager import GGUFManager
+        models_dir = os.path.expanduser("~/.jarvis/models")
+        manager = GGUFManager(models_dir)
+        if not manager.validate_remote_file(args["repo_id"], args["filename"]):
+            return ToolResult(
+                success=False,
+                error=f"Remote file not found: {args['repo_id']}/{args['filename']}",
+            )
+        try:
+            path = manager.download_model(args["repo_id"], args["filename"])
+            return ToolResult(
+                success=bool(path),
+                output=f"Downloaded {args['filename']} to {path}" if path else "Download failed",
+                data={"path": path, "name": args["filename"]},
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=f"Download failed: {e}")
