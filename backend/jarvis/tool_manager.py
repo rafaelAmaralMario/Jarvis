@@ -511,6 +511,30 @@ class ToolManager:
                 }, "required": ["uid"]},
                 risk=RiskLevel.ASK,
             ),
+            "list_devices": ToolDefinition(
+                name="list_devices",
+                description="List Home Assistant devices and their states.",
+                parameters={"type": "object", "properties": {}, "required": []},
+                risk=RiskLevel.SAFE,
+            ),
+            "control_device": ToolDefinition(
+                name="control_device",
+                description="Control a Home Assistant device (turn_on, turn_off, toggle, set).",
+                parameters={"type": "object", "properties": {
+                    "entity_id": {"type": "string", "description": "Entity ID, e.g. light.living_room"},
+                    "action": {"type": "string", "description": "Action: turn_on, turn_off, toggle, set"},
+                    "value": {"type": "string", "description": "Value for 'set' action (e.g. brightness_pct)"},
+                }, "required": ["entity_id", "action"]},
+                risk=RiskLevel.ASK,
+            ),
+            "get_sensor": ToolDefinition(
+                name="get_sensor",
+                description="Read a Home Assistant sensor value.",
+                parameters={"type": "object", "properties": {
+                    "entity_id": {"type": "string", "description": "Sensor entity ID, e.g. sensor.temperature"},
+                }, "required": ["entity_id"]},
+                risk=RiskLevel.SAFE,
+            ),
         }
 
     def _resolve_path(self, path: str) -> str:
@@ -1132,3 +1156,47 @@ class ToolManager:
             return ToolResult(success=True, output=f"Event {args['uid']} updated.")
         except Exception as e:
             return ToolResult(success=False, error=f"Calendar error: {e}")
+
+    def _handle_list_devices(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.homeassistant_service import HomeAssistantService
+        try:
+            ha = HomeAssistantService()
+            result = ha.list_devices()
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "HA error"))
+            devices = result.get("devices", [])
+            if not devices:
+                return ToolResult(success=True, output="No devices found.")
+            lines = [f"- {d['friendly_name'] or d['entity_id']}: {d['state']}" for d in devices]
+            return ToolResult(success=True, output="\n".join(lines), data=result)
+        except Exception as e:
+            return ToolResult(success=False, error=f"Home Assistant error: {e}")
+
+    def _handle_control_device(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.homeassistant_service import HomeAssistantService
+        try:
+            ha = HomeAssistantService()
+            kwargs = {}
+            if args.get("value"):
+                kwargs["value"] = args["value"]
+            result = ha.control_device(args["entity_id"], args["action"], **kwargs)
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "HA error"))
+            return ToolResult(success=True, output=f"{args['action']} {args['entity_id']}")
+        except Exception as e:
+            return ToolResult(success=False, error=f"Home Assistant error: {e}")
+
+    def _handle_get_sensor(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.homeassistant_service import HomeAssistantService
+        try:
+            ha = HomeAssistantService()
+            result = ha.get_sensor(args["entity_id"])
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "HA error"))
+            return ToolResult(
+                success=True,
+                output=f"{args['entity_id']}: {result['state']}",
+                data=result,
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=f"Home Assistant error: {e}")
