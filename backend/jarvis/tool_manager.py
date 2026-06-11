@@ -471,6 +471,16 @@ class ToolManager:
                 }, "required": ["pr_number"]},
                 risk=RiskLevel.SAFE,
             ),
+            "extract_text_from_image": ToolDefinition(
+                name="extract_text_from_image",
+                description="Extract text from an image using OCR (Tesseract). Supports PNG, JPG, TIFF, BMP.",
+                parameters={"type": "object", "properties": {
+                    "path": {"type": "string", "description": "Path to image file"},
+                    "language": {"type": "string", "description": "Tesseract language(s), e.g. 'por+eng'", "default": "por+eng"},
+                }, "required": ["path"]},
+                risk=RiskLevel.SAFE,
+                examples=["extract_text_from_image path='scan.png'", "extract_text_from_image path='doc.jpg' language='eng'"],
+            ),
         }
 
     def _resolve_path(self, path: str) -> str:
@@ -1031,3 +1041,21 @@ class ToolManager:
             return ToolResult(success=True, output=f"PR #{args['pr_number']} merged.", data=result.get("data", {}))
         except Exception as e:
             return ToolResult(success=False, error=f"GitHub error: {e}")
+
+    def _handle_extract_text_from_image(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.ocr_service import OCRService
+        path = self._resolve_path(args["path"])
+        if not os.path.exists(path):
+            return ToolResult(success=False, error=f"File not found: {path}")
+        try:
+            ocr = OCRService()
+            result = ocr.extract_text(path, args.get("language", "por+eng"))
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "OCR failed"))
+            return ToolResult(
+                success=True,
+                output=result["text"],
+                data={"confidence": result.get("confidence", 0), "language": result.get("language", "")},
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=f"OCR failed: {e}")
