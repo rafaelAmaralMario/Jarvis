@@ -19,6 +19,7 @@ from jarvis.graph_builder import GraphBuilder
 from jarvis.knowledge_manager import CreateNoteDTO, KnowledgeManager
 from jarvis.gguf_manager import GGUFManager
 from jarvis.llm_gateway import LLMGateway, LLMRequest, LLMMessage
+from jarvis.llm_router import LLMRouter, RouterRule, RouterMatch
 from jarvis.mcp_manager import MCPManager
 from jarvis.models_manager import ModelMetadata, ModelSpecialty, ModelsManager
 from jarvis.module_loader import ModuleLoader
@@ -99,6 +100,7 @@ class JARVISBridge:
         self._mcp = mcp
         self._workflows = workflows
         self._security = security
+        self._llm_router = LLMRouter(gateway=llm_gateway, db=db) if llm_gateway else None
         self._db = db
         self._chat = ChatManager(db) if db else None
         self._tools = ToolManager(workspace_root=workspace.get_roots()[0] if workspace and workspace.get_roots() else None)
@@ -1057,6 +1059,54 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
             return {"success": False, "text": "", "error": str(e)}
         finally:
             os.unlink(tmp.name)
+
+    # ========================================================================
+    # LLM Router
+    # ========================================================================
+
+    def llmRouterGetRules(self) -> list:
+        if not self._llm_router:
+            return []
+        return self._llm_router.get_rules()
+
+    def llmRouterSaveRule(self, data: dict) -> bool:
+        if not self._llm_router:
+            return False
+        match = data.get("match", {})
+        rule = RouterRule(
+            name=data["name"],
+            match=RouterMatch(
+                by_model=match.get("byModel", []),
+                by_capability=match.get("byCapability", []),
+                by_provider=match.get("byProvider", []),
+                max_cost_per_1k=match.get("maxCostPer1k", 0.0),
+            ),
+            providers=data.get("providers", []),
+            priority=data.get("priority", 0),
+            enabled=data.get("enabled", True),
+        )
+        return self._llm_router.save_rule(rule)
+
+    def llmRouterDeleteRule(self, name: str) -> bool:
+        if not self._llm_router:
+            return False
+        return self._llm_router.delete_rule(name)
+
+    def llmRouterGetMetrics(self) -> list:
+        if not self._llm_router:
+            return []
+        return self._llm_router.get_metrics()
+
+    def llmRouterClearCache(self) -> dict:
+        if not self._llm_router:
+            return {"cleared": 0}
+        count = self._llm_router.clear_cache()
+        return {"cleared": count}
+
+    def llmRouterGetCacheInfo(self) -> dict:
+        if not self._llm_router:
+            return {"size": 0, "maxSize": 0}
+        return self._llm_router.get_cache_info()
 
     # ========================================================================
     # Self-Improvement (streaming)

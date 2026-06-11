@@ -38,6 +38,12 @@ interface MockBridge {
   ggufCatalog: ReturnType<typeof vi.fn>;
   ggufDiskUsage: ReturnType<typeof vi.fn>;
   audioTranscribe: ReturnType<typeof vi.fn>;
+  llmRouterGetRules: ReturnType<typeof vi.fn>;
+  llmRouterSaveRule: ReturnType<typeof vi.fn>;
+  llmRouterDeleteRule: ReturnType<typeof vi.fn>;
+  llmRouterGetMetrics: ReturnType<typeof vi.fn>;
+  llmRouterClearCache: ReturnType<typeof vi.fn>;
+  llmRouterGetCacheInfo: ReturnType<typeof vi.fn>;
   taskPlannerExecute: ReturnType<typeof vi.fn>;
   plannerExecuteStream: ReturnType<typeof vi.fn>;
   plannerGetProgress: ReturnType<typeof vi.fn>;
@@ -100,6 +106,12 @@ export const mockBridge: MockBridge = {
   ]),
   ggufDiskUsage: vi.fn().mockResolvedValue({ totalBytes: 0, count: 0, modelsDir: '/mock/models' }),
   audioTranscribe: vi.fn().mockResolvedValue({ success: true, text: 'mock transcription' }),
+  llmRouterGetRules: vi.fn().mockResolvedValue([]),
+  llmRouterSaveRule: vi.fn().mockResolvedValue(true),
+  llmRouterDeleteRule: vi.fn().mockResolvedValue(true),
+  llmRouterGetMetrics: vi.fn().mockResolvedValue([]),
+  llmRouterClearCache: vi.fn().mockResolvedValue({ cleared: 0 }),
+  llmRouterGetCacheInfo: vi.fn().mockResolvedValue({ size: 0, maxSize: 1000 }),
   taskPlannerExecute: vi.fn().mockResolvedValue({
     success: true,
     task: 'mock task',

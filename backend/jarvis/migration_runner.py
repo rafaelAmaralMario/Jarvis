@@ -283,6 +283,17 @@ MIGRATIONS: list[Migration] = [
     Migration(12, "agent-provider", """
         ALTER TABLE agents ADD COLUMN provider TEXT NOT NULL DEFAULT 'ollama';
     """),
+    Migration(13, "llm-router-rules", """
+        CREATE TABLE IF NOT EXISTS llm_router_rules (
+            name TEXT PRIMARY KEY,
+            match_json TEXT NOT NULL DEFAULT '{}',
+            providers TEXT NOT NULL DEFAULT '[]',
+            priority INTEGER NOT NULL DEFAULT 0,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );
+    """),
 ]
 
 

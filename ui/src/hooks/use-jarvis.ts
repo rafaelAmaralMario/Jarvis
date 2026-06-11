@@ -11,7 +11,7 @@ import type {
   PermissionInfo, AuditEntry, SecretInfo, ModelServerStatus, UpdateStatus,
   ConversationSummary, ChatMessage,
   ToolDefinition, ToolCallResult, ToolAgentResponse, ToolAgentAnswerResult,
-  StreamTask, StreamState, SIProgress, LLMFallbackConfig, GGUFModelInfo, GGUFModelCatalog, AudioTranscribeResult, TaskPlannerResult, PlannerProgress, PlannerCheckpoint,
+  StreamTask, StreamState, SIProgress, LLMFallbackConfig, GGUFModelInfo, GGUFModelCatalog, AudioTranscribeResult, RouterRule, ProviderMetrics, RouterCacheInfo, TaskPlannerResult, PlannerProgress, PlannerCheckpoint,
 } from '@/types';
 
 declare global {
@@ -307,6 +307,13 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     ggufDiskUsage: () => send('ggufDiskUsage') as Promise<{ totalBytes: number; count: number; modelsDir: string }>,
 
     audioTranscribe: (audioBase64, model?) => send('audioTranscribe', audioBase64, model) as Promise<AudioTranscribeResult>,
+
+    llmRouterGetRules: () => send('llmRouterGetRules') as Promise<RouterRule[]>,
+    llmRouterSaveRule: (rule) => send('llmRouterSaveRule', rule) as Promise<boolean>,
+    llmRouterDeleteRule: (name) => send('llmRouterDeleteRule', name) as Promise<boolean>,
+    llmRouterGetMetrics: () => send('llmRouterGetMetrics') as Promise<ProviderMetrics[]>,
+    llmRouterClearCache: () => send('llmRouterClearCache') as Promise<{ cleared: number }>,
+    llmRouterGetCacheInfo: () => send('llmRouterGetCacheInfo') as Promise<RouterCacheInfo>,
 
     copyToClipboard: (text) => send('copyToClipboard', text) as Promise<boolean>,
     revealInExplorer: (path) => send('revealInExplorer', path) as Promise<boolean>,

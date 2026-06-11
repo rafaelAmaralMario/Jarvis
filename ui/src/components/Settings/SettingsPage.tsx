@@ -12,6 +12,7 @@ import { SecurityPanel } from './SecurityPanel';
 import { UpdatesPanel } from './UpdatesPanel';
 import { GeneralPanel } from './GeneralPanel';
 import { GGUFSettings } from './GGUFSettings';
+import { RouterPanel } from './RouterPanel';
 
 const TABS: { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'models', label: 'Models', icon: '📦' },
@@ -20,6 +21,7 @@ const TABS: { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'orchestration', label: 'Orquestração', icon: '🔀' },
   { id: 'api-keys', label: 'API Keys', icon: '🔑' },
   { id: 'llm-providers', label: 'LLM Providers', icon: '🧠' },
+  { id: 'llm-router', label: 'Router', icon: '🔀' },
   { id: 'mcp-servers', label: 'MCP Servers', icon: '🔌' },
   { id: 'workflows', label: 'Workflows', icon: '⚡' },
   { id: 'security', label: 'Security', icon: '🔒' },
@@ -84,6 +86,7 @@ export function SettingsPage() {
               {activeTab === 'orchestration' && <OrchestrationPanel />}
               {activeTab === 'api-keys' && <ApiKeyManager />}
               {activeTab === 'llm-providers' && <LLMProvidersPanel />}
+              {activeTab === 'llm-router' && <RouterPanel />}
               {activeTab === 'mcp-servers' && <MCPServersPanel />}
               {activeTab === 'workflows' && <WorkflowsPanel />}
               {activeTab === 'security' && <SecurityPanel />}

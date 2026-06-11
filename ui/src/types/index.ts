@@ -177,6 +177,13 @@ export interface JarvisBridge {
 
   audioTranscribe(audioBase64: string, model?: string): Promise<AudioTranscribeResult>;
 
+  llmRouterGetRules(): Promise<RouterRule[]>;
+  llmRouterSaveRule(rule: RouterRule): Promise<boolean>;
+  llmRouterDeleteRule(name: string): Promise<boolean>;
+  llmRouterGetMetrics(): Promise<ProviderMetrics[]>;
+  llmRouterClearCache(): Promise<{ cleared: number }>;
+  llmRouterGetCacheInfo(): Promise<RouterCacheInfo>;
+
   copyToClipboard(text: string): Promise<boolean>;
   revealInExplorer(path: string): Promise<boolean>;
   getRelativePath(base: string, target: string): Promise<string>;
@@ -719,6 +726,33 @@ export interface GGUFModelInfo {
   modifiedAt: string;
 }
 
+export interface RouterRule {
+  name: string;
+  match: {
+    byModel: string[];
+    byCapability: string[];
+    byProvider: string[];
+    maxCostPer1k: number;
+  };
+  providers: string[];
+  priority: number;
+  enabled: boolean;
+}
+
+export interface ProviderMetrics {
+  provider: string;
+  totalCalls: number;
+  successCalls: number;
+  avgLatencyMs: number;
+  lastError: string;
+  lastSuccessAt: string;
+}
+
+export interface RouterCacheInfo {
+  size: number;
+  maxSize: number;
+}
+
 export interface AudioTranscribeResult {
   success: boolean;
   text: string;
@@ -783,4 +817,4 @@ export interface PlannerCheckpoint {
 }
 
 export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'planner' | 'settings' | 'git';
-export type SettingsTab = 'general' | 'models' | 'gguf' | 'assistant' | 'orchestration' | 'agents' | 'api-keys' | 'llm-providers' | 'mcp-servers' | 'workflows' | 'security' | 'updates';
+export type SettingsTab = 'general' | 'models' | 'gguf' | 'assistant' | 'orchestration' | 'agents' | 'api-keys' | 'llm-providers' | 'llm-router' | 'mcp-servers' | 'workflows' | 'security' | 'updates';
