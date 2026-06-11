@@ -271,6 +271,9 @@ MIGRATIONS: list[Migration] = [
         ALTER TABLE agents ADD COLUMN is_builtin INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE workflows ADD COLUMN is_builtin INTEGER NOT NULL DEFAULT 0;
     """),
+    Migration(12, "agent-provider", """
+        ALTER TABLE agents ADD COLUMN provider TEXT NOT NULL DEFAULT 'ollama';
+    """),
 ]
 
 

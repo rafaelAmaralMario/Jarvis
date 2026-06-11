@@ -1,7 +1,9 @@
 """Multi-provider LLM Gateway — OpenAI, Anthropic, AWS Bedrock, Ollama."""
 
+import glob
 import json
 import os
+import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -16,6 +18,7 @@ class LLMProvider(Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     BEDROCK = "bedrock"
+    NATIVE = "native"
 
 
 @dataclass
@@ -33,6 +36,7 @@ class LLMRequest:
     temperature: float = 0.7
     max_tokens: int = 2048
     stream: bool = False
+    grammar: str = ""
 
 
 @dataclass
@@ -349,6 +353,114 @@ class AnthropicClient(BaseLLMClient):
             return False
 
 
+class NativeLLMClient(BaseLLMClient):
+    """LLM client using llama-cpp-python to run GGUF models natively (in-process)."""
+
+    _model_cache: dict[str, Any] = {}
+    _lock = threading.Lock()
+
+    def __init__(self, config: LLMProviderConfig):
+        self._model_dir = config.api_url or os.path.expanduser("~/.jarvis/models")
+        self._model_filename = config.default_model or ""
+        self._tool_grammar: str | None = self._load_grammar()
+
+    @staticmethod
+    def _load_grammar() -> str | None:
+        grammar_path = os.path.join(os.path.dirname(__file__), "grammars", "tool_call.gbnf")
+        if os.path.isfile(grammar_path):
+            with open(grammar_path, encoding="utf-8") as f:
+                return f.read()
+        return None
+
+    def _get_model_path(self, model_name: str = "") -> str:
+        name = model_name or self._model_filename
+        if os.path.isabs(name):
+            return name
+        return os.path.join(self._model_dir, name)
+
+    def _get_model(self, model_name: str = ""):
+        path = self._get_model_path(model_name)
+        if not os.path.isfile(path):
+            raise LLMError(f"GGUF model not found at: {path}")
+        with NativeLLMClient._lock:
+            if path not in NativeLLMClient._model_cache:
+                try:
+                    from llama_cpp import Llama
+                except ImportError:
+                    raise LLMError(
+                        "llama-cpp-python not installed. "
+                        "Run: pip install jarvis-backend[native]"
+                    )
+                NativeLLMClient._model_cache[path] = Llama(
+                    model_path=path, n_ctx=4096, verbose=False
+                )
+            return NativeLLMClient._model_cache[path]
+
+    def _build_prompt(self, req: LLMRequest) -> str:
+        parts = []
+        if req.system:
+            parts.append(f"system: {req.system}")
+        for msg in req.messages:
+            parts.append(f"{msg.role}: {msg.content}")
+        parts.append("assistant:")
+        return "\n".join(parts)
+
+    def generate(self, req: LLMRequest) -> LLMResponse:
+        model = self._get_model(req.model)
+        prompt = self._build_prompt(req)
+        kwargs: dict[str, Any] = dict(
+            max_tokens=req.max_tokens,
+            temperature=req.temperature,
+            stop=["</s>", "<|eot_id|>"],
+        )
+        # Apply GBNF grammar for tool calling when explicitly requested
+        if req.grammar:
+            kwargs["grammar"] = req.grammar
+        t1 = time.monotonic()
+        result = model.create_completion(prompt, **kwargs)
+        t2 = time.monotonic()
+        content = result.get("choices", [{}])[0].get("text", "")
+        usage = result.get("usage", {})
+        return LLMResponse(
+            content=content,
+            model=req.model or self._model_filename,
+            provider=LLMProvider.NATIVE,
+            prompt_tokens=usage.get("prompt_tokens", 0),
+            completion_tokens=usage.get("completion_tokens", 0),
+            latency_ms=int((t2 - t1) * 1000),
+            done=True,
+        )
+
+    def generate_stream(self, req: LLMRequest, on_chunk: Callable[[str], None]) -> bool:
+        model = self._get_model(req.model)
+        prompt = self._build_prompt(req)
+        kwargs: dict[str, Any] = dict(
+            max_tokens=req.max_tokens,
+            temperature=req.temperature,
+            stop=["</s>", "<|eot_id|>"],
+            stream=True,
+        )
+        if req.grammar:
+            kwargs["grammar"] = req.grammar
+        for result in model.create_completion(prompt, **kwargs):
+            choice = result.get("choices", [{}])[0]
+            text = choice.get("text", "")
+            if text:
+                on_chunk(text)
+        return True
+
+    def list_models(self) -> list[str]:
+        pattern = os.path.join(self._model_dir, "*.gguf")
+        return sorted(os.path.basename(p) for p in glob.glob(pattern))
+
+    def ping(self) -> bool:
+        try:
+            import llama_cpp  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
+
 _CLIENT_CACHE: dict[str, BaseLLMClient] = {}
 
 
@@ -364,6 +476,8 @@ def get_llm_client(config: LLMProviderConfig) -> BaseLLMClient:
         client = AnthropicClient(config)
     elif config.provider == LLMProvider.BEDROCK:
         raise LLMError("AWS Bedrock provider not yet implemented")
+    elif config.provider == LLMProvider.NATIVE:
+        client = NativeLLMClient(config)
     else:
         raise LLMError(f"Unknown provider: {config.provider}")
     _CLIENT_CACHE[key] = client

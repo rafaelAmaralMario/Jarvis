@@ -1,0 +1,84 @@
+# Build
+build/
+cmake-build-*/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+
+# IDE
+.idea/
+.vscode/
+*.user
+*.pro.user*
+moc_*
+ui_*
+qrc_*
+
+# Qt Creator
+CMakeLists.txt.user*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# App data
+data/
+indexes/
+embeddings/
+*.db
+*.db-journal
+*.db-wal
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+
+# Temp
+tmp/
+temp/
+test-results/
+*.tmp
+*.bak
+
+# Docker
+docker-data/
+!docker-compose.yml
+
+# Build artifacts
+dist/
+ui/dist/
+ui/playwright-report/
+ui/test-results/
+
+# Node
+node_modules/
+ui/node_modules/
+*.tsbuildinfo
+tmp_*
+
+# Server
+server/node_modules/
+server/dist/
+
+# Python
+backend/__pycache__/
+backend/*.egg-info/
+backend/dist/
+backend/build/
+*.pyc
+*.pyo
+__pycache__/
+
+# Old C++ tests
+tests/

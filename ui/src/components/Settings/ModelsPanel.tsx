@@ -128,6 +128,11 @@ export function ModelsPanel() {
         </div>
       )}
 
+      <div className="flex items-center gap-2 pb-2">
+        <span className="text-xs text-muted-foreground font-medium">Provider:</span>
+        <span className="px-2 py-0.5 text-xs rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">🦙 Ollama</span>
+      </div>
+
       <div className="flex gap-2 p-1 rounded-xl border bg-card overflow-x-auto">
         <button
           onClick={() => setActiveTab('all')}

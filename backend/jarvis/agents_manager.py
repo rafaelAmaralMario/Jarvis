@@ -12,6 +12,7 @@ class CreateAgentDTO:
     name: str = ""
     description: str = ""
     model: str = ""
+    provider: str = "ollama"
     system_prompt: str = ""
     temperature: float = 0.7
     max_tokens: int = 2048
@@ -28,6 +29,7 @@ class Agent:
     name: str = ""
     description: str = ""
     model: str = ""
+    provider: str = "ollama"
     system_prompt: str = ""
     temperature: float = 0.0
     max_tokens: int = 0
@@ -46,11 +48,16 @@ def _row_to_agent(row) -> Agent:
         is_builtin = bool(row["is_builtin"])
     except (KeyError, IndexError):
         is_builtin = False
+    try:
+        agent_provider = row["provider"]
+    except (KeyError, IndexError):
+        agent_provider = "ollama"
     return Agent(
         id=row["id"],
         name=row["name"],
         description=row["description"],
         model=row["model"],
+        provider=agent_provider,
         system_prompt=row["system_prompt"],
         temperature=row["temperature"],
         max_tokens=row["max_tokens"],
@@ -413,16 +420,17 @@ class AgentsManager:
         agent_id = secrets.token_hex(16).lower()
         self._db.execute(
             """
-            INSERT INTO agents (id, name, description, model, system_prompt,
+            INSERT INTO agents (id, name, description, model, provider, system_prompt,
                                 temperature, max_tokens, specialty, tools,
                                 can_orchestrate, priority, is_builtin)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 agent_id,
                 dto.name,
                 dto.description,
                 dto.model,
+                dto.provider,
                 dto.system_prompt,
                 dto.temperature,
                 dto.max_tokens,
@@ -441,7 +449,7 @@ class AgentsManager:
         self._db.execute(
             """
             UPDATE agents SET
-                name = ?, description = ?, model = ?, system_prompt = ?,
+                name = ?, description = ?, model = ?, provider = ?, system_prompt = ?,
                 temperature = ?, max_tokens = ?, specialty = ?, tools = ?,
                 can_orchestrate = ?, priority = ?,
                 updated_at = ?
@@ -451,6 +459,7 @@ class AgentsManager:
                 dto.name,
                 dto.description,
                 dto.model,
+                dto.provider,
                 dto.system_prompt,
                 dto.temperature,
                 dto.max_tokens,
@@ -510,11 +519,12 @@ class AgentsManager:
                 "SELECT id, is_default FROM agents WHERE id = ?", (agent["id"],)
             )
             tools_json = json.dumps(agent["tools"])
+            agent_provider = agent.get("provider", "ollama")
             if existing:
                 self._db.execute(
                     """
                     UPDATE agents SET
-                        name=?, description=?, model=?, system_prompt=?,
+                        name=?, description=?, model=?, provider=?, system_prompt=?,
                         temperature=?, max_tokens=?, specialty=?, tools=?,
                         can_orchestrate=?, priority=?, is_builtin=1,
                         is_default=?, updated_at=?
@@ -524,6 +534,7 @@ class AgentsManager:
                         agent["name"],
                         agent["description"],
                         agent["model"],
+                        agent_provider,
                         agent["system_prompt"],
                         agent["temperature"],
                         agent["max_tokens"],
@@ -539,16 +550,17 @@ class AgentsManager:
             else:
                 self._db.execute(
                     """
-                    INSERT INTO agents (id, name, description, model, system_prompt,
+                    INSERT INTO agents (id, name, description, model, provider, system_prompt,
                         temperature, max_tokens, specialty, tools, is_default,
                         can_orchestrate, priority, is_builtin)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                     """,
                     (
                         agent["id"],
                         agent["name"],
                         agent["description"],
                         agent["model"],
+                        agent_provider,
                         agent["system_prompt"],
                         agent["temperature"],
                         agent["max_tokens"],

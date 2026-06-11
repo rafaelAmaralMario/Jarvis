@@ -725,11 +725,16 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
         try:
             agent_model = ""
             agent_provider = "ollama"
+            try:
+                if self._llm:
+                    agent_provider = self._llm.get_default_provider()
+            except Exception:
+                pass
             if self._agents:
                 default = self._agents.get_default_agent()
                 if default:
                     agent_model = default.model
-                    agent_provider = getattr(default, "provider", "ollama")
+                    agent_provider = default.provider or agent_provider
 
             tool_calls_log: list[dict] = []
             tool_results_log: list[dict] = []
@@ -800,18 +805,25 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                 agent_provider = "ollama"
                 agent_system = None
 
+                # Fallback to the user's globally selected default provider
+                try:
+                    if self._llm:
+                        agent_provider = self._llm.get_default_provider()
+                except Exception:
+                    pass
+
                 if agent_id and self._agents:
                     agent = self._agents.get_agent(agent_id)
                     if agent:
                         agent_model = agent.model or ""
-                        agent_provider = getattr(agent, "provider", "ollama")
+                        agent_provider = agent.provider or agent_provider
                         if agent.system_prompt:
                             agent_system = agent.system_prompt
                 elif self._agents:
                     default = self._agents.get_default_agent()
                     if default:
                         agent_model = default.model or ""
-                        agent_provider = getattr(default, "provider", "ollama")
+                        agent_provider = default.provider or agent_provider
                         if default.system_prompt:
                             agent_system = default.system_prompt
 

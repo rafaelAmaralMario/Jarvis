@@ -1,0 +1,21 @@
+# GBNF grammar for JARVIS tool call JSON format
+# Forces the LLM to output valid JSON: {"tool": "name", "args": {...}}
+# Used by NativeLLMClient when tool calling is active.
+
+root ::= tool-call
+
+tool-call ::= "{" ws "\"tool\"" ws ":" ws string ws "," ws "\"args\"" ws ":" ws value ws "}"
+
+string ::= "\"" [^"]* "\""
+
+value ::= string | number | object | array | "true" | "false" | "null"
+
+object ::= "{" ws (pair ("," ws pair)*)? ws "}"
+
+pair ::= string ws ":" ws value
+
+array ::= "[" ws (value ("," ws value)*)? ws "]"
+
+number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [-+]? [0-9]+)?
+
+ws ::= [ \t\n]*

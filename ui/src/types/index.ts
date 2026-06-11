@@ -326,6 +326,7 @@ export interface Agent {
   name: string;
   description: string;
   model: string;
+  provider: string;
   systemPrompt: string;
   temperature: number;
   maxTokens: number;
@@ -343,6 +344,7 @@ export interface CreateAgentDTO {
   name: string;
   description?: string;
   model: string;
+  provider?: string;
   systemPrompt: string;
   temperature?: number;
   maxTokens?: number;

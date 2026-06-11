@@ -320,6 +320,15 @@ class ToolAgent:
         return "\n".join(lines)
 
     def _extract_tool_call(self, text: str) -> dict[str, Any] | None:
+        # Attempt 1: Direct json.loads on the entire text (grammar-constrained output is pure JSON)
+        try:
+            data = json.loads(text.strip())
+            if isinstance(data, dict) and "tool" in data:
+                return data
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+        # Attempt 2: Regex extraction for JSON in code blocks or backticks
         patterns = [
             r'```(?:json)?\s*\n?(\{[\s\S]*?"tool"[\s\S]*?\})\n?\s*```',
             r'`({.*?"tool".*?})`',
@@ -334,6 +343,22 @@ class ToolAgent:
                         return data
                 except (json.JSONDecodeError, KeyError):
                     continue
+
+        # Attempt 3: Heuristic repair — try to recover malformed JSON
+        try:
+            # Find any object-like structure
+            obj_match = re.search(r'(\{[\s\S]*\})', text)
+            if obj_match:
+                candidate = obj_match.group(1)
+                # Try adding missing closing brace
+                if candidate.count("{") > candidate.count("}"):
+                    candidate += "}" * (candidate.count("{") - candidate.count("}"))
+                data = json.loads(candidate)
+                if isinstance(data, dict) and "tool" in data:
+                    return data
+        except (json.JSONDecodeError, ValueError):
+            pass
+
         return None
 
 

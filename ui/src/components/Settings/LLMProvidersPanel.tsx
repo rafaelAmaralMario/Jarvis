@@ -8,6 +8,7 @@ const PROVIDER_ICONS: Record<string, string> = {
   openai: '🤖',
   anthropic: '✨',
   bedrock: '☁️',
+  native: '⚡',
 };
 
 export function LLMProvidersPanel() {
@@ -120,6 +121,21 @@ export function LLMProvidersPanel() {
           {testResult}
         </div>
       )}
+
+      {/* NativeProvider setup guide */}
+      <div className="p-4 rounded-xl border border-border/50 bg-muted/30">
+        <h3 className="text-sm font-semibold mb-2">⚡ Native Provider Setup</h3>
+        <p className="text-xs text-muted-foreground mb-2">
+          The Native provider runs GGUF models directly in-process using llama-cpp-python, no external server needed.
+        </p>
+        <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+          <li>Install: <code className="px-1 py-0.5 rounded bg-muted text-[10px]">pip install jarvis-backend[native]</code></li>
+          <li>Set <strong>API URL</strong> to the directory containing your <code className="px-1 py-0.5 rounded bg-muted text-[10px]">.gguf</code> files (e.g. <code className="px-1 py-0.5 rounded bg-muted text-[10px]">C:\models</code>)</li>
+          <li>Set <strong>Default Model</strong> to the GGUF filename (e.g. <code className="px-1 py-0.5 rounded bg-muted text-[10px]">llama-3.2-3b.Q4_K_M.gguf</code>)</li>
+          <li>Click <strong>Test</strong> to verify the library is installed</li>
+          <li>Select <strong>native</strong> in the AiPanel provider dropdown to use it</li>
+        </ol>
+      </div>
     </div>
   );
 }

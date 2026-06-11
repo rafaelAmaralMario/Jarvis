@@ -14,6 +14,7 @@ def db_with_agents(tmp_path):
             name TEXT NOT NULL,
             description TEXT NOT NULL DEFAULT '',
             model TEXT NOT NULL,
+            provider TEXT NOT NULL DEFAULT 'ollama',
             system_prompt TEXT NOT NULL DEFAULT '',
             temperature REAL NOT NULL DEFAULT 0.7
                 CHECK (temperature >= 0.0 AND temperature <= 2.0),
@@ -46,6 +47,7 @@ def empty_db(tmp_path):
             name TEXT NOT NULL,
             description TEXT NOT NULL DEFAULT '',
             model TEXT NOT NULL,
+            provider TEXT NOT NULL DEFAULT 'ollama',
             system_prompt TEXT NOT NULL DEFAULT '',
             temperature REAL NOT NULL DEFAULT 0.7,
             max_tokens INTEGER NOT NULL DEFAULT 2048,
@@ -70,13 +72,14 @@ def test_seeds_builtin_agents_on_empty_db(empty_db):
     manager = AgentsManager(empty_db)
     agents = manager.list_agents()
 
-    assert len(agents) == 10
+    assert len(agents) == 11
     names = [a.name for a in agents]
     assert "Orquestrador Principal" in names
     assert "Analista de Requisitos" in names
     assert "Arquiteto de Software" in names
     assert "Desenvolvedor Full-Stack" in names
     assert "Especialista em Testes" in names
+    assert "Computer Use Agent" in names
     assert all(a.is_builtin for a in agents)
 
 

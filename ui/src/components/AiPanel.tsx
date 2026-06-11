@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useJarvis } from '@/hooks/use-jarvis';
-import type { Agent, ToolAgentCall, ToolAgentResult, PendingQuestion } from '@/types';
+import type { Agent, LLMProviderInfo, ToolAgentCall, ToolAgentResult, PendingQuestion } from '@/types';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import type { ContextMenuItem } from '@/components/ui/ContextMenu';
 
@@ -103,6 +103,8 @@ export function AiPanel({ fullView }: AiPanelProps) {
   const [loading, setLoading] = useState(false);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [providers, setProviders] = useState<LLMProviderInfo[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState<string>('ollama');
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; convId: string; hasSelection: boolean } | null>(null);
@@ -153,6 +155,21 @@ export function AiPanel({ fullView }: AiPanelProps) {
       setAgents(list);
       if (!selectedAgentId && list.length > 0) {
         setSelectedAgentId(list[0].id);
+      }
+    }).catch(() => {});
+
+    bridge.llmGetProviders().then(list => {
+      setProviders(list);
+      const enabled = list.filter(p => p.enabled);
+      if (enabled.length > 0) {
+        // Use default provider from bridge, fallback to first enabled
+        bridge.llmGetDefaultProvider().then((def: string) => {
+          if (def && enabled.some(p => p.provider === def)) {
+            setSelectedProvider(def);
+          } else {
+            setSelectedProvider(enabled[0].provider);
+          }
+        }).catch(() => setSelectedProvider(enabled[0].provider));
       }
     }).catch(() => {});
 
@@ -511,6 +528,21 @@ export function AiPanel({ fullView }: AiPanelProps) {
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
+          {providers.length > 1 && (
+            <select
+              value={selectedProvider}
+              onChange={(e) => {
+                setSelectedProvider(e.target.value);
+                bridge.llmSetDefaultProvider(e.target.value).catch(() => {});
+              }}
+              className="bg-transparent text-[11px] text-muted-foreground truncate focus:outline-none cursor-pointer max-w-[100px]"
+              title="Provider"
+            >
+              {providers.filter(p => p.enabled).map(p => (
+                <option key={p.provider} value={p.provider}>{p.provider}</option>
+              ))}
+            </select>
+          )}
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -525,7 +557,7 @@ export function AiPanel({ fullView }: AiPanelProps) {
           {selectedAgent && (
             <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-500 border border-green-500/20">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-sm shadow-green-500/60 animate-pulse" />
-              {selectedAgent.model.split(':')[0]}
+              {selectedAgent.model.split(':')[0]}@{selectedProvider}
             </span>
           )}
         </div>

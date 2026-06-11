@@ -1,270 +1,190 @@
-# CONTEXTO COMPLETO — JARVIS Python (Junho 2026)
+# CONTEXTO COMPLETO — JARVIS v0.2.0
 
-> **Ultima atualizacao:** 2026-06-06T11:00:00-03:00
-> **Branch:** `main`
-> **Status:** Migracao Qt C++ → Python concluida. 9 fases entregues.
-
----
-
-## Identidade do Projeto
-
-| Campo | Valor |
-|-------|-------|
-| **Nome** | JARVIS |
-| **Descricao** | Assistente de IA completo e modular com IDE integrada |
-| **Stack** | Python 3.14 + pywebview 5.x (WebView2) + React 19 + TypeScript + Vite |
-| **Bridge** | pywebview js_api com 65+ metodos em `window.jarvis.*` |
-| **Banco** | SQLite 3.x nativo com WAL mode, 8 migrations, ~26 tabelas, FTS5 |
-| **Build** | pip install + npm run build |
-| **Sistema** | Windows 11 primario |
+> **Atualizado:** 2026-06-11
+> **Stack:** Python 3.14 + pywebview 5 (WebView2) + React 19 + TypeScript + Vite + SQLite3
 
 ---
 
-## Stack Tecnologica (Implementada)
+## 1. Identidade
 
-| Camada | Tecnologia | Versao | Uso |
-|--------|-----------|--------|-----|
-| Backend | Python | 3.14 | Todo o backend (14 modulos) |
-| Desktop Framework | pywebview | 5.x | WebView2 window, Python↔JS bridge |
-| HTTP Client | httpx | 0.28+ | Ollama API, requisicoes HTTP |
-| Criptografia | cryptography | 44+ | API key storage |
-| Terminal PTY | subprocess + pyte | — | Emulacao de terminal |
-| Plugin Loader | importlib | — | Descoberta e carga de modulos Python |
-| UI Web | React + TypeScript | 19 + 5.9 | Interface completa |
-| Build Web | Vite | 7 | Bundle da UI |
-| Estilos | Tailwind CSS + Radix UI | 4 | Design system |
-| Animacoes | Framer Motion | 12 | Transicoes de paineis |
-| Editor Codigo | Monaco Editor | 0.55 | Editor de codigo profissional |
-| Terminal UI | xterm.js | 5.x | Terminal integrado |
-| Bridge | pywebview js_api | 5.x | JSON-RPC nativo |
-| Banco | SQLite3 (nativo) | 3.x | Persistencia local (WAL, FTS5) |
-| Build Python | pip + setuptools | — | Instalacao do backend |
-| Testes Python | pytest | 8.x | 260+ testes (unitarios + integracao) |
-| Testes Web | Vitest | 4.x | 145 testes React |
+JARVIS é um assistente de IA pessoal **100% local, gratuito, sem assinatura**. Semelhante ao Claude Code/Cursor mas com IDE integrada (editor Monaco, terminal xterm.js, git) e sem depender de cloud.
+
+**Filosofia:** Tudo local. Zero dados enviados para servidores externos.
 
 ---
 
-## Arquitetura de Camadas
+## 2. Stack
+
+| Camada | Tecnologia |
+|--------|-----------|
+| Backend | Python 3.14 (18 módulos) |
+| Desktop | pywebview 5 (WebView2) |
+| Frontend | React 19 + TypeScript + Vite 7 |
+| Estilos | Tailwind CSS 4 + Radix UI + Framer Motion |
+| Editor | Monaco Editor 0.55 |
+| Terminal | xterm.js 5 |
+| Banco | SQLite3 WAL + FTS5 (8 migrations, ~26 tabelas) |
+| LLM | Ollama (primário) + llama-cpp-python (alternativo) |
+| Testes | pytest (260+) + Vitest (179) + Playwright E2E |
+
+---
+
+## 3. Arquitetura
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│  L4: Plugins                                [NÃO INICIADO]│
-│     Python plugins via ModuleLoader (importlib)          │
-├──────────────────────────────────────────────────────────┤
-│  L3: Editor · Git · Terminal                  [✓ 3/3]    │
-│     Monaco Editor, xterm.js, Git CLI subprocess          │
-├──────────────────────────────────────────────────────────┤
-│  L2: Conhecimento · AI Engine                  [✓ 2/2]    │
-│     Notes, FTS5 Search, Graph, Models, Agents, Critic    │
-├──────────────────────────────────────────────────────────┤
-│  L1: Workspace · Rede · Persistência           [✓ 3/3]   │
-│     File I/O, HTTP, OAuth, SQLite (WAL mode)            │
-├──────────────────────────────────────────────────────────┤
-│  L0: Bridge ⚙️                               [✓ COMPLETO]│
-│     pywebview JSON-RPC, 65+ window.jarvis.* methods      │
-│     14 Python modules, 260+ pytest tests                 │
-├──────────────────────────────────────────────────────────┤
-│  OS: Windows (primary)                                   │
-└──────────────────────────────────────────────────────────┘
+Frontend (React + Vite) ─── pywebview IPC ───→ Bridge (JARVISBridge)
+                                                    │
+                     ┌──────────────────────────────────┐
+                     │  LLMGateway (multi-provedor)      │
+                     │    ├─ OllamaLLMClient             │
+                     │    ├─ NativeLLMClient (llama-cpp) │
+                     │    ├─ OpenAIClient                │
+                     │    └─ AnthropicClient             │
+                     │                                  │
+                     │  ToolManager (14 ferramentas)     │
+                     │  ToolAgent (loop autônomo)        │
+                     │  TaskPlanner (DAG decomposição)   │
+                     │  SelfImprovement (ciclo melhoria) │
+                     │  KnowledgeManager (notas + FTS5)  │
+                     │  AgentsManager (built-in + custom)│
+                     │  OrchestrationManager (multi-agente)│
+                     │  WorkflowEngine (steps sequenciais)│
+                     │  GitManager + TerminalManager     │
+                     │  WorkspaceManager + EditorManager │
+                     │  SecurityManager + MCPManager     │
+                     └──────────────────────────────────┘
 ```
+
+### Fluxo principal
+1. Usuário envia mensagem no chat (AiPanel)
+2. `bridge.toolAgentExecuteStream(query, history, agentId, unattended)`
+3. Bridge cria `ToolAgent` com callbacks de streaming
+4. Loop: LLM decide → executa ferramenta → observa resultado → repete
+5. Frontend polling 100ms atualiza UI (tokens + tool calls + resultados)
+6. Se modo assistido: pausa para permissão em tools ASK/DANGER
 
 ---
 
-## Estrutura de Pastas (Real)
+## 4. Estado Atual
+
+### ✅ Fase 0 — Estabilização (COMPLETA)
+- ModelServerStatus com ping timeout, PATH detection, auto-start
+- Context Menu inteligente (arquivo/pasta/vazio com ações AI)
+- Task Planner UI (PlannerPanel com progresso, checkpoints, resume)
+- Self-Improvement Module (analisar → propor → executar)
+- Modo Não Assistido (unattended: pula todas as permissões)
+- Knowledge Tools (create_note, list_notes, search_notes)
+- Conversation History + Agent System Prompt (contexto total)
+- General Settings (theme, language, font size, auto-save)
+
+### ✅ Fase 1 — LLM Dual Provider (COMPLETA)
+- `NativeProvider` com llama-cpp-python (NativeLLMClient, model cache, generate/stream)
+- `Grammar-Constrained Tool Calling` (GBNF grammar p/ JSON 100% válido)
+- `Provider Selector UI` (dropdown provedor + model@provider badge)
+- Dependência opcional `[native]` no pyproject.toml
+
+### 🟡 Ready For Work (4 cards)
+| Card | Descrição | Prioridade |
+|------|-----------|-----------|
+| 002_AutomaticFallback | Fallback em cascata entre provedores | Média |
+| 003_WhisperSTT | Whisper speech-to-text (tool + microfone) | Média |
+| 023_DownloadGGUF | Download de modelos GGUF do Hugging Face | Média |
+| 026_LLMRouter | Roteamento inteligente + cache de respostas | Média |
+
+### 🔵 Backlog (24 cards)
+Áudio: PiperTTS, CoquiVoiceClone, VoiceConversation, MusicGenAudio
+Visão: StableDiffusion, ImageEditing, CameraCapture, OCR, AnimateDiff
+Documentos: DocumentRead, DocumentCreate, RAG
+Integrações: Email, WhatsApp, GitHub, Calendar, Instagram, HomeAssistant, PluginSystem
+Avançado: LongTermMemory, BackgroundAgents, MicroServices
+UI: WorkspaceEditorUnification, TerminalOutputMCP
+
+---
+
+## 5. Estrutura do Projeto
 
 ```
 C:\Users\Rafae\Documents\Jarvis\
-├── backend/                       # Python backend
-│   ├── pyproject.toml             # Dependencias Python
-│   ├── jarvis/
-│   │   ├── __init__.py
-│   │   ├── main.py                # Entry point pywebview
-│   │   ├── bridge.py              # 65+ metodos window.jarvis.*
-│   │   ├── database.py            # SQLite WAL, thread-safe
-│   │   ├── migration_runner.py    # 8 migrations SQL
-│   │   ├── ollama_client.py       # HTTP client p/ Ollama
-│   │   ├── models_manager.py      # CRUD model_metadata
-│   │   ├── agents_manager.py      # CRUD agents + seed defaults
-│   │   ├── orchestration_manager.py # Multi-agent routing + critic
-│   │   ├── knowledge_manager.py   # Notes + FTS5 + wikilinks
-│   │   ├── graph_builder.py       # Knowledge graph viz
-│   │   ├── workspace_manager.py   # File I/O + watcher
-│   │   ├── editor_manager.py      # Open/save/settings
-│   │   ├── git_manager.py         # Git CLI subprocess
-│   │   ├── terminal_manager.py    # PTY subprocess
-│   │   ├── network_manager.py     # HTTP + OAuth + API keys
-│   │   └── module_loader.py       # Python plugin loader
-│   └── tests/                     # 16 arquivos de teste
-│       ├── test_database.py
-│       ├── test_migration_runner.py
-│       ├── test_ollama_client.py
-│       ├── test_models_manager.py
-│       ├── test_agents_manager.py
-│       ├── test_orchestration_manager.py
-│       ├── test_knowledge_manager.py
-│       ├── test_graph_builder.py
-│       ├── test_workspace_manager.py
-│       ├── test_editor_manager.py
-│       ├── test_git_manager.py
-│       ├── test_terminal_manager.py
-│       ├── test_network_manager.py
-│       ├── test_module_loader.py
-│       └── test_integration.py    # E2E integration (15 testes)
-├── ui/                            # React frontend (56 arquivos src/)
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── index.html
-│   └── src/
-│       ├── main.tsx
-│       ├── App.tsx
-│       ├── components/            # 30+ componentes
-│       ├── hooks/                 # use-jarvis.ts, useAutoSave.ts
-│       ├── types/index.ts
-│       └── styles/globals.css
-├── .docs/                         # Documentacao ativa
-├── .context/                      # Registro de contexto (16 entradas)
-├── .old/                          # Artefatos legados
-│   ├── old-cpp/                   # Codigo C++ original (migrado)
-│   ├── tarefas/                   # Tasks historicas
-│   └── docs/                      # Docs historicas C++
-├── docs/                          # Documentacao C++ historica
-├── build_rls.bat                  # Script build (React + pip)
-└── README.md                      # Root README
+├── backend/jarvis/        # 18 módulos Python
+│   ├── main.py            # Entry point
+│   ├── bridge.py           # 65+ métodos window.jarvis.*
+│   ├── database.py         # SQLite WAL thread-safe
+│   ├── llm_gateway.py      # Multi-provedor (Ollama, Native, OpenAI, Anthropic)
+│   ├── tool_agent.py       # ToolAgent + TaskPlanner
+│   ├── tool_manager.py     # 14 ferramentas com risk levels
+│   ├── self_improvement.py # Análise → proposta → execução
+│   ├── grammars/           # GBNF grammars
+│   └── tests/              # 260+ testes pytest
+├── ui/src/                 # React + TypeScript + Vite
+│   ├── components/         # AiPanel, PlannerPanel, Settings, etc.
+│   ├── hooks/use-jarvis.ts # Bridge hook tipado
+│   ├── types/index.ts      # Interfaces completas (bridge, models, etc.)
+│   └── App.tsx
+├── kanban/                 # Sistema visual de tarefas (LEIA AQUI)
+│   ├── 01_Backlog/         # Ideias não refinadas
+│   ├── 02_Ready_For_Work/  # Pronto para implementar
+│   ├── 04_Review/          # Aguardando verificação
+│   ├── 05_Done/            # Completamente finalizada
+│   └── README.md           # Como usar o kanban
+├── .context/               # Contexto unificado do projeto (este arquivo)
+└── HOW-TO-START.md         # Setup instruction
 ```
 
 ---
 
-## Modulos — Estado Real de Implementacao
+## 6. Bridge API (métodos principais)
 
-| Modulo | Python | Tests | Status |
-|--------|--------|-------|--------|
-| Bridge (65+ metodos) | `bridge.py` | — (E2E via test_integration) | ✅ Completo |
-| Database (SQLite WAL) | `database.py` | 15 | ✅ Completo |
-| Migration Runner | `migration_runner.py` | 11 | ✅ Completo |
-| Ollama Client | `ollama_client.py` | 11 | ✅ Completo |
-| Models Manager | `models_manager.py` | 18 | ✅ Completo |
-| Agents Manager | `agents_manager.py` | 18 | ✅ Completo |
-| Orchestration Manager | `orchestration_manager.py` | 15 | ✅ Completo |
-| Knowledge Manager | `knowledge_manager.py` | 40 | ✅ Completo |
-| Graph Builder | `graph_builder.py` | 11 | ✅ Completo |
-| Workspace Manager | `workspace_manager.py` | 28 | ✅ Completo |
-| Editor Manager | `editor_manager.py` | 12 | ✅ Completo |
-| Git Manager | `git_manager.py` | 18 | ✅ Completo |
-| Terminal Manager | `terminal_manager.py` | 11 | ✅ Completo |
-| Network Manager | `network_manager.py` | 15 | ✅ Completo |
-| Module Loader | `module_loader.py` | 9 | ✅ Completo |
-| **E2E Integration** | `test_integration.py` | 15 | ✅ Completo |
+Bridge expõe métodos via `window.jarvis.*`:
+- **Chat:** chatListConversations, chatGetMessages, chatCreateConversation, chatSaveMessage, chatDeleteConversation, chatAutoTitle
+- **LLM:** llmGetProviders, llmSaveProvider, llmGetDefaultProvider, llmSetDefaultProvider, llmTestConnection
+- **Tools:** toolsList, toolsGetRisk, toolsExecute, toolsSetWorkspace
+- **Agent:** toolAgentExecute, toolAgentExecuteStream (query, convId, history, agentId, unattended), toolAgentGetStream, toolAgentAnswer
+- **Planner:** plannerExecuteStream, plannerGetProgress, plannerCancel, plannerListCheckpoints, plannerResumeCheckpoint
+- **Self-Improvement:** selfImprovementStream, selfImprovementGetStream, selfImprovementAnswer, selfImprovementCancel
+- **Knowledge:** createNote, getNote, listNotes, updateNote, deleteNote, searchNotes, getNoteGraph, getBacklinks
+- **Workspace:** openWorkspace, listFiles, readFile, writeFile, createFile, deleteFile, createDirectory, getRoots
+- **Editor:** editorOpenFile, editorGetContent, editorUpdateSettings
+- **Git:** gitStatus, gitDiff, gitStage, gitCommit, gitLog, gitBranches, gitPull, gitPush
+- **Terminal:** terminalCreate, terminalWrite, terminalResize, terminalKill, terminalList
+- **MCP:** mcpListServers, mcpStartServer, mcpStopServer, mcpCallTool
+- **System:** copyToClipboard, showFolderPicker, getAppVersion, getModelServerStatus, startModelServer
 
 ---
 
-## Banco de Dados (SQLite)
+## 7. Decisões Técnicas Importantes
 
-| Item | Detalhe |
-|------|---------|
-| **Engine** | SQLite 3.x nativo (sqlite3 module) |
-| **Modo WAL** | Sim (PRAGMA journal_mode=WAL) |
-| **Thread safety** | RLock (recursive lock) |
-| **Localizacao** | `%APPDATA%\JARVIS\jarvis-ai.db` |
-| **Schema version** | 8 |
-| **Tabelas** | ~26 |
-| **Migrations** | 8 scripts em `migration_runner.py` |
-| **FTS5** | Notas com full-text search |
-| **Transacoes** | Explicitas (BEGIN/COMMIT/ROLLBACK) com `isolation_level = None` |
-
-### Migrations
-1. `core_001_core.sql` — tabelas base (modules, service_registry, config)
-2. `core_002_permissions.sql` — permissoes e roles
-3. `core_003_extensions.sql` — extensoes
-4. `models_agents_001.sql` — modelos, agentes, orquestracao
-5. `knowledge_001.sql` — notas, links, tags, FTS5
-6. `workspace_001.sql` — projetos, arquivos
-7. `editor_001.sql` — configuracoes do editor
-8. `api_keys_001.sql` — chaves de API, OAuth tokens
+| Decisão | Escolha | Motivo |
+|---------|---------|--------|
+| Streaming | Polling (não WebSocket) | pywebview bridge é síncrona request-response |
+| LLM primário | Ollama + llama-cpp-python (dual) | Gratuito, privado, sem cloud |
+| Tools risk | safe / ask / danger | Balance entre segurança e fluidez |
+| Task Planner | Checkpoint JSON em `.jarvis/plans/` | Simples, sem depender de banco |
+| Clipboard | pyperclip | Estável, cross-platform |
+| Comunicação | pywebview js_api (JSON-RPC) | Nativo do framework |
 
 ---
 
-## Bridge Python ↔ React (pywebview)
+## 8. Para Agentes — Como Trabalhar Neste Projeto
 
-### Como funciona
-1. React chama `window.pywebview.api.<method>(args)` → retorna `Promise<result>`
-2. pywebview serializa args como JSON, envia via WebView2 IPC
-3. Metodo Python correspondente em `JARVISBridge` executa a logica
-4. Resultado (dict/list) e serializado como JSON de volta
-5. Promise resolve no React
+### Ao receber uma tarefa:
+1. Leia este `.context/CONTEXTO-COMPLETO.md` para entender o projeto
+2. Veja `kanban/02_Ready_For_Work/` ou `kanban/01_Backlog/` para tarefas disponíveis
+3. Leia o card da tarefa para escopo e critérios de aceitação
+4. Explore o código relacionado antes de implementar
+5. Após implementar: mova o card para `04_Review/` e crie log em `kanban/logs/`
 
-### Metodos expostos: 65+
-- **Module (2):** `getModules`, `getModule`
-- **File (3):** `readFile`, `writeFile`, `listDirectory`
-- **Model (8):** `listModels`, `getModel`, `pullModel`, `deleteModel`, `startModel`, `stopModel`, `updateModelMetadata`, `getModelBySpecialty`
-- **Agent (8):** `listAgents`, `getAgent`, `createAgent`, `updateAgent`, `deleteAgent`, `setDefaultAgent`, `getDefaultAgent`, `getOrchestrationPool`
-- **Orchestration (5):** `getOrchestrationConfig`, `updateOrchestrationConfig`, `sendMessage`, `executeOrchestratedQuery`, `getAgentTrace`
-- **Workspace (15):** `openWorkspace`, `addRoot`, `removeRoot`, `getRoots`, `listFiles`, `createFile`, `createFileWithPath`, `createDirectory`, `deletePath`, `renamePath`, `movePath`, `getRecentFiles`, `getProjectInfo`, `cancelGeneration`
-- **Knowledge (12):** `createNote`, `getNote`, `listNotes`, `updateNote`, `deleteNote`, `searchNotes`, `getBacklinks`, `getGraph`, `getFolders`, `moveNote`, `importNote`, `exportNote`
-- **Editor (8):** `editorOpenFile`, `editorSaveFile`, `editorCloseFile`, `editorGetOpenFiles`, `editorDetectLanguage`, `editorSearchFiles`, `editorGetSettings`, `editorUpdateSettings`
-- **Terminal (6):** `terminalCreate`, `terminalWrite`, `terminalResize`, `terminalClose`, `terminalList`, `terminalCloseAll`
-- **Network (10):** `networkGet`, `networkPost`, `networkOAuthStart`, `networkOAuthComplete`, `networkGetStoredToken`, `networkClearToken`, `networkStoreApiKey`, `networkGetApiKey`, `networkDeleteApiKey`, `networkListApiKeys`
-- **Git (17):** `gitStatus`, `gitDiff`, `gitDiffGutter`, `gitStage`, `gitUnstage`, `gitStageAll`, `gitCommit`, `gitBranches`, `gitCheckout`, `gitCreateBranch`, `gitDeleteBranch`, `gitPush`, `gitPull`, `gitLog`, `gitIsRepo`, `gitCurrentBranch`, `gitSetCredentials`
+### Regras de implementação:
+- **Leia antes de escrever** — sempre entenda o arquivo existente antes de modificar
+- **TypeScript check:** `cd ui && npx tsc --noEmit` (0 erros)
+- **Testes backend:** `cd backend && python -m pytest tests/`
+- **Testes frontend:** `cd ui && npx vitest run`
+- **Python lint:** `cd backend && ruff check .`
+- **Dependências:** verifique `pyproject.toml` (Python) ou `package.json` (JS) antes de adicionar libs novas
+- **Um card por vez:** só trabalhe em um card por sessão
+- **Crie logs:** sempre registre o que foi feito em `kanban/logs/`
 
-### Eventos (Bridge → React)
-- `terminal-output(terminalId, data)` — saida do terminal
-- `terminal-exit(terminalId, exitCode)` — terminal fechou
-- `file-changed({ type, path })` — arquivo criado/deletado
-
----
-
-## Proximos Passos
-
-### Curto Prazo (Proximo Ciclo)
-1. **Plugin Ecosystem** — Ativar ModuleLoader para carregar plugins Python de `modules/`
-2. **Gateway Multi-Provedor LLM** — Suporte a OpenAI, Anthropic, AWS Bedrock
-3. **Knowledge Graph Viz** — Visualizacao interativa do grafo de conhecimento
-4. **MCP Server Integration** — Integracao com Model Context Protocol
-
-### Medio Prazo
-5. **Automatizacao** — Workflow engine com steps (run command, api call, wait)
-6. **Seguranca** — Permission center UI, audit log, secret storage
-7. **Voz** — STT/TTS integrado
-
-### Longo Prazo
-8. **Instalador** — NSIS/AppImage para distribuicao
-9. **Multi-Usuario** — Sync server com colaboracao
-10. **Mobile Companion** — App mobile
-
----
-
-## Decisoes Arquiteturais Importantes
-
-| Decisao | Alternativa Rejeitada | Motivo |
-|---------|----------------------|--------|
-| Python + pywebview em vez de Qt C++ | Qt 6.8 + QWebEngine | Crash Blink em debug, desenvolvimento mais rapido |
-| sqlite3 nativo em vez de SQLAlchemy | ORM pesado | Controle fino sobre WAL, FTS5, transacoes |
-| httpx em vez de requests | requests (sync) | httpx suporta HTTP/2, streaming nativo |
-| subprocess (git CLI) em vez de gitpython | gitpython | Evita dependencia, mesma UX do C++ original |
-| camelCase no bridge | snake_case | Compatibilidade com frontend React legado |
-| Managers injetados no construtor | Service locator global | Testabilidade, dependencias explicitas |
-
----
-
-## Convencoes de Codigo
-
-- **Python:** type hints em todos os metodos publicos
-- **Testes:** pytest com fixtures, sem dependencia externa (Ollama mockado)
-- **Database:** `isolation_level = None`, transacoes explicitas
-- **ID generation:** `secrets.token_hex(16)` ou `uuid.uuid4().hex`
-- **Sem comentarios no codigo** (auto-documentado)
-- **Bridge:** camelCase para compatibilidade React
-- **Managers:** snake_case nos metodos internos
-
-## Arquivos Criticos
-
-| Arquivo | Descricao | Linhas |
-|---------|-----------|--------|
-| `backend/jarvis/bridge.py` | 65+ metodos `window.jarvis.*` | ~490 |
-| `backend/jarvis/main.py` | Entry point + injecao de dependencias | ~70 |
-| `backend/jarvis/knowledge_manager.py` | Notes CRUD + FTS5 + wikilinks + import/export | ~409 |
-| `backend/jarvis/workspace_manager.py` | File I/O + watcher + project detection | ~486 |
-| `backend/jarvis/orchestration_manager.py` | Multi-agent routing + critic | ~306 |
-| `backend/jarvis/database.py` | SQLite WAL + thread-safe | ~64 |
-| `ui/src/hooks/use-jarvis.ts` | Bridge hook com metodos tipados | ~203 |
-| `ui/src/types/index.ts` | Interfaces TypeScript | ~339 |
-| `ui/src/App.tsx` | Layout principal com 6 paineis | ~82 |
+### Convenções de código:
+- Python: type hints obrigatórios, snake_case, 100 chars linha
+- TypeScript/React: interfaces exportadas, camelCase, Tailwind classes
+- Bridge methods: camelCase (expostos ao JS)
+- Mova cards: Backlog → Ready → Review → Done
