@@ -418,6 +418,59 @@ class ToolManager:
                 }, "required": ["path"]},
                 risk=RiskLevel.SAFE,
             ),
+            "github_list_issues": ToolDefinition(
+                name="github_list_issues",
+                description="List GitHub issues for the current or specified repository.",
+                parameters={"type": "object", "properties": {
+                    "repo": {"type": "string", "description": "Repository (owner/repo), defaults to current"},
+                    "state": {"type": "string", "description": "open, closed, or all", "default": "open"},
+                    "limit": {"type": "number", "description": "Max results", "default": 10},
+                }, "required": []},
+                risk=RiskLevel.SAFE,
+            ),
+            "github_create_issue": ToolDefinition(
+                name="github_create_issue",
+                description="Create a GitHub issue.",
+                parameters={"type": "object", "properties": {
+                    "title": {"type": "string", "description": "Issue title"},
+                    "body": {"type": "string", "description": "Issue body/description"},
+                    "repo": {"type": "string", "description": "Repository (owner/repo), defaults to current"},
+                    "labels": {"type": "string", "description": "Comma-separated labels"},
+                }, "required": ["title"]},
+                risk=RiskLevel.SAFE,
+            ),
+            "github_list_prs": ToolDefinition(
+                name="github_list_prs",
+                description="List GitHub pull requests.",
+                parameters={"type": "object", "properties": {
+                    "repo": {"type": "string", "description": "Repository (owner/repo), defaults to current"},
+                    "state": {"type": "string", "description": "open, closed, or all", "default": "open"},
+                    "limit": {"type": "number", "description": "Max results", "default": 10},
+                }, "required": []},
+                risk=RiskLevel.SAFE,
+            ),
+            "github_create_pr": ToolDefinition(
+                name="github_create_pr",
+                description="Create a GitHub pull request.",
+                parameters={"type": "object", "properties": {
+                    "title": {"type": "string", "description": "PR title"},
+                    "body": {"type": "string", "description": "PR body/description"},
+                    "branch": {"type": "string", "description": "Head branch (default: current)"},
+                    "base": {"type": "string", "description": "Base branch (default: repo default)"},
+                    "repo": {"type": "string", "description": "Repository (owner/repo), defaults to current"},
+                }, "required": ["title"]},
+                risk=RiskLevel.SAFE,
+            ),
+            "github_merge_pr": ToolDefinition(
+                name="github_merge_pr",
+                description="Merge a GitHub pull request.",
+                parameters={"type": "object", "properties": {
+                    "pr_number": {"type": "number", "description": "PR number to merge"},
+                    "repo": {"type": "string", "description": "Repository (owner/repo), defaults to current"},
+                    "method": {"type": "string", "description": "Merge method: merge, squash, rebase", "default": "merge"},
+                }, "required": ["pr_number"]},
+                risk=RiskLevel.SAFE,
+            ),
         }
 
     def _resolve_path(self, path: str) -> str:
@@ -913,3 +966,68 @@ class ToolManager:
             })
         except Exception as e:
             return ToolResult(success=False, error=f"Failed to read XLSX: {e}")
+
+    def _handle_github_list_issues(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.github_service import GitHubService
+        try:
+            gh = GitHubService()
+            result = gh.list_issues(args.get("repo", ""), args.get("state", "open"), args.get("limit", 10))
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "GitHub CLI failed"))
+            issues = result.get("data", [])
+            if isinstance(issues, list):
+                lines = [f"#{i['number']} [{i['state']}] {i['title']} — {i.get('url', '')}" for i in issues[:20]]
+                return ToolResult(success=True, output="\n".join(lines) if lines else "No issues found.", data=issues)
+            return ToolResult(success=True, output=str(issues), data=issues)
+        except Exception as e:
+            return ToolResult(success=False, error=f"GitHub error: {e}")
+
+    def _handle_github_create_issue(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.github_service import GitHubService
+        try:
+            gh = GitHubService()
+            labels = args.get("labels", "")
+            label_list = [l.strip() for l in labels.split(",") if l.strip()] if labels else None
+            result = gh.create_issue(args["title"], args.get("body", ""), args.get("repo", ""), label_list)
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Failed to create issue"))
+            return ToolResult(success=True, output=f"Issue created: {result.get('data', '')}", data=result.get("data", {}))
+        except Exception as e:
+            return ToolResult(success=False, error=f"GitHub error: {e}")
+
+    def _handle_github_list_prs(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.github_service import GitHubService
+        try:
+            gh = GitHubService()
+            result = gh.list_prs(args.get("repo", ""), args.get("state", "open"), args.get("limit", 10))
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "GitHub CLI failed"))
+            prs = result.get("data", [])
+            if isinstance(prs, list):
+                lines = [f"#{p['number']} [{p['state']}] {p['title']} ({p.get('headRefName', '')} → {p.get('baseRefName', '')})" for p in prs[:20]]
+                return ToolResult(success=True, output="\n".join(lines) if lines else "No PRs found.", data=prs)
+            return ToolResult(success=True, output=str(prs), data=prs)
+        except Exception as e:
+            return ToolResult(success=False, error=f"GitHub error: {e}")
+
+    def _handle_github_create_pr(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.github_service import GitHubService
+        try:
+            gh = GitHubService()
+            result = gh.create_pr(args["title"], args.get("body", ""), args.get("branch", ""), args.get("repo", ""), args.get("base", ""))
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Failed to create PR"))
+            return ToolResult(success=True, output=f"PR created: {result.get('data', '')}", data=result.get("data", {}))
+        except Exception as e:
+            return ToolResult(success=False, error=f"GitHub error: {e}")
+
+    def _handle_github_merge_pr(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.github_service import GitHubService
+        try:
+            gh = GitHubService()
+            result = gh.merge_pr(args["pr_number"], args.get("repo", ""), args.get("method", "merge"))
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Failed to merge PR"))
+            return ToolResult(success=True, output=f"PR #{args['pr_number']} merged.", data=result.get("data", {}))
+        except Exception as e:
+            return ToolResult(success=False, error=f"GitHub error: {e}")
