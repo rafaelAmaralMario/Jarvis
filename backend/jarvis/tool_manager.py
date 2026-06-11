@@ -535,6 +535,17 @@ class ToolManager:
                 }, "required": ["entity_id"]},
                 risk=RiskLevel.SAFE,
             ),
+            "synthesize_speech": ToolDefinition(
+                name="synthesize_speech",
+                description="Converte texto em fala usando Piper TTS. Gera arquivo .wav.",
+                parameters={"type": "object", "properties": {
+                    "text": {"type": "string", "description": "Texto a ser sintetizado"},
+                    "voice": {"type": "string", "description": "Nome da voz (ex: pt_BR-faber-medium)", "default": "pt_BR-faber-medium"},
+                    "output": {"type": "string", "description": "Caminho do arquivo .wav de saída", "default": ""},
+                }, "required": ["text"]},
+                risk=RiskLevel.SAFE,
+                examples=["synthesize_speech text='Olá mundo'", "synthesize_speech text='Bom dia' voice='pt_BR-faber-medium'"],
+            ),
         }
 
     def _resolve_path(self, path: str) -> str:
@@ -1200,3 +1211,22 @@ class ToolManager:
             )
         except Exception as e:
             return ToolResult(success=False, error=f"Home Assistant error: {e}")
+
+    def _handle_synthesize_speech(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.audio_tts import synthesize
+        text = args["text"]
+        voice = args.get("voice", "pt_BR-faber-medium")
+        output = args.get("output", "")
+        try:
+            if output:
+                output_path = self._resolve_path(output)
+                os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+                synthesize(text, voice, output_path)
+                return ToolResult(success=True, output=f"Áudio gerado: {output_path}", data={"path": output_path})
+            else:
+                audio_bytes = synthesize(text, voice)
+                import base64
+                b64 = base64.b64encode(audio_bytes).decode()
+                return ToolResult(success=True, output="Áudio gerado (base64 inline)", data={"audioBase64": b64, "format": "wav"})
+        except Exception as e:
+            return ToolResult(success=False, error=f"TTS failed: {e}")

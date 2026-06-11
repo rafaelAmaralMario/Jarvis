@@ -26,15 +26,16 @@ dependencies = [
 native = [
     "llama-cpp-python>=0.3,<1",
 ]
-audio = [
-    "faster-whisper>=1.1,<2",
-]
 ocr = [
     "pytesseract>=0.4,<1",
     "Pillow>=11,<12",
 ]
 caldav = [
     "caldav>=1.0,<2",
+]
+audio = [
+    "piper-tts>=1.2,<2",
+    "faster-whisper>=1.1,<2",
 ]
 dev = [
     "pytest>=8,<9",

@@ -1060,6 +1060,20 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
         finally:
             os.unlink(tmp.name)
 
+    def ttsSynthesize(self, text: str, voice: str = "pt_BR-faber-medium") -> dict:
+        try:
+            from jarvis.audio_tts import synthesize
+            audio_bytes = synthesize(text, voice)
+            import base64
+            return {
+                "success": True,
+                "audioBase64": base64.b64encode(audio_bytes).decode(),
+                "format": "wav",
+            }
+        except Exception as e:
+            logger.exception("ttsSynthesize failed")
+            return {"success": False, "error": str(e)}
+
     # ========================================================================
     # LLM Router
     # ========================================================================

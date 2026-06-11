@@ -307,6 +307,7 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     ggufDiskUsage: () => send('ggufDiskUsage') as Promise<{ totalBytes: number; count: number; modelsDir: string }>,
 
     audioTranscribe: (audioBase64, model?) => send('audioTranscribe', audioBase64, model) as Promise<AudioTranscribeResult>,
+    ttsSynthesize: (text, voice?) => send('ttsSynthesize', text, voice) as Promise<{ success: boolean; audioBase64?: string; format?: string; error?: string }>,
 
     llmRouterGetRules: () => send('llmRouterGetRules') as Promise<RouterRule[]>,
     llmRouterSaveRule: (rule) => send('llmRouterSaveRule', rule) as Promise<boolean>,

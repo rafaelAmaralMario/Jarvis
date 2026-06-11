@@ -306,6 +306,19 @@ export function AiPanel({ fullView }: AiPanelProps) {
           )
         );
 
+        if (state.audioBase64) {
+          try {
+            const binary = atob(state.audioBase64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blob = new Blob([bytes], { type: 'audio/wav' });
+            const url = URL.createObjectURL(blob);
+            new Audio(url).play();
+          } catch (e) {
+            // audio playback failed, non-critical
+          }
+        }
+
         if (state.pendingQuestion) {
           pendingQuestionResult = state.pendingQuestion;
         }
