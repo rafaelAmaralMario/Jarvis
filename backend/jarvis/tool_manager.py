@@ -390,6 +390,34 @@ class ToolManager:
                 risk=RiskLevel.SAFE,
                 examples=["transcribe_audio path='audio.wav'", "transcribe_audio path='recording.mp3' model='base' language='pt'"],
             ),
+            "read_pdf": ToolDefinition(
+                name="read_pdf",
+                description="Read text and tables from a PDF file.",
+                parameters={"type": "object", "properties": {
+                    "path": {"type": "string", "description": "Path to PDF file"},
+                    "start_page": {"type": "number", "description": "First page (1-indexed, default: 1)"},
+                    "end_page": {"type": "number", "description": "Last page (default: all)"},
+                }, "required": ["path"]},
+                risk=RiskLevel.SAFE,
+                examples=["read_pdf path='report.pdf'", "read_pdf path='book.pdf' start_page=10 end_page=20"],
+            ),
+            "read_docx": ToolDefinition(
+                name="read_docx",
+                description="Read text and tables from a Word (.docx) file.",
+                parameters={"type": "object", "properties": {
+                    "path": {"type": "string", "description": "Path to DOCX file"},
+                }, "required": ["path"]},
+                risk=RiskLevel.SAFE,
+            ),
+            "read_xlsx": ToolDefinition(
+                name="read_xlsx",
+                description="Read data from an Excel (.xlsx) spreadsheet.",
+                parameters={"type": "object", "properties": {
+                    "path": {"type": "string", "description": "Path to XLSX file"},
+                    "sheet": {"type": "string", "description": "Sheet name (default: first sheet)"},
+                }, "required": ["path"]},
+                risk=RiskLevel.SAFE,
+            ),
         }
 
     def _resolve_path(self, path: str) -> str:
@@ -832,3 +860,56 @@ class ToolManager:
             )
         except Exception as e:
             return ToolResult(success=False, error=f"Transcription failed: {e}")
+
+    def _handle_read_pdf(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.document_service import DocumentReader
+        path = self._resolve_path(args["path"])
+        if not os.path.exists(path):
+            return ToolResult(success=False, error=f"File not found: {path}")
+        try:
+            reader = DocumentReader()
+            content = reader.read_pdf(path, args.get("start_page", 1), args.get("end_page", 0))
+            output = content.text
+            if content.tables:
+                output += "\n\n--- Tables ---\n"
+                for i, t in enumerate(content.tables):
+                    output += f"\nTable {i + 1}:\n"
+                    for row in t:
+                        output += " | ".join(row) + "\n"
+            output += f"\n\nMetadata: {content.metadata}\nPages: {content.pages}\nSize: {content.size_bytes} bytes"
+            return ToolResult(success=True, output=output, data={
+                "text": content.text, "tables": content.tables,
+                "metadata": content.metadata, "pages": content.pages,
+            })
+        except Exception as e:
+            return ToolResult(success=False, error=f"Failed to read PDF: {e}")
+
+    def _handle_read_docx(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.document_service import DocumentReader
+        path = self._resolve_path(args["path"])
+        if not os.path.exists(path):
+            return ToolResult(success=False, error=f"File not found: {path}")
+        try:
+            reader = DocumentReader()
+            content = reader.read_docx(path)
+            return ToolResult(success=True, output=content.text, data={
+                "tables": content.tables, "metadata": content.metadata,
+                "fileType": content.file_type,
+            })
+        except Exception as e:
+            return ToolResult(success=False, error=f"Failed to read DOCX: {e}")
+
+    def _handle_read_xlsx(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.document_service import DocumentReader
+        path = self._resolve_path(args["path"])
+        if not os.path.exists(path):
+            return ToolResult(success=False, error=f"File not found: {path}")
+        try:
+            reader = DocumentReader()
+            content = reader.read_xlsx(path, args.get("sheet", ""))
+            return ToolResult(success=True, output=content.text, data={
+                "tables": content.tables, "metadata": content.metadata,
+                "sheets": content.metadata.get("sheets", []),
+            })
+        except Exception as e:
+            return ToolResult(success=False, error=f"Failed to read XLSX: {e}")
