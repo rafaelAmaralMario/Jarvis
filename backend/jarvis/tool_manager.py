@@ -605,6 +605,20 @@ class ToolManager:
                 }, "required": ["email_id", "body"]},
                 risk=RiskLevel.ASK,
             ),
+            "capture_camera": ToolDefinition(
+                name="capture_camera",
+                description="Capture a frame from the camera and save to file.",
+                parameters={"type": "object", "properties": {
+                    "path": {"type": "string", "description": "Output image path (.jpg)"},
+                }, "required": ["path"]},
+                risk=RiskLevel.SAFE,
+            ),
+            "analyze_camera": ToolDefinition(
+                name="analyze_camera",
+                description="Capture a camera frame and return it as base64 for analysis.",
+                parameters={"type": "object", "properties": {}, "required": []},
+                risk=RiskLevel.SAFE,
+            ),
         }
 
     def _resolve_path(self, path: str) -> str:
@@ -1362,3 +1376,30 @@ class ToolManager:
             return ToolResult(success=True, output=f"Reply sent to {result.get('to', '')}")
         except Exception as e:
             return ToolResult(success=False, error=f"Email error: {e}")
+
+    def _handle_capture_camera(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.camera_service import CameraService
+        path = self._resolve_path(args["path"])
+        try:
+            cam = CameraService()
+            result = cam.capture_and_save(path)
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Camera error"))
+            return ToolResult(success=True, output=f"Camera frame saved: {path}", data=result)
+        except Exception as e:
+            return ToolResult(success=False, error=f"Camera error: {e}")
+
+    def _handle_analyze_camera(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.camera_service import CameraService
+        try:
+            cam = CameraService()
+            result = cam.analyze()
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Camera error"))
+            return ToolResult(
+                success=True,
+                output="Camera frame captured",
+                data={"imageBase64": result.get("imageBase64", ""), "format": "jpg"},
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=f"Camera error: {e}")
