@@ -481,6 +481,36 @@ class ToolManager:
                 risk=RiskLevel.SAFE,
                 examples=["extract_text_from_image path='scan.png'", "extract_text_from_image path='doc.jpg' language='eng'"],
             ),
+            "list_events": ToolDefinition(
+                name="list_events",
+                description="List calendar events from CalDAV.",
+                parameters={"type": "object", "properties": {
+                    "days": {"type": "number", "description": "Number of days to look ahead", "default": 7},
+                }, "required": []},
+                risk=RiskLevel.SAFE,
+            ),
+            "create_event": ToolDefinition(
+                name="create_event",
+                description="Create a new calendar event via CalDAV.",
+                parameters={"type": "object", "properties": {
+                    "summary": {"type": "string", "description": "Event title"},
+                    "start": {"type": "string", "description": "Start datetime (ISO format, e.g. 2025-04-01T10:00:00)"},
+                    "end": {"type": "string", "description": "End datetime (ISO format)"},
+                    "description": {"type": "string", "description": "Event description"},
+                }, "required": ["summary", "start", "end"]},
+                risk=RiskLevel.ASK,
+            ),
+            "update_event": ToolDefinition(
+                name="update_event",
+                description="Update an existing calendar event.",
+                parameters={"type": "object", "properties": {
+                    "uid": {"type": "string", "description": "Event UID to update"},
+                    "summary": {"type": "string", "description": "New title"},
+                    "start": {"type": "string", "description": "New start datetime"},
+                    "end": {"type": "string", "description": "New end datetime"},
+                }, "required": ["uid"]},
+                risk=RiskLevel.ASK,
+            ),
         }
 
     def _resolve_path(self, path: str) -> str:
@@ -1059,3 +1089,46 @@ class ToolManager:
             )
         except Exception as e:
             return ToolResult(success=False, error=f"OCR failed: {e}")
+
+    def _handle_list_events(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.calendar_service import CalendarService
+        try:
+            cal = CalendarService()
+            result = cal.list_events(days=args.get("days", 7))
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Calendar error"))
+            events = result.get("events", [])
+            if not events:
+                return ToolResult(success=True, output="No events found.")
+            lines = [f"- {e['start']}: {e['summary']} ({e['calendar']})" for e in events]
+            return ToolResult(success=True, output="\n".join(lines), data=result)
+        except Exception as e:
+            return ToolResult(success=False, error=f"Calendar error: {e}")
+
+    def _handle_create_event(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.calendar_service import CalendarService
+        try:
+            cal = CalendarService()
+            result = cal.create_event(
+                summary=args["summary"], start=args["start"], end=args["end"],
+                description=args.get("description", ""),
+            )
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Calendar error"))
+            return ToolResult(success=True, output=f"Event created: {args['summary']}", data=result)
+        except Exception as e:
+            return ToolResult(success=False, error=f"Calendar error: {e}")
+
+    def _handle_update_event(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.calendar_service import CalendarService
+        try:
+            cal = CalendarService()
+            result = cal.update_event(
+                uid=args["uid"], summary=args.get("summary", ""),
+                start=args.get("start", ""), end=args.get("end", ""),
+            )
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Calendar error"))
+            return ToolResult(success=True, output=f"Event {args['uid']} updated.")
+        except Exception as e:
+            return ToolResult(success=False, error=f"Calendar error: {e}")

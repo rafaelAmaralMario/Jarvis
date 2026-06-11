@@ -33,6 +33,9 @@ ocr = [
     "pytesseract>=0.4,<1",
     "Pillow>=11,<12",
 ]
+caldav = [
+    "caldav>=1.0,<2",
+]
 dev = [
     "pytest>=8,<9",
     "pytest-cov>=6,<7",
