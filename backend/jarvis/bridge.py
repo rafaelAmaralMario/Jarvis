@@ -177,12 +177,7 @@ class JARVISBridge:
         try:
             return _serialize(self._models.list_models())
         except Exception as e:
-            msg = str(e)
-            if "connection" in msg.lower() or "refused" in msg.lower():
-                logger.warning("Ollama não respondeu — tentando iniciar servidor...")
-                self.startModelServer()
-            else:
-                logger.warning("listModels failed: %s", msg)
+            logger.warning("listModels failed (server offline?): %s", e)
             return []
 
     def getModel(self, name: str):
@@ -796,7 +791,7 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
 
     _streams: dict[str, dict] = {}
 
-    def toolAgentExecuteStream(self, query: str, conv_id: str = "", history: list | None = None, agent_id: str = "", unattended: bool = False) -> dict:
+    def toolAgentExecuteStream(self, query: str, conv_id: str = "", history: list | None = None, agent_id: str = "", unattended: bool = False, provider_override: str = "", model_override: str = "") -> dict:
         task_id = str(uuid.uuid4())
         JARVISBridge._streams[task_id] = {
             "content": "",
@@ -814,13 +809,6 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                 agent_provider = "ollama"
                 agent_system = None
 
-                # Fallback to the user's globally selected default provider
-                try:
-                    if self._llm:
-                        agent_provider = self._llm.get_default_provider()
-                except Exception:
-                    pass
-
                 if agent_id and self._agents:
                     agent = self._agents.get_agent(agent_id)
                     if agent:
@@ -835,6 +823,20 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                         agent_provider = default.provider or agent_provider
                         if default.system_prompt:
                             agent_system = default.system_prompt
+
+                # Chat overrides take highest priority
+                if model_override:
+                    agent_model = model_override
+                if provider_override:
+                    agent_provider = provider_override
+
+                # Fallback to default provider if still not set
+                if not agent_provider or agent_provider == "ollama":
+                    try:
+                        if self._llm:
+                            agent_provider = self._llm.get_default_provider()
+                    except Exception:
+                        pass
 
                 tool_calls_log: list[dict] = []
                 tool_results_log: list[dict] = []

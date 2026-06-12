@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useJarvis } from '@/hooks/use-jarvis';
-import type { Agent, LLMProviderInfo, ToolAgentCall, ToolAgentResult, PendingQuestion } from '@/types';
+import type { Agent, LLMProviderInfo, ToolAgentCall, ToolAgentResult, PendingQuestion, ModelInfo, Specialty } from '@/types';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import type { ContextMenuItem } from '@/components/ui/ContextMenu';
 
@@ -105,6 +105,8 @@ export function AiPanel({ fullView }: AiPanelProps) {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [providers, setProviders] = useState<LLMProviderInfo[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>('ollama');
+  const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; convId: string; hasSelection: boolean } | null>(null);
@@ -218,6 +220,30 @@ export function AiPanel({ fullView }: AiPanelProps) {
   }, [bridge, initialized, conversations.length, selectedAgentId]);
 
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
+  const modelsInitialized = useRef(false);
+
+  // Load models when agent or provider changes
+  useEffect(() => {
+    if (!agents.length) return;
+    bridge.listModels().then(ms => {
+      setAvailableModels(ms);
+      const filtered = ms.filter(m => m.provider === selectedProvider);
+      if (filtered.length === 0) return;
+      if (!modelsInitialized.current) {
+        const agent = agents.find(a => a.id === selectedAgentId);
+        if (agent && filtered.some(m => m.name === agent.model)) {
+          setSelectedModel(agent.model);
+        } else {
+          setSelectedModel(filtered[0].name);
+        }
+        modelsInitialized.current = true;
+      }
+    }).catch(() => {});
+  }, [selectedAgentId, selectedProvider, agents.length, bridge]);
+
+  const MODEL_SPECIALTY_ICONS: Record<string, string> = {
+    chat: '💬', code: '💻', reasoning: '🧠', embedding: '📐', vision: '👁', general: '🤖',
+  };
 
   const updateMessages = useCallback((convId: string, updater: (msgs: Message[]) => Message[]) => {
     setConversations(prev => prev.map(c =>
@@ -275,7 +301,7 @@ export function AiPanel({ fullView }: AiPanelProps) {
 
     try {
       const history = activeConv?.messages.slice(0, -1).map(m => ({ role: m.role, content: m.content })) || [];
-      const stream = await bridge.toolAgentExecuteStream(text, activeConvId, history, selectedAgentId || undefined, unattended);
+      const stream = await bridge.toolAgentExecuteStream(text, activeConvId, history, selectedAgentId || undefined, unattended, selectedProvider, selectedModel);
       streamTaskRef.current = stream.taskId;
 
       let pendingQuestionResult: PendingQuestion | null = null;
@@ -570,31 +596,52 @@ export function AiPanel({ fullView }: AiPanelProps) {
           >
             ☰
           </motion.button>
-          <select
-            value={selectedAgentId ?? ''}
-            onChange={(e) => setSelectedAgentId(e.target.value || null)}
-            className="flex-1 bg-transparent text-sm font-semibold truncate focus:outline-none cursor-pointer"
-          >
-            {agents.length === 0 && <option value="">Carregando...</option>}
-            {agents.map(a => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-          {providers.length > 1 && (
+          <div className="relative flex-1 min-w-0">
             <select
-              value={selectedProvider}
-              onChange={(e) => {
-                setSelectedProvider(e.target.value);
-                bridge.llmSetDefaultProvider(e.target.value).catch(() => {});
-              }}
-              className="bg-transparent text-[11px] text-muted-foreground truncate focus:outline-none cursor-pointer max-w-[100px]"
-              title="Provider"
+              value={selectedAgentId ?? ''}
+              onChange={(e) => setSelectedAgentId(e.target.value || null)}
+              className="w-full appearance-none bg-transparent text-sm font-semibold truncate focus:outline-none cursor-pointer pr-5"
             >
-              {providers.filter(p => p.enabled).map(p => (
-                <option key={p.provider} value={p.provider}>{p.provider}</option>
+              {agents.length === 0 && <option value="">Carregando...</option>}
+              {agents.map(a => (
+                <option key={a.id} value={a.id}>
+                  {MODEL_SPECIALTY_ICONS[a.specialty] || '🤖'} {a.name}
+                </option>
               ))}
             </select>
+            <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">▼</span>
+          </div>
+          {providers.length > 1 && (
+            <div className="relative">
+              <select
+                value={selectedProvider}
+                onChange={(e) => {
+                  setSelectedProvider(e.target.value);
+                  bridge.llmSetDefaultProvider(e.target.value).catch(() => {});
+                }}
+                className="appearance-none bg-muted/50 text-[11px] text-muted-foreground truncate focus:outline-none cursor-pointer px-2 py-0.5 rounded-md border border-border pr-5"
+                title="Provider"
+              >
+                {providers.filter(p => p.enabled).map(p => (
+                  <option key={p.provider} value={p.provider}>{p.provider}</option>
+                ))}
+              </select>
+              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-muted-foreground pointer-events-none">▼</span>
+            </div>
           )}
+          <div className="relative max-w-[120px]">
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="appearance-none bg-muted/50 text-[11px] text-muted-foreground truncate focus:outline-none cursor-pointer px-2 py-0.5 rounded-md border border-border pr-5 max-w-full"
+              title="Model"
+            >
+              {availableModels.filter(m => m.provider === selectedProvider).map(m => (
+                <option key={m.name} value={m.name}>{m.name.split(':')[0]}</option>
+              ))}
+            </select>
+            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-muted-foreground pointer-events-none">▼</span>
+          </div>
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -604,14 +651,6 @@ export function AiPanel({ fullView }: AiPanelProps) {
           >
             ✚
           </motion.button>
-        </div>
-        <div className="flex items-center gap-2 text-[10px] flex-shrink-0">
-          {selectedAgent && (
-            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-500 border border-green-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-sm shadow-green-500/60 animate-pulse" />
-              {selectedAgent.model.split(':')[0]}@{selectedProvider}
-            </span>
-          )}
         </div>
       </div>
 
@@ -806,7 +845,7 @@ export function AiPanel({ fullView }: AiPanelProps) {
 
       {/* Input */}
       <div className="p-3 border-t border-border">
-        {error && (
+        {error && error !== 'tool' && (
           <div className="mb-2 px-3 py-1.5 rounded-lg bg-red-950/20 border border-red-900/40 text-xs text-red-400">
             {error}
           </div>

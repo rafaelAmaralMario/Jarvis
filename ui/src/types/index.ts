@@ -152,7 +152,7 @@ export interface JarvisBridge {
   toolsSetWorkspace(path: string): Promise<boolean>;
   toolAgentExecute(query: string, convId?: string): Promise<ToolAgentResponse>;
   toolAgentAnswer(questionId: string, answer: string): Promise<ToolAgentAnswerResult>;
-  toolAgentExecuteStream(query: string, convId?: string, history?: {role: string; content: string}[], agentId?: string, unattended?: boolean): Promise<StreamTask>;
+  toolAgentExecuteStream(query: string, convId?: string, history?: {role: string; content: string}[], agentId?: string, unattended?: boolean, provider?: string, model?: string): Promise<StreamTask>;
   toolAgentGetStream(taskId: string): Promise<StreamState>;
   taskPlannerExecute(query: string, resume?: boolean): Promise<TaskPlannerResult>;
   plannerExecuteStream(query: string, resumePlanId?: string): Promise<{ taskId: string }>;
@@ -821,4 +821,4 @@ export interface PlannerCheckpoint {
 }
 
 export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'planner' | 'settings' | 'git';
-export type SettingsTab = 'general' | 'models' | 'gguf' | 'assistant' | 'orchestration' | 'agents' | 'api-keys' | 'llm-providers' | 'llm-router' | 'mcp-servers' | 'workflows' | 'security' | 'updates';
+export type SettingsTab = 'general' | 'models' | 'gguf' | 'assistant' | 'orchestration' | 'agents' | 'api-keys' | 'llm-providers' | 'llm-router' | 'mcp-servers' | 'workflows' | 'security' | 'updates' | 'model-classification';

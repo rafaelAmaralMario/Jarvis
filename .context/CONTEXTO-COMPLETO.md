@@ -138,7 +138,7 @@ Bridge expõe métodos via `window.jarvis.*`:
 - **Chat:** chatListConversations, chatGetMessages, chatCreateConversation, chatSaveMessage, chatDeleteConversation, chatAutoTitle
 - **LLM:** llmGetProviders, llmSaveProvider, llmGetDefaultProvider, llmSetDefaultProvider, llmTestConnection
 - **Tools:** toolsList, toolsGetRisk, toolsExecute, toolsSetWorkspace
-- **Agent:** toolAgentExecute, toolAgentExecuteStream (query, convId, history, agentId, unattended), toolAgentGetStream, toolAgentAnswer
+- **Agent:** toolAgentExecute, toolAgentExecuteStream (query, convId, history, agentId, unattended, providerOverride, modelOverride), toolAgentGetStream, toolAgentAnswer
 - **Planner:** plannerExecuteStream, plannerGetProgress, plannerCancel, plannerListCheckpoints, plannerResumeCheckpoint
 - **Self-Improvement:** selfImprovementStream, selfImprovementGetStream, selfImprovementAnswer, selfImprovementCancel
 - **Knowledge:** createNote, getNote, listNotes, updateNote, deleteNote, searchNotes, getNoteGraph, getBacklinks
@@ -147,7 +147,7 @@ Bridge expõe métodos via `window.jarvis.*`:
 - **Git:** gitStatus, gitDiff, gitStage, gitCommit, gitLog, gitBranches, gitPull, gitPush
 - **Terminal:** terminalCreate, terminalWrite, terminalResize, terminalKill, terminalList
 - **MCP:** mcpListServers, mcpStartServer, mcpStopServer, mcpCallTool
-- **System:** copyToClipboard, showFolderPicker, getAppVersion, getModelServerStatus, startModelServer
+- **System:** copyToClipboard, showFolderPicker, getAppVersion, getModelServerStatus, startModelServer, getLogPath
 
 ---
 
@@ -161,6 +161,9 @@ Bridge expõe métodos via `window.jarvis.*`:
 | Task Planner | Checkpoint JSON em `.jarvis/plans/` | Simples, sem depender de banco |
 | Clipboard | pyperclip | Estável, cross-platform |
 | Comunicação | pywebview js_api (JSON-RPC) | Nativo do framework |
+| Model Selectors | Styled dropdown (appearance-none) | Moderno, sem dependências |
+| Prioridade de modelo | agente → especialidade → chat | Flexível, fallback progressivo |
+| Chat overrides | Provider + Model passados no toolAgentExecuteStream | Usuário escolhe, backend respeita |
 
 ---
 

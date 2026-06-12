@@ -284,7 +284,7 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     toolsSetWorkspace: (path) => send('toolsSetWorkspace', path) as Promise<boolean>,
     toolAgentExecute: (query, convId) => send('toolAgentExecute', query, convId) as Promise<ToolAgentResponse>,
     toolAgentAnswer: (questionId, answer) => send('toolAgentAnswer', questionId, answer) as Promise<ToolAgentAnswerResult>,
-    toolAgentExecuteStream: (query, convId, history, agentId, unattended) => send('toolAgentExecuteStream', query, convId, history, agentId, unattended) as Promise<StreamTask>,
+    toolAgentExecuteStream: (query, convId, history, agentId, unattended, provider, model) => send('toolAgentExecuteStream', query, convId, history, agentId, unattended, provider, model) as Promise<StreamTask>,
     toolAgentGetStream: (taskId) => send('toolAgentGetStream', taskId) as Promise<StreamState>,
     taskPlannerExecute: (query, resume) => send('taskPlannerExecute', query, resume) as Promise<TaskPlannerResult>,
     plannerExecuteStream: (query, resumePlanId) => send('plannerExecuteStream', query, resumePlanId) as Promise<{ taskId: string }>,

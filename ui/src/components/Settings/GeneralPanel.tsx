@@ -10,8 +10,8 @@ interface GeneralSettings {
   editorFontSize: number;
   terminalFontSize: number;
   autoSave: boolean;
-  defaultModel: string;
   chatFontSize: number;
+  defaultModelsBySpecialty: Record<string, string>;
 }
 
 const DEFAULT_SETTINGS: GeneralSettings = {
@@ -20,8 +20,8 @@ const DEFAULT_SETTINGS: GeneralSettings = {
   editorFontSize: 14,
   terminalFontSize: 13,
   autoSave: true,
-  defaultModel: '',
   chatFontSize: 14,
+  defaultModelsBySpecialty: {},
 };
 
 export function GeneralPanel() {
@@ -191,20 +191,6 @@ export function GeneralPanel() {
           </button>
         </div>
 
-        {/* Default Model */}
-        <div className="flex items-center justify-between">
-          <div>
-            <label className="text-sm font-medium text-foreground">Default Model</label>
-            <p className="text-xs text-muted-foreground">AI model used for chat by default</p>
-          </div>
-          <input
-            type="text"
-            value={settings.defaultModel}
-            onChange={(e) => update('defaultModel', e.target.value)}
-            placeholder="e.g. llama3.2:3b"
-            className="px-3 py-1.5 rounded-lg border bg-card text-sm w-48 focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/40"
-          />
-        </div>
       </div>
 
       <div className="pt-4 border-t border-border">

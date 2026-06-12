@@ -13,6 +13,7 @@ import { UpdatesPanel } from './UpdatesPanel';
 import { GeneralPanel } from './GeneralPanel';
 import { GGUFSettings } from './GGUFSettings';
 import { RouterPanel } from './RouterPanel';
+import { ModelClassificationPanel } from './ModelClassificationPanel';
 
 const TABS: { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'models', label: 'Models', icon: '📦' },
@@ -25,6 +26,7 @@ const TABS: { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'mcp-servers', label: 'MCP Servers', icon: '🔌' },
   { id: 'workflows', label: 'Workflows', icon: '⚡' },
   { id: 'security', label: 'Security', icon: '🔒' },
+  { id: 'model-classification', label: 'Classificação', icon: '🏷️' },
   { id: 'general', label: 'Geral', icon: '📋' },
   { id: 'updates', label: 'Atualizações', icon: '🔄' },
 ];
@@ -64,10 +66,7 @@ export function SettingsPage() {
             {TABS.find(t => t.id === activeTab)?.icon}{' '}
             {TABS.find(t => t.id === activeTab)?.label}
           </h1>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="w-2 h-2 rounded-full bg-green-500 shadow-sm shadow-green-500/50 animate-pulse" />
-            Ollama connected
-          </div>
+
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -90,6 +89,7 @@ export function SettingsPage() {
               {activeTab === 'mcp-servers' && <MCPServersPanel />}
               {activeTab === 'workflows' && <WorkflowsPanel />}
               {activeTab === 'security' && <SecurityPanel />}
+              {activeTab === 'model-classification' && <ModelClassificationPanel />}
               {activeTab === 'general' && <GeneralPanel />}
               {activeTab === 'updates' && <UpdatesPanel />}
             </motion.div>
