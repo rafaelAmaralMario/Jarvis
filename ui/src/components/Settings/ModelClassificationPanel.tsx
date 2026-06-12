@@ -18,11 +18,12 @@ export function ModelClassificationPanel() {
 
   useEffect(() => {
     Promise.all([
-      bridge.editorGetSettings() as Promise<Record<string, unknown>>,
+      bridge.editorGetSettings() as Promise<Record<string, string>>,
       bridge.listModels().then(ms => ms.map(m => m.name)),
     ]).then(([settings, modelNames]) => {
-      if (settings?.defaultModelsBySpecialty && typeof settings.defaultModelsBySpecialty === 'object') {
-        setDefaults(settings.defaultModelsBySpecialty as Record<string, string>);
+      const raw = settings?.['model-classification'];
+      if (raw) {
+        try { setDefaults(JSON.parse(raw)); } catch {}
       }
       setModels(modelNames);
     });
@@ -34,8 +35,7 @@ export function ModelClassificationPanel() {
   };
 
   const save = async () => {
-    const settings = await bridge.editorGetSettings() as Record<string, unknown>;
-    await bridge.editorUpdateSettings({ ...settings, defaultModelsBySpecialty: defaults });
+    await bridge.editorUpdateSettings('model-classification', JSON.stringify(defaults));
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };

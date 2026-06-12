@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useJarvis } from '@/hooks/use-jarvis';
-import type { Agent, LLMProviderInfo, ToolAgentCall, ToolAgentResult, PendingQuestion, ModelInfo, Specialty } from '@/types';
+import type { Agent, LLMProviderInfo, ToolAgentCall, ToolAgentResult, PendingQuestion, ModelInfo } from '@/types';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import type { ContextMenuItem } from '@/components/ui/ContextMenu';
 
@@ -219,7 +219,6 @@ export function AiPanel({ fullView }: AiPanelProps) {
     }).catch(() => {});
   }, [bridge, initialized, conversations.length, selectedAgentId]);
 
-  const selectedAgent = agents.find(a => a.id === selectedAgentId);
   const modelsInitialized = useRef(false);
 
   // Load models when agent or provider changes
