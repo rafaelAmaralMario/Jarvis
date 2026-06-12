@@ -7,8 +7,8 @@ from typing import Callable
 
 from jarvis.agents_manager import AgentsManager, Agent
 from jarvis.database import Database
+from jarvis.llm_gateway import LLMGateway, LLMProvider, LLMRequest, LLMMessage
 from jarvis.models_manager import ModelsManager
-from jarvis.ollama_client import OllamaClient, OllamaError, OllamaGenerateRequest
 
 
 @dataclass
@@ -74,12 +74,12 @@ class OrchestrationManager:
         models: ModelsManager,
         agents: AgentsManager,
         db: Database,
-        ollama: OllamaClient | None = None,
+        llm_gateway: LLMGateway,
     ):
         self._models = models
         self._agents = agents
         self._db = db
-        self._ollama = ollama or OllamaClient()
+        self._llm = llm_gateway
         self._stream_cb: Callable[[str], None] | None = None
         self._traces: dict[str, AgentTrace] = {}
         self._load_config()
@@ -187,63 +187,24 @@ class OrchestrationManager:
         return self._execute_agent(agent, query)
 
     def _execute_agent(self, agent: Agent, query: str) -> str:
-        return self._execute_agent_with_fallback(agent, query, agent.model)
-
-    def _execute_agent_with_fallback(
-        self, agent: Agent, query: str, model: str
-    ) -> str:
+        messages = [LLMMessage(role="user", content=query)]
         system = agent.system_prompt
         if system:
             system += "\n\nResponda em markdown."
-        req = OllamaGenerateRequest(
-            model=model,
-            prompt=query,
-            system=system,
+        provider_str = agent.provider if agent.provider else "ollama"
+        req = LLMRequest(
+            provider=LLMProvider(provider_str),
+            model=agent.model,
+            messages=messages,
+            system=system or "",
             temperature=agent.temperature,
             max_tokens=agent.max_tokens,
-            stream=False,
         )
         try:
-            result = self._ollama.generate(req)
-            return result.response
-        except OllamaError:
-            fallback = self._pick_available_model()
-            if fallback and fallback != model:
-                return (
-                    f"*Modelo '{model}' não disponível. "
-                    f"Usando '{fallback}' como alternativa.*\n\n"
-                    f"{self._execute_agent_with_fallback(agent, query, fallback)}"
-                )
-            return (
-                f"**Erro:** Nenhum modelo disponível no Ollama. "
-                f"Modelos instalados: {[m.name for m in self._ollama.list_models()]}. "
-                f"Configure um modelo em Settings → Models."
-            )
+            result = self._llm.generate(req)
+            return result.content
         except Exception as e:
-            msg = str(e).lower()
-            if "connect" in msg or "refused" in msg:
-                return f"**Erro:** Não foi possível conectar ao Ollama em localhost:11434. Verifique se `ollama serve` está rodando."
             return f"**Erro ao executar agente '{agent.name}':** {e}"
-
-    _PREFERRED_MODELS = [
-        "llama3.2", "llama3.1", "llama3", "phi4", "phi3",
-        "mistral", "qwen2.5", "gemma3", "gemma2",
-    ]
-
-    def _pick_available_model(self) -> str | None:
-        try:
-            models = self._ollama.list_models()
-            if not models:
-                return None
-            available_names = {m.name for m in models}
-            for preferred in self._PREFERRED_MODELS:
-                for name in available_names:
-                    if name.startswith(preferred):
-                        return name
-            return models[0].name
-        except Exception:
-            pass
-        return None
 
     def _orchestrator_plan(self, query: str) -> tuple[str, list[str]]:
         pool = self._agents.get_orchestration_pool()
@@ -272,28 +233,16 @@ class OrchestrationManager:
             if self._config.orchestrator_model
             else pool[0].model
         )
-        req = OllamaGenerateRequest(
+        req = LLMRequest(
             model=model,
-            prompt=routing_prompt,
+            messages=[LLMMessage(role="user", content=routing_prompt)],
             temperature=0.1,
             max_tokens=256,
-            stream=False,
         )
 
         try:
-            result = self._ollama.generate(req)
-            response = result.response.strip()
-        except OllamaError:
-            fallback_model = self._pick_available_model()
-            if fallback_model and fallback_model != model:
-                req.model = fallback_model
-                try:
-                    result = self._ollama.generate(req)
-                    response = result.response.strip()
-                except Exception:
-                    response = ", ".join(
-                        a.name for a in pool[: self._config.max_agents_per_query]
-                    )
+            result = self._llm.generate(req)
+            response = result.content.strip()
             agent_names = [
                 name.strip()
                 for name in response.split(",")
@@ -325,26 +274,15 @@ class OrchestrationManager:
         pool = self._agents.get_orchestration_pool()
         model = pool[0].model if pool else "llama3.2"
 
-        req = OllamaGenerateRequest(
+        req = LLMRequest(
             model=model,
-            prompt=prompt,
+            messages=[LLMMessage(role="user", content=prompt)],
             temperature=self._config.critic_temperature,
             max_tokens=512,
-            stream=False,
         )
         try:
-            result = self._ollama.generate(req)
-            return result.response
-        except OllamaError:
-            fallback = self._pick_available_model()
-            if fallback and fallback != model:
-                req.model = fallback
-                try:
-                    result = self._ollama.generate(req)
-                    return result.response
-                except Exception:
-                    pass
-            return "✅ Aprovado (critico indisponivel)"
+            result = self._llm.generate(req)
+            return result.content
         except Exception:
             return "✅ Aprovado (critico indisponivel)"
 

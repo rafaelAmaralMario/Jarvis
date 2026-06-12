@@ -116,8 +116,8 @@ def main():
     agents = AgentsManager(db)
     knowledge = KnowledgeManager(db)
     graph = GraphBuilder(db)
-    orchestration = OrchestrationManager(models, agents, db, ollama)
     llm_gateway = LLMGateway(db)
+    orchestration = OrchestrationManager(models, agents, db, llm_gateway)
     mcp = MCPManager(db)
     workflows = WorkflowEngine(db)
     security = SecurityManager(db)
@@ -142,17 +142,26 @@ def main():
         security=security,
     )
 
-    # Fix agent models that don't exist in Ollama
+    # Fix agent models that don't exist in any provider (Ollama or GGUF)
     try:
-        available = [m.name for m in ollama.list_models()]
+        ollama_models = [m.name for m in ollama.list_models()]
+        gguf_models: list[str] = []
+        try:
+            import glob
+            models_dir = os.path.expanduser("~/.jarvis/models")
+            gguf_models = [os.path.basename(p) for p in glob.glob(os.path.join(models_dir, "*.gguf"))]
+        except Exception:
+            pass
+        available = set(ollama_models + gguf_models)
         if available:
+            first_available = next(iter(available))
             for agent in agents.list_agents():
                 if agent.model not in available:
                     old_model = agent.model
                     agents.update_agent(agent.id, CreateAgentDTO(
                         name=agent.name,
                         description=agent.description,
-                        model=available[0],
+                        model=first_available,
                         system_prompt=agent.system_prompt,
                         temperature=agent.temperature,
                         max_tokens=agent.max_tokens,
@@ -163,7 +172,7 @@ def main():
                     ))
                     logger.info(
                         "Agent '%s': model '%s' not found, fixed to '%s'",
-                        agent.name, old_model, available[0],
+                        agent.name, old_model, first_available,
                     )
     except Exception as e:
         logger.warning("Agent model validation failed: %s", e)

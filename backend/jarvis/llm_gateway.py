@@ -552,6 +552,23 @@ class LLMGateway:
                 enabled=True,
             )
 
+        if "native" not in self._providers:
+            models_dir = os.path.expanduser("~/.jarvis/models")
+            gguf_files = glob.glob(os.path.join(models_dir, "*.gguf"))
+            if gguf_files:
+                first_model = os.path.basename(gguf_files[0])
+                self._providers["native"] = LLMProviderConfig(
+                    provider=LLMProvider.NATIVE,
+                    api_url=models_dir,
+                    default_model=first_model,
+                    enabled=True,
+                    models=[os.path.basename(f) for f in gguf_files],
+                )
+                logger.info(
+                    "NATIVE provider auto-registrado com %d modelo(s) GGUF em %s",
+                    len(gguf_files), models_dir,
+                )
+
         self._load_fallback_config()
 
     def _load_fallback_config(self):

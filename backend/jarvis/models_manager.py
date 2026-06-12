@@ -1,3 +1,5 @@
+import logging
+import os
 import re
 from dataclasses import dataclass, field
 from enum import Enum
@@ -5,6 +7,8 @@ from typing import Callable
 
 from jarvis.database import Database
 from jarvis.ollama_client import OllamaClient
+
+logger = logging.getLogger(__name__)
 
 
 class ModelStatus(Enum):
@@ -102,8 +106,16 @@ class ModelsManager:
         self._progress_cb = cb
 
     def list_models(self) -> list[ModelInfo]:
-        ollama_models = self._ollama.list_models()
+        from jarvis.llm_gateway import get_llm_client, LLMProvider, LLMProviderConfig
+
         result: list[ModelInfo] = []
+        seen: set[str] = set()
+
+        try:
+            ollama_models = self._ollama.list_models()
+        except Exception:
+            ollama_models = []
+
         for om in ollama_models:
             info = ModelInfo(
                 name=om.name,
@@ -114,6 +126,31 @@ class ModelsManager:
             self._load_metadata(info)
             info.status = self._estimate_status(info.name)
             result.append(info)
+            seen.add(om.name)
+
+        models_dir = os.path.expanduser("~/.jarvis/models")
+        if os.path.isdir(models_dir):
+            try:
+                native_cfg = LLMProviderConfig(
+                    provider=LLMProvider.NATIVE,
+                    api_url=models_dir,
+                    enabled=True,
+                )
+                native = get_llm_client(native_cfg)
+                gguf_models = native.list_models()
+                for gguf_name in gguf_models:
+                    if gguf_name not in seen:
+                        info = ModelInfo(
+                            name=gguf_name,
+                            description=f"GGUF local model ({_format_size(os.path.getsize(os.path.join(models_dir, gguf_name)))})",
+                        )
+                        self._load_metadata(info)
+                        info.status = ModelStatus.RUNNING if native.ping() else ModelStatus.DOWNLOADED
+                        result.append(info)
+                        seen.add(gguf_name)
+            except Exception:
+                logger.warning("Failed to list GGUF models", exc_info=True)
+
         return result
 
     def get_model(self, name: str) -> ModelInfo:
