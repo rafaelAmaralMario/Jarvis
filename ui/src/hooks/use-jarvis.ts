@@ -57,6 +57,7 @@ function createBridge(): JarvisBridge {
   loadChat: [],
   showFolderPicker: null,
   copyToClipboard: false,
+  getLogPath: '',
   revealInExplorer: false,
   startModelServer: false,
   getRelativePath: '',
@@ -318,6 +319,7 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     llmRouterGetCacheInfo: () => send('llmRouterGetCacheInfo') as Promise<RouterCacheInfo>,
 
     copyToClipboard: (text) => send('copyToClipboard', text) as Promise<boolean>,
+    getLogPath: () => send('getLogPath') as Promise<string>,
     revealInExplorer: (path) => send('revealInExplorer', path) as Promise<boolean>,
     getRelativePath: (base, target) => send('getRelativePath', base, target) as Promise<string>,
     getPlatform: () => send('getPlatform') as Promise<string>,

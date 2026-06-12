@@ -58,9 +58,21 @@ export class AppErrorBoundary extends Component<Props, State> {
               >
                 Recarregar
               </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const bridge = (window as any).jarvis;
+                    const logPath = await bridge.getLogPath();
+                    bridge.revealInExplorer(logPath);
+                  } catch {}
+                }}
+                className="px-4 py-2 rounded-lg bg-amber-950/30 text-amber-400 border border-amber-900/40 text-sm hover:bg-amber-950/50 transition-colors"
+              >
+                Abrir logs
+              </button>
             </div>
             <p className="mt-6 text-[10px] text-muted-foreground">
-              Veja os logs em: %APPDATA%/JARVIS/logs/jarvis.log
+              Veja os logs em: %APPDATA%/JARVIS/logs/
             </p>
           </div>
         </div>

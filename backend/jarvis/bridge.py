@@ -2154,6 +2154,10 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
             logger.warning("revealInExplorer failed: %s", e)
             return False
 
+    def getLogPath(self) -> str:
+        from jarvis.logging_config import get_log_dir
+        return str(get_log_dir())
+
     def getRelativePath(self, base: str, target: str) -> str:
         try:
             rel = os.path.relpath(os.path.abspath(target), os.path.abspath(base))

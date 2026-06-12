@@ -187,6 +187,7 @@ export interface JarvisBridge {
   llmRouterGetCacheInfo(): Promise<RouterCacheInfo>;
 
   copyToClipboard(text: string): Promise<boolean>;
+  getLogPath(): Promise<string>;
   revealInExplorer(path: string): Promise<boolean>;
   getRelativePath(base: string, target: string): Promise<string>;
   getPlatform(): Promise<string>;
