@@ -23,7 +23,7 @@ export function SearchPalette({ isOpen, onClose, onOpenFile, commands }: SearchP
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [mode, setMode] = useState<'files' | 'commands'>('files');
   const inputRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const searchFiles = useCallback(async (q: string) => {
     if (!q || q.startsWith('>')) {
