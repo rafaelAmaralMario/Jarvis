@@ -903,12 +903,31 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
             return {"done": True, "error": "Task not found"}
         return dict(stream)
 
+    def _resolve_model_provider(self) -> tuple[str, str]:
+        model = ""
+        provider = "ollama"
+        try:
+            if self._llm:
+                provider = self._llm.get_default_provider()
+        except Exception:
+            pass
+        try:
+            if self._agents:
+                default = self._agents.get_default_agent()
+                if default:
+                    model = default.model or ""
+                    provider = default.provider or provider
+        except Exception:
+            pass
+        return model, provider
+
     def taskPlannerExecute(self, query: str, resume: bool = False) -> dict:
+        model, provider = self._resolve_model_provider()
         planner = TaskPlanner(
             llm=self._llm,
-            tools=self._tool_manager,
-            model=self._model,
-            provider=self._provider,
+            tools=self._tools,
+            model=model,
+            provider=provider,
             on_token=lambda t: None,
         )
         return planner.execute(query, resume=resume)
@@ -937,16 +956,17 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                 def on_progress(p: dict) -> None:
                     stream.update(p)
 
+                model, provider = self._resolve_model_provider()
                 planner = TaskPlanner(
                     llm=self._llm,
-                    tools=self._tool_manager,
-                    model=self._model,
-                    provider=self._provider,
+                    tools=self._tools,
+                    model=model,
+                    provider=provider,
                     on_progress=on_progress,
                 )
 
                 if resume_plan_id:
-                    cp = TaskPlanner.load_checkpoint(self._tool_manager.workspace_root or "", resume_plan_id)
+                    cp = TaskPlanner.load_checkpoint(self._tools.workspace_root or "", resume_plan_id)
                     if cp:
                         result = planner.execute(cp.get("plan", {}).get("summary", ""), resume=True)
                     else:
@@ -981,7 +1001,7 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
         return {"success": True}
 
     def plannerListCheckpoints(self) -> list:
-        ws = self._tool_manager.workspace_root or ""
+        ws = self._tools.workspace_root or ""
         return TaskPlanner.list_checkpoints(ws)
 
     def plannerResumeCheckpoint(self, plan_id: str) -> dict:
@@ -1151,8 +1171,7 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
 
         def _run():
             try:
-                agent_model = self._model or ""
-                agent_provider = self._provider or "ollama"
+                agent_model, agent_provider = self._resolve_model_provider()
 
                 si = SelfImprovement(
                     llm=self._llm,
