@@ -103,7 +103,13 @@ class JARVISBridge:
         self._llm_router = LLMRouter(gateway=llm_gateway, db=db) if llm_gateway else None
         self._db = db
         self._chat = ChatManager(db) if db else None
-        self._tools = ToolManager(workspace_root=workspace.get_roots()[0] if workspace and workspace.get_roots() else None)
+        try:
+            roots = workspace.get_roots() if workspace else []
+            ws_root = roots[0] if roots else None
+        except Exception:
+            logger.warning("Failed to get workspace roots, using None")
+            ws_root = None
+        self._tools = ToolManager(workspace_root=ws_root)
         if knowledge:
             self._tools.set_knowledge_manager(knowledge)
         self._tool_agent: ToolAgent | None = None
@@ -1073,6 +1079,9 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
         except Exception as e:
             logger.exception("ttsSynthesize failed")
             return {"success": False, "error": str(e)}
+
+    def logError(self, message: str, stack: str = "") -> None:
+        logger.error("Frontend error: %s\n%s", message, stack)
 
     # ========================================================================
     # LLM Router

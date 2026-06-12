@@ -619,6 +619,23 @@ class ToolManager:
                 parameters={"type": "object", "properties": {}, "required": []},
                 risk=RiskLevel.SAFE,
             ),
+            "send_whatsapp": ToolDefinition(
+                name="send_whatsapp",
+                description="Send a WhatsApp message via Web.",
+                parameters={"type": "object", "properties": {
+                    "to": {"type": "string", "description": "Phone number with country code, e.g. +5511999999999"},
+                    "message": {"type": "string", "description": "Message text"},
+                }, "required": ["to", "message"]},
+                risk=RiskLevel.ASK,
+            ),
+            "read_whatsapp": ToolDefinition(
+                name="read_whatsapp",
+                description="Read recent WhatsApp messages (requires whatsapp-web.js setup).",
+                parameters={"type": "object", "properties": {
+                    "limit": {"type": "number", "description": "Max messages", "default": 10},
+                }, "required": []},
+                risk=RiskLevel.SAFE,
+            ),
         }
 
     def _resolve_path(self, path: str) -> str:

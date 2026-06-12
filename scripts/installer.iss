@@ -39,6 +39,9 @@ LanguageDetectionMethod=uilanguage
 VersionInfoVersion={#MyAppVersion}
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} - AI Assistant with Integrated IDE
+; Creates the logs directory at %APPDATA%/JARVIS/logs/
+DirExistsWarning=no
+UsePreviousAppDir=yes
 
 [Languages]
 Name: "portuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"

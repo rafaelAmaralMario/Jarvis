@@ -39,6 +39,7 @@ interface MockBridge {
   ggufDiskUsage: ReturnType<typeof vi.fn>;
   audioTranscribe: ReturnType<typeof vi.fn>;
   ttsSynthesize: ReturnType<typeof vi.fn>;
+  logError: ReturnType<typeof vi.fn>;
   llmRouterGetRules: ReturnType<typeof vi.fn>;
   llmRouterSaveRule: ReturnType<typeof vi.fn>;
   llmRouterDeleteRule: ReturnType<typeof vi.fn>;
@@ -108,6 +109,7 @@ export const mockBridge: MockBridge = {
   ggufDiskUsage: vi.fn().mockResolvedValue({ totalBytes: 0, count: 0, modelsDir: '/mock/models' }),
   audioTranscribe: vi.fn().mockResolvedValue({ success: true, text: 'mock transcription' }),
   ttsSynthesize: vi.fn().mockResolvedValue({ success: true, audioBase64: 'mock-base64', format: 'wav' }),
+  logError: vi.fn().mockResolvedValue(undefined),
   llmRouterGetRules: vi.fn().mockResolvedValue([]),
   llmRouterSaveRule: vi.fn().mockResolvedValue(true),
   llmRouterDeleteRule: vi.fn().mockResolvedValue(true),

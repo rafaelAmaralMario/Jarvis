@@ -4,6 +4,7 @@ import argparse
 import logging
 import os
 import sys
+import traceback
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,31 @@ from jarvis.security_manager import SecurityManager
 from jarvis.terminal_manager import TerminalManager
 from jarvis.workflow_engine import WorkflowEngine
 from jarvis.workspace_manager import WorkspaceManager
+from jarvis.logging_config import setup_logging, install_exception_hooks, on_crash
+
+
+APP_NAME = "JARVIS"
+
+
+def _show_error_dialog(title: str, message: str) -> None:
+    """Show a Windows message box. Falls back to print."""
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, message, title, 0x10)
+    except Exception:
+        try:
+            import subprocess
+            subprocess.run(
+                ["mshta", "javascript:alert(new ActiveXObject('WScript.Shell').Popup("
+                 f"'{message}',0,'{title}',0x10));close();"],
+                capture_output=True, timeout=5,
+            )
+        except Exception:
+            print(f"FATAL: {title} — {message}", flush=True)
+
+
+def show_error_dialog(title: str, message: str) -> None:
+    _show_error_dialog(title, message)
 
 
 def get_db_path() -> Path:
@@ -62,11 +88,18 @@ def get_ui_path(dev_mode: bool = False) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="JARVIS AI Assistant")
+    parser = argparse.ArgumentParser(description=f"{APP_NAME} AI Assistant")
     parser.add_argument("--dev", action="store_true", help="Connect to Vite dev server")
+    parser.add_argument("--log-level", default="DEBUG", help="Log level (DEBUG/INFO/WARNING/ERROR)")
     args = parser.parse_args()
 
+    log_file = setup_logging(level=getattr(logging, args.log_level.upper(), logging.DEBUG))
+    install_exception_hooks()
+
+    logger.info("Starting %s (frozen=%s, dev=%s)", APP_NAME, getattr(sys, "frozen", False), args.dev)
+
     db_path = get_db_path()
+    logger.info("Database path: %s", db_path)
     db = Database(db_path)
 
     runner = MigrationRunner(db)
@@ -135,10 +168,11 @@ def main():
     except Exception as e:
         logger.warning("Agent model validation failed: %s", e)
 
+    logger.info("UI path: %s", get_ui_path(args.dev))
     import webview
 
     window = webview.create_window(
-        title="JARVIS",
+        title=APP_NAME,
         url=str(get_ui_path(args.dev)),
         js_api=bridge,
         width=1280,
@@ -146,8 +180,26 @@ def main():
         min_size=(900, 600),
     )
 
+    logger.info("Starting pywebview (debug=%s)", args.dev)
     webview.start(debug=args.dev)
 
 
 if __name__ == "__main__":
-    main()
+    on_crash(lambda msg: _show_error_dialog(
+        f"{APP_NAME} — Erro inesperado",
+        "Ocorreu um erro inesperado.\n\n"
+        f"Veja o log em: {setup_logging()}\n\n"
+        f"{msg[:500]}"
+    ))
+    try:
+        main()
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.critical("Fatal startup error:\n%s", tb)
+        _show_error_dialog(
+            f"{APP_NAME} — Erro ao iniciar",
+            f"{APP_NAME} encontrou um erro e não pode continuar.\n\n"
+            f"{exc}\n\n"
+            f"Veja o log completo em:\n{setup_logging()}"
+        )
+        sys.exit(1)

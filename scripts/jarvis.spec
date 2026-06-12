@@ -25,6 +25,7 @@ a = Analysis(
     hiddenimports=[
         "jarvis.bridge",
         "jarvis.database",
+        "jarvis.logging_config",
         "jarvis.version",
         "jarvis.ollama_client",
         "jarvis.llm_gateway",
