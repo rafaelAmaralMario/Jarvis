@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { ActivityBar } from '@/components/ActivityBar';
 import { Sidebar } from '@/components/Sidebar';
@@ -6,15 +6,35 @@ import { MainArea } from '@/components/MainArea';
 import { TerminalPanel } from '@/components/Terminal/TerminalPanel';
 import { StatusBar } from '@/components/StatusBar';
 import { AppErrorBoundary } from '@/components/ErrorBoundary';
+import { SearchPalette } from '@/components/SearchPalette';
 import type { ActivityView } from '@/types';
 
 export function App() {
   const [activeView, setActiveView] = useState<ActivityView>('ai');
   const [showTerminal, setShowTerminal] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(200);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const commands = [
+    { id: 'toggle-terminal', label: 'Toggle Terminal', description: 'Show/hide the terminal panel', action: () => setShowTerminal(v => !v) },
+    { id: 'view-ai', label: 'Switch to AI Chat', description: 'Open the AI chat view', action: () => setActiveView('ai') },
+    { id: 'view-editor', label: 'Switch to Editor', description: 'Open the editor/workspace view', action: () => setActiveView('editor') },
+    { id: 'view-knowledge', label: 'Switch to Knowledge', description: 'Open the knowledge base view', action: () => setActiveView('knowledge') },
+    { id: 'view-git', label: 'Switch to Git', description: 'Open the Git source control view', action: () => setActiveView('git') },
+    { id: 'view-settings', label: 'Open Settings', description: 'Open the settings panel', action: () => setActiveView('settings') },
+  ];
+
+  const handleSearchOpenFile = useCallback((path: string) => {
+    window.dispatchEvent(new CustomEvent('jarvis:open-file', { detail: { path } }));
+    setActiveView('editor');
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        setSearchOpen(v => !v);
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === '`') {
         e.preventDefault();
         setShowTerminal(v => !v);
@@ -95,6 +115,12 @@ export function App() {
         <StatusBar
           moduleCount={3}
           modelName="Ollama qwen2.5-coder"
+        />
+        <SearchPalette
+          isOpen={searchOpen}
+          onClose={() => setSearchOpen(false)}
+          onOpenFile={handleSearchOpenFile}
+          commands={commands}
         />
       </motion.div>
     </AppErrorBoundary>

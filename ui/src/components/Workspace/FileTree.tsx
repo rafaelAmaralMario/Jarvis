@@ -3,6 +3,7 @@ import type { FileEntry } from '@/types';
 import { useJarvis } from '@/hooks/use-jarvis';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import type { ContextMenuItem } from '@/components/ui/ContextMenu';
+import { FileIcon } from './FileIcon';
 
 interface FileTreeProps {
   entries: FileEntry[];
@@ -11,6 +12,7 @@ interface FileTreeProps {
   onCreateFile: (parentDir: string, name: string) => void;
   onCreateFolder: (parentDir: string, name: string) => void;
   onRename: (oldPath: string, newName: string) => void;
+  onMoveFile?: (sourcePath: string, targetDir: string) => void;
   selectedPath?: string;
   depth?: number;
   onCreateFileWithPath?: (fullPath: string) => void;
@@ -18,33 +20,7 @@ interface FileTreeProps {
   onOpenProject?: () => void;
 }
 
-function fileIcon(entry: FileEntry): string {
-  if (entry.isDirectory) return '📁';
-  const ext = entry.name.split('.').pop()?.toLowerCase();
-  switch (ext) {
-    case 'ts': case 'tsx': return '🔵';
-    case 'js': case 'jsx': return '🟡';
-    case 'mjs': return '🟡';
-    case 'cjs': return '🟡';
-    case 'cpp': case 'cxx': case 'cc': return '🔷';
-    case 'h': case 'hpp': return '🔶';
-    case 'md': return '📝';
-    case 'json': return '📋';
-    case 'html': return '🌐';
-    case 'css': return '🎨';
-    case 'scss': return '🎨';
-    case 'py': return '🐍';
-    case 'rs': return '🦀';
-    case 'toml': return '⚙️';
-    case 'yaml': case 'yml': return '📄';
-    case 'sql': return '🗄️';
-    case 'png': case 'jpg': case 'jpeg': case 'gif': case 'svg': case 'webp': return '🖼️';
-    case 'pdf': return '📕';
-    default: return '📄';
-  }
-}
-
-export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, onCreateFolder, onRename, selectedPath, depth = 0, onCreateFileWithPath, roots, onOpenProject }: FileTreeProps) {
+export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, onCreateFolder, onRename, onMoveFile, selectedPath, depth = 0, onCreateFileWithPath, roots, onOpenProject }: FileTreeProps) {
   const bridge = useJarvis();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry: FileEntry | null } | null>(null);
@@ -271,14 +247,48 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
     if (e.key === 'Escape') setCreateMode(null);
   }, [handleCreateSubmit]);
 
+  const [dragOverPath, setDragOverPath] = useState<string | null>(null);
+
+  const handleDragStart = useCallback((e: React.DragEvent, path: string) => {
+    e.dataTransfer.setData('text/plain', path);
+    e.dataTransfer.effectAllowed = 'move';
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, path: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverPath(path);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOverPath(null);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, targetPath: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverPath(null);
+    const sourcePath = e.dataTransfer.getData('text/plain');
+    if (sourcePath && sourcePath !== targetPath && onMoveFile) {
+      onMoveFile(sourcePath, targetPath);
+    }
+  }, [onMoveFile]);
+
   return (
     <div data-context-menu-enabled className="select-none text-sm" onContextMenu={(e) => handleContextMenu(e, null)}>
       {sorted.map((entry) => (
-        <div key={entry.path}>
+        <div key={entry.path}
+          draggable={!entry.isDirectory}
+          onDragStart={(e) => handleDragStart(e, entry.path)}
+          onDragOver={(e) => entry.isDirectory && handleDragOver(e, entry.path)}
+          onDragLeave={entry.isDirectory ? handleDragLeave : undefined}
+          onDrop={(e) => entry.isDirectory && handleDrop(e, entry.path)}
+        >
           <div
             className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer group hover:bg-accent/30 transition-colors ${
               selectedPath === entry.path ? 'bg-accent text-accent-foreground' : 'text-foreground'
-            }`}
+            } ${dragOverPath === entry.path && entry.isDirectory ? 'bg-accent/40 ring-1 ring-primary/40' : ''}`}
             style={{ paddingLeft: `${depth * 16 + 8}px` }}
             onClick={() => {
               if (entry.isDirectory) {
@@ -295,7 +305,7 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
               </span>
             )}
             {!entry.isDirectory && <span className="w-3 flex-shrink-0" />}
-            <span className="flex-shrink-0">{fileIcon(entry)}</span>
+            <FileIcon entry={entry} />
 
             {renameTarget?.path === entry.path ? (
               <input
@@ -394,6 +404,7 @@ export function FileTree({ entries, onSelectFile, onDeleteFile, onCreateFile, on
               onCreateFile={onCreateFile}
               onCreateFolder={onCreateFolder}
               onRename={onRename}
+              onMoveFile={onMoveFile}
               selectedPath={selectedPath}
               depth={depth + 1}
               onCreateFileWithPath={onCreateFileWithPath}

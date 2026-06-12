@@ -5,6 +5,8 @@ import { useJarvis } from '@/hooks/use-jarvis';
 import { FileTree } from './FileTree';
 import { MonacoWrapper } from '@/components/Editor/MonacoWrapper';
 import { EditorTabs } from '@/components/Editor/EditorTabs';
+import { ImagePreview } from '@/components/Preview/ImagePreview';
+import { PdfPreview } from '@/components/Preview/PdfPreview';
 
 const spring = { type: 'spring' as const, stiffness: 300, damping: 30 };
 
@@ -262,6 +264,19 @@ export function WorkspacePanel({ fileToOpen }: WorkspacePanelProps) {
     }
   }
 
+  function isImageFile(name: string): boolean {
+    const ext = name.split('.').pop()?.toLowerCase() || '';
+    return ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico'].includes(ext);
+  }
+
+  function isPdfFile(name: string): boolean {
+    return (name.split('.').pop()?.toLowerCase() || '') === 'pdf';
+  }
+
+  function handleMoveFile(sourcePath: string, targetDir: string) {
+    bridge.movePath(sourcePath, targetDir).then(() => loadWorkspace()).catch(() => {});
+  }
+
   const currentTab = openTabs.find(t => t.path === activeTab);
 
   return (
@@ -345,6 +360,7 @@ export function WorkspacePanel({ fileToOpen }: WorkspacePanelProps) {
                     onCreateFile={handleCreateFile}
                     onCreateFolder={handleCreateFolder}
                     onRename={handleRename}
+                    onMoveFile={handleMoveFile}
                     selectedPath={selectedPath}
                     onCreateFileWithPath={handleCreateFileWithPath}
                     roots={_roots}
@@ -410,23 +426,37 @@ export function WorkspacePanel({ fileToOpen }: WorkspacePanelProps) {
             if (tab) setEditingContent(tab.content);
           }}
           onCloseTab={handleCloseTab}
+          onReorderTabs={(from, to) => {
+            setOpenTabs(prev => {
+              const arr = [...prev];
+              const [moved] = arr.splice(from, 1);
+              arr.splice(to, 0, moved);
+              return arr;
+            });
+          }}
         />
 
         <div className="flex-1 flex overflow-hidden">
           {activeTab && currentTab ? (
             <div className="flex-1 flex flex-col">
               <div className="flex-1 relative">
-                <MonacoWrapper
-                  value={editingContent}
-                  language={detectLanguage(currentTab.name)}
-                  path={currentTab.path}
-                  onChange={(value) => {
-                    setEditingContent(value);
-                    setOpenTabs(prev => prev.map(t => t.path === activeTab ? { ...t, changed: true } : t));
-                  }}
-                  onSave={() => handleSaveFile(activeTab)}
-                  settings={editorSettings}
-                />
+                {isImageFile(currentTab.name) ? (
+                  <ImagePreview path={currentTab.path} />
+                ) : isPdfFile(currentTab.name) ? (
+                  <PdfPreview path={currentTab.path} />
+                ) : (
+                  <MonacoWrapper
+                    value={editingContent}
+                    language={detectLanguage(currentTab.name)}
+                    path={currentTab.path}
+                    onChange={(value) => {
+                      setEditingContent(value);
+                      setOpenTabs(prev => prev.map(t => t.path === activeTab ? { ...t, changed: true } : t));
+                    }}
+                    onSave={() => handleSaveFile(activeTab)}
+                    settings={editorSettings}
+                  />
+                )}
               </div>
               <div className="flex items-center justify-between px-4 py-1.5 border-t border-border text-[10px] text-muted-foreground bg-card">
                 <span>{currentTab.name}</span>
