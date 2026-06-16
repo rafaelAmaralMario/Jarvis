@@ -59,3 +59,4 @@
 
 - `07:30` — **Card `025_TerminalOutputMCP`** → **Done**: Bottom panel unificado com abas (Terminal, Output, MCP Servers, Problems). Terminal existente migrado, `OutputManager` com log de build/execução, MCP com lista/status/start/stop, Problems com erros/warnings, resize handler. TypeScript compila sem erros. Kanban: **Backlog 8, Done 29, Removed 2**.
 - `08:00` — **Card `006_StableDiffusion`** → **Done**: `ImageGenerator` (SDXL/SD3/Flux via diffusers), tool `generate_image` no ToolManager, fallback GPU/CPU, parâmetros steps/seed/tamanho/guidance/negative_prompt, exibição de imagem no frontend, `image` extra no pyproject.toml. Kanban: **Backlog 7, Done 30, Removed 2**.
+- `08:15` — **Card `004_CoquiVoiceClone`** → **Done**: `VoiceCloneService` com Coqui XTTS v2, tools `clone_voice`/`synthesize_speech_with_voice`/`list_voices`, fallback GPU/CPU. Fine-tuning opcional pendente. Kanban: **Backlog 6, Done 31, Removed 2**.

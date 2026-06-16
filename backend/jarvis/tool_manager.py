@@ -681,6 +681,32 @@ class ToolManager:
                 }, "required": []},
                 risk=RiskLevel.SAFE,
             ),
+            "clone_voice": ToolDefinition(
+                name="clone_voice",
+                description="Clone a voice from a short audio sample (3-10s WAV/MP3 audio bytes). Returns a speaker_id for later synthesis.",
+                parameters={"type": "object", "properties": {
+                    "audio_base64": {"type": "string", "description": "Base64-encoded audio sample (3-10 seconds)"},
+                    "language": {"type": "string", "description": "Language code (pt, en, es, etc.)", "default": "pt"},
+                }, "required": ["audio_base64"]},
+                risk=RiskLevel.SAFE,
+            ),
+            "synthesize_speech_with_voice": ToolDefinition(
+                name="synthesize_speech_with_voice",
+                description="Synthesize speech using a cloned voice. Use clone_voice first to get a speaker_id.",
+                parameters={"type": "object", "properties": {
+                    "text": {"type": "string", "description": "Text to synthesize"},
+                    "speaker_id": {"type": "string", "description": "Speaker ID from clone_voice"},
+                    "language": {"type": "string", "description": "Language code", "default": "pt"},
+                }, "required": ["text", "speaker_id"]},
+                risk=RiskLevel.SAFE,
+                examples=["synthesize_speech_with_voice text='Olá mundo' speaker_id='abc123'"],
+            ),
+            "list_voices": ToolDefinition(
+                name="list_voices",
+                description="List all cloned voices available.",
+                parameters={"type": "object", "properties": {}, "required": []},
+                risk=RiskLevel.SAFE,
+            ),
             "generate_image": ToolDefinition(
                 name="generate_image",
                 description="Generate an image from a text prompt using Stable Diffusion or Flux.",
@@ -1602,3 +1628,56 @@ class ToolManager:
         except Exception as e:
             logger.exception("generate_image failed")
             return ToolResult(success=False, error=f"Image generation failed: {e}")
+
+    def _handle_clone_voice(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.voice_clone import VoiceCloneService
+        import base64
+        audio_base64 = args["audio_base64"]
+        language = args.get("language", "pt")
+        try:
+            audio_bytes = base64.b64decode(audio_base64)
+            vc = VoiceCloneService()
+            result = vc.clone_voice(audio_bytes, language)
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Clone failed"))
+            return ToolResult(
+                success=True,
+                output=f"Voice cloned! Speaker ID: {result['speaker_id']}",
+                data=result,
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=f"Voice clone failed: {e}")
+
+    def _handle_synthesize_speech_with_voice(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.voice_clone import VoiceCloneService
+        import base64
+        text = args["text"]
+        speaker_id = args["speaker_id"]
+        language = args.get("language", "pt")
+        try:
+            vc = VoiceCloneService()
+            audio_bytes = vc.synthesize(text, speaker_id, language)
+            b64 = base64.b64encode(audio_bytes).decode()
+            return ToolResult(
+                success=True,
+                output=f"Speech synthesized with voice {speaker_id}",
+                data={"audioBase64": b64, "format": "wav"},
+            )
+        except FileNotFoundError as e:
+            return ToolResult(success=False, error=str(e))
+        except ImportError as e:
+            return ToolResult(success=False, error=f"Missing TTS dependency: {e}. Install with: pip install TTS")
+        except Exception as e:
+            return ToolResult(success=False, error=f"Synthesis failed: {e}")
+
+    def _handle_list_voices(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.voice_clone import VoiceCloneService
+        try:
+            vc = VoiceCloneService()
+            voices = vc.list_voices()
+            if not voices:
+                return ToolResult(success=True, output="No cloned voices found.")
+            lines = [f"- {v['speaker_id']} ({v['language']})" for v in voices]
+            return ToolResult(success=True, output="Cloned voices:\n" + "\n".join(lines), data={"voices": voices})
+        except Exception as e:
+            return ToolResult(success=False, error=f"Failed to list voices: {e}")
