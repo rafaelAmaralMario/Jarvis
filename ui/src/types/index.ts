@@ -696,6 +696,7 @@ export interface ToolAgentResult {
   output: string;
   error: string;
   round: number;
+  data?: Record<string, unknown> | null;
 }
 
 export interface PendingQuestion {

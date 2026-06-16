@@ -204,6 +204,7 @@ class ToolAgent:
                         "output": result.output[:2000],
                         "error": result.error,
                         "round": self._tool_rounds,
+                        "data": result.data,
                     })
 
                 result_text = f"Tool '{tool_name}' executed successfully.\n\nOutput:\n```\n{result.output[:3000]}\n```\n\nWaiting for user response..."
@@ -258,6 +259,7 @@ class ToolAgent:
                             "output": perm_result.output[:2000],
                             "error": perm_result.error,
                             "round": self._tool_rounds,
+                            "data": perm_result.data,
                         })
 
                     self._messages.append({

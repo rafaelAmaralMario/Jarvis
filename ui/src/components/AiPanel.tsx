@@ -708,6 +708,16 @@ export function AiPanel({ fullView }: AiPanelProps) {
                   {result.output.slice(0, 200)}
                 </div>
               )}
+              {result && tc.name === 'generate_image' && result.data?.base64 && (
+                <div className="mt-2">
+                  <img
+                    src={`data:image/png;base64,${result.data.base64}`}
+                    alt="Generated"
+                    className="max-w-full rounded-lg border border-border"
+                    style={{ maxHeight: 300 }}
+                  />
+                </div>
+              )}
             </div>
           );
         })}

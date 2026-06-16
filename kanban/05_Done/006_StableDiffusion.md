@@ -91,12 +91,12 @@ Novo módulo `backend/jarvis/image_service.py` encapsula carregamento de pipelin
 4. [ ] Validação de parâmetros: `steps=-1` ou `width=0` → retorna erro sem crash do pipeline
 
 ## Critérios de Aceitação
-- [ ] Instalar torch + diffusers
-- [ ] Tool `generate_image`: prompt → imagem
-- [ ] Suporte a SDXL, SD3, Flux schnell
-- [ ] Parâmetros: steps, seed, tamanho, guidance_scale, negative_prompt
-- [ ] Exibição da imagem no frontend
-- [ ] Download da imagem gerada
+- [x] Instalar torch + diffusers (optional dep: `pip install jarvis-backend[image]`)
+- [x] Tool `generate_image`: prompt → imagem (ImageGenerator + tool handler)
+- [x] Suporte a SDXL, SD3, Flux schnell, Flux dev
+- [x] Parâmetros: steps, seed, tamanho, guidance_scale, negative_prompt
+- [x] Exibição da imagem no frontend (AiPanel renderiza base64 do tool result)
+- [x] Download da imagem gerada (salva em workspace/images/)
 
 ## Dependências
 - [ ] — (independente)

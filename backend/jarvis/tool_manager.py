@@ -681,6 +681,22 @@ class ToolManager:
                 }, "required": []},
                 risk=RiskLevel.SAFE,
             ),
+            "generate_image": ToolDefinition(
+                name="generate_image",
+                description="Generate an image from a text prompt using Stable Diffusion or Flux.",
+                parameters={"type": "object", "properties": {
+                    "prompt": {"type": "string", "description": "Text description of the image"},
+                    "negative_prompt": {"type": "string", "description": "Things to avoid in the image", "default": ""},
+                    "steps": {"type": "number", "description": "Inference steps (default: 30)", "default": 30},
+                    "seed": {"type": "number", "description": "Random seed (0 = random)", "default": 0},
+                    "width": {"type": "number", "description": "Image width (default: 1024)", "default": 1024},
+                    "height": {"type": "number", "description": "Image height (default: 1024)", "default": 1024},
+                    "guidance_scale": {"type": "number", "description": "CFG scale (default: 7.5)", "default": 7.5},
+                    "model": {"type": "string", "description": "Model: sdxl, sd3, flux-schnell, flux-dev", "default": "sdxl"},
+                }, "required": ["prompt"]},
+                risk=RiskLevel.SAFE,
+                examples=["generate_image prompt='a cat wearing a top hat' steps=50"],
+            ),
         }
 
     def _resolve_path(self, path: str) -> str:
@@ -1541,3 +1557,48 @@ class ToolManager:
             )
         except Exception as e:
             return ToolResult(success=False, error=f"Memory error: {e}")
+
+    def _handle_generate_image(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.image_service import ImageGenerator
+        prompt = args["prompt"]
+        negative_prompt = args.get("negative_prompt", "")
+        steps = int(args.get("steps", 30))
+        seed = int(args.get("seed", 0))
+        width = int(args.get("width", 1024))
+        height = int(args.get("height", 1024))
+        guidance_scale = float(args.get("guidance_scale", 7.5))
+        model_key = args.get("model", "sdxl")
+        try:
+            model_id = ImageGenerator.resolve_model_id(model_key)
+            gen = ImageGenerator(model_id)
+            output_dir = os.path.join(self._workspace_root or ".", "images") if self._workspace_root else "images"
+            result = gen.generate(
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                steps=steps,
+                seed=seed,
+                width=width,
+                height=height,
+                guidance_scale=guidance_scale,
+                output_dir=output_dir,
+            )
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Generation failed"))
+            return ToolResult(
+                success=True,
+                output=f"Image generated ({result['width']}x{result['height']}, seed={result['seed']}, model={model_key})",
+                data={
+                    "base64": result["base64"],
+                    "path": result["path"],
+                    "format": result["format"],
+                    "width": result["width"],
+                    "height": result["height"],
+                    "seed": result["seed"],
+                    "model": model_key,
+                },
+            )
+        except ImportError as e:
+            return ToolResult(success=False, error=f"Missing dependencies: {e}. Install with: pip install jarvis-backend[image]")
+        except Exception as e:
+            logger.exception("generate_image failed")
+            return ToolResult(success=False, error=f"Image generation failed: {e}")
