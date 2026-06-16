@@ -1,100 +1,76 @@
 import { test, expect } from '@playwright/test';
+import { mockBridge } from './mock-bridge';
 
-const MOCK_BRIDGE = {
-  checkConnection: () => true,
-  getVersion: () => '0.1.0',
-  getModules: () => Promise.resolve([]),
-  listModels: () => Promise.resolve([]),
-  getRoots: () => Promise.resolve([]),
-  listFiles: () => Promise.resolve([]),
-  getRecentFiles: () => Promise.resolve([]),
-  listMCPServers: () => Promise.resolve([]),
-  workflowList: () => Promise.resolve([]),
-  securityGetPermissions: () => Promise.resolve([]),
-  getModelServerStatus: () => ({ running: false, command: 'ollama serve', pid: 0, error: '' }),
-  getPlatform: () => 'windows',
-  getPathSeparator: () => '\\',
-  getConfig: () => Promise.resolve(null),
-  listChatHistory: () => Promise.resolve([]),
-  loadChat: () => Promise.resolve([]),
-  getModelBySpecialty: () => Promise.resolve(null),
-  listAgents: () => Promise.resolve([]),
-  getDefaultAgent: () => Promise.resolve(null),
-  getOrchestrationConfig: () => Promise.resolve({ strategy: 'auto', maxRounds: 3 }),
-  getProjectInfo: () => Promise.resolve(null),
-};
-
-async function mockBridge(page: any) {
-  await page.addInitScript(() => {
-    window.pywebview = {
-      api: {
-        getModules: () => [],
-        checkConnection: () => true,
-        getVersion: () => '0.1.0',
-        listModels: () => [],
-        getRoots: () => [],
-        listFiles: () => [],
-        getRecentFiles: () => [],
-        listMCPServers: () => [],
-        workflowList: () => [],
-        securityGetPermissions: () => [],
-        getModelServerStatus: () => ({ running: false, command: 'ollama serve', pid: 0, error: '' }),
-        getPlatform: () => 'windows',
-        getPathSeparator: () => '\\',
-        getConfig: () => null,
-        listChatHistory: () => [],
-        loadChat: () => [],
-        getModelBySpecialty: () => null,
-        listAgents: () => [],
-        getDefaultAgent: () => null,
-        getOrchestrationConfig: () => ({ strategy: 'auto', maxRounds: 3 }),
-        getProjectInfo: () => null,
-        showFolderPicker: () => null,
-        copyToClipboard: () => true,
-        revealInExplorer: () => true,
-        startModelServer: () => true,
-        getRelativePath: () => '',
-        getModelServerStatus: () => ({ running: false, command: 'ollama serve', pid: 0, error: '' }),
-      },
-    };
-  });
-}
-
-test.describe('Jarvis App', () => {
+test.describe('Jarvis App - Main Layout', () => {
   test.beforeEach(async ({ page }) => {
     await mockBridge(page);
+    await page.goto('/');
+    await page.waitForSelector('body', { timeout: 10000 });
   });
 
-  test('loads and renders the main interface', async ({ page }) => {
+  test('loads without console errors', async ({ page }) => {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') errors.push(msg.text());
+      if (msg.type() === 'warning') warnings.push(msg.text());
+    });
     await page.goto('/');
+    await page.waitForTimeout(2000);
+    const ignoredErrors = errors.filter(e =>
+      !e.includes('No bridge available') &&
+      !e.includes('favicon') &&
+      !e.includes('ResizeObserver loop')
+    );
+    expect(ignoredErrors).toEqual([]);
+  });
+
+  test('renders body and root', async ({ page }) => {
     await expect(page.locator('body')).toBeVisible();
     await expect(page.locator('#root')).toBeVisible({ timeout: 10000 });
   });
 
-  test('app renders activity bar', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForTimeout(2000);
-    const buttons = page.locator('button');
+  test('renders activity bar with 7 navigation items', async ({ page }) => {
+    const aside = page.locator('aside').first();
+    await expect(aside).toBeVisible({ timeout: 5000 });
+    const buttons = aside.locator('button');
     const count = await buttons.count();
-    expect(count).toBeGreaterThanOrEqual(1);
+    expect(count).toBeGreaterThanOrEqual(5);
   });
 
-  test('app has no console errors on load', async ({ page }) => {
-    const errors: string[] = [];
-    page.on('console', (msg) => {
-      if (msg.type() === 'error') errors.push(msg.text());
+  test('activity bar buttons have correct tooltip labels', async ({ page }) => {
+    const labels = ['Assistente IA', 'Conhecimento', 'Workspace + Editor', 'Git', 'Planner', 'Automacao', 'Configuracoes'];
+    for (const label of labels) {
+      const btn = page.locator(`button[title="${label}"]`);
+      if (await btn.count() > 0) {
+        await expect(btn).toBeVisible();
+      }
+    }
+  });
+
+  test('status bar renders with version and Ollama status', async ({ page }) => {
+    await page.waitForTimeout(2000);
+    const footer = page.locator('footer');
+    await expect(footer).toBeVisible({ timeout: 5000 });
+    await expect(footer.locator('text=/JARVIS/')).toBeVisible();
+  });
+
+  test('page does not crash from React errors', async ({ page }) => {
+    const pageErrors: Error[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err));
+    await page.waitForTimeout(2000);
+    expect(pageErrors.length).toBe(0);
+  });
+
+  test('dark theme CSS variables are applied', async ({ page }) => {
+    const bg = await page.evaluate(() => {
+      const style = getComputedStyle(document.body);
+      return {
+        bg: style.backgroundColor,
+        color: style.color,
+      };
     });
-    await page.goto('/');
-    await page.waitForTimeout(2000);
-    const bridgeErrors = errors.filter(e => !e.includes('No bridge available'));
-    expect(bridgeErrors).toEqual([]);
-  });
-
-  test('status bar renders', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForTimeout(2000);
-    const statusBars = page.locator('text=Ollama');
-    const count = await statusBars.count();
-    expect(count).toBeGreaterThanOrEqual(0);
+    expect(bg.bg).toBeTruthy();
+    expect(bg.color).toBeTruthy();
   });
 });

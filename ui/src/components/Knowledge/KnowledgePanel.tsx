@@ -194,15 +194,23 @@ export function KnowledgePanel() {
                         <div className="flex items-center gap-2">
                           <span className="text-xs">📄</span>
                           <span className="flex-1 truncate font-medium">{note.title}</span>
-                          <button
+                          <span
+                            role="button"
+                            tabIndex={0}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDeleteNote(note.id);
                             }}
-                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 transition-all text-xs"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.stopPropagation();
+                                handleDeleteNote(note.id);
+                              }
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 transition-all text-xs cursor-pointer"
                           >
                             ✕
-                          </button>
+                          </span>
                         </div>
                         <div className="text-[10px] text-muted-foreground/50 ml-5 truncate">
                           {note.folder} · {new Date(note.updatedAt).toLocaleDateString()}

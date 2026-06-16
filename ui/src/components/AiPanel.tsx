@@ -1005,7 +1005,7 @@ export function AiPanel({ fullView }: AiPanelProps) {
 
       {/* Input */}
       <div className="p-3 border-t border-border">
-        {error && error !== 'tool' && (
+        {error && (
           <div className="mb-2 px-3 py-1.5 rounded-lg bg-red-950/20 border border-red-900/40 text-xs text-red-400">
             {error}
           </div>
