@@ -29,8 +29,8 @@ class ImageGenerator:
         if self._pipeline is not None:
             return
         try:
-            import torch
             import diffusers
+            import torch
         except ImportError:
             raise ImportError(
                 "diffusers and torch are required for image generation. "
@@ -204,7 +204,6 @@ class ImageGenerator:
             "StableDiffusionInpaintPipeline",
         ):
             logger.info("Converting pipeline to inpainting...")
-            orig_cls = self._pipeline.__class__
             if "xl" in self._model_id.lower():
                 self._pipeline = StableDiffusionXLInpaintPipeline(
                     vae=self._pipeline.vae,

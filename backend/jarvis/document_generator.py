@@ -2,7 +2,6 @@
 
 import logging
 import os
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -11,8 +10,8 @@ class DocumentGenerator:
     def create_docx(self, path: str, title: str = "", sections: list | None = None) -> dict:
         try:
             from docx import Document
-            from docx.shared import Inches, Pt
             from docx.enum.text import WD_ALIGN_PARAGRAPH
+            from docx.shared import Inches, Pt
         except ImportError:
             return {"success": False, "error": "python-docx not installed"}
 
@@ -55,11 +54,11 @@ class DocumentGenerator:
 
     def create_pdf(self, path: str, sections: list | None = None) -> dict:
         try:
-            from reportlab.lib.pagesizes import A4
-            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-            from reportlab.lib.units import mm
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer
             from reportlab.lib import colors
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+            from reportlab.lib.units import mm
+            from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
         except ImportError:
             return {"success": False, "error": "reportlab not installed"}
 
@@ -103,7 +102,7 @@ class DocumentGenerator:
     def create_xlsx(self, path: str, sheets: list | None = None) -> dict:
         try:
             from openpyxl import Workbook
-            from openpyxl.styles import Font, Alignment, numbers
+            from openpyxl.styles import Alignment, Font, numbers
         except ImportError:
             return {"success": False, "error": "openpyxl not installed"}
 

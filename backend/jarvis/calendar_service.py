@@ -2,7 +2,7 @@
 
 import logging
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,6 @@ class CalendarService:
     def create_event(self, summary: str, start: str, end: str, description: str = "") -> dict:
         self._connect()
         try:
-            import caldav
             principal = self._client.principal()
             calendars = principal.calendars()
             if not calendars:

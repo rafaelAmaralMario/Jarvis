@@ -1,19 +1,16 @@
 """Micro-services architecture — worker manager, HTTP protocol, process isolation."""
 
-import json
 import logging
-import os
 import socket
 import subprocess
 import sys
 import threading
 import time
-import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import httpx
 

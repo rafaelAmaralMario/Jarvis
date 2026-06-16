@@ -23,8 +23,8 @@ class VideoGenerator:
         if self._pipeline is not None:
             return
         try:
-            import torch
             import diffusers
+            import torch
         except ImportError:
             raise ImportError("diffusers and torch required for video generation. Install with: pip install jarvis-backend[image]")
 

@@ -1,10 +1,9 @@
 """Git operations via subprocess (git CLI)."""
 
 import os
-import subprocess
 import re
+import subprocess
 from dataclasses import dataclass
-
 
 _GIT_TIMEOUT = 30
 

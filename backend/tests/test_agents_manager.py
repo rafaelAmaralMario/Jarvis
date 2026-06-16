@@ -1,8 +1,7 @@
-import json
 import pytest
 
+from jarvis.agents_manager import AgentsManager, CreateAgentDTO
 from jarvis.database import Database
-from jarvis.agents_manager import AgentsManager, CreateAgentDTO, Agent
 
 
 @pytest.fixture
@@ -198,7 +197,7 @@ def test_get_default_agent_falls_back(empty_db):
     manager = AgentsManager(empty_db)  # seeds 2 agents
     empty_db.execute("DELETE FROM agents")
     dto = CreateAgentDTO(name="Orphan", model="llama3")
-    agent = manager.create_agent(dto)
+    manager.create_agent(dto)
     default = manager.get_default_agent()
     assert default is not None
     assert default.name == "Orphan"

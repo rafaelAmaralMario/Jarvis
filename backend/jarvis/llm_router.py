@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable
 
-from jarvis.llm_gateway import LLMGateway, LLMRequest, LLMResponse, LLMProvider, LLMError
+from jarvis.llm_gateway import LLMError, LLMGateway, LLMProvider, LLMRequest, LLMResponse
 
 logger = logging.getLogger(__name__)
 

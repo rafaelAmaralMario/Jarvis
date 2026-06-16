@@ -1,11 +1,9 @@
 """Editor service — file open/save/close, language detection, settings."""
 
 import os
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
 
 from jarvis.database import Database
-
 
 _LANG_MAP: dict[str, str] = {
     ".js": "javascript", ".jsx": "javascript",

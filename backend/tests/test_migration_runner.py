@@ -1,7 +1,7 @@
 import pytest
 
 from jarvis.database import Database
-from jarvis.migration_runner import MigrationRunner, MIGRATIONS
+from jarvis.migration_runner import MIGRATIONS, MigrationRunner
 
 
 @pytest.fixture

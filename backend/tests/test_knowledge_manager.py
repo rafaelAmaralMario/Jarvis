@@ -1,20 +1,14 @@
 """Tests for KnowledgeManager — notes CRUD, wikilinks, FTS5, graph, import/export."""
 
-import json
 import os
 import tempfile
-from pathlib import Path
 
 import pytest
 
-from jarvis.graph_builder import GraphData, GraphEdge, GraphNode
+from jarvis.graph_builder import GraphData
 from jarvis.knowledge_manager import (
-    Backlink,
     CreateNoteDTO,
-    FolderEntry,
     KnowledgeManager,
-    Note,
-    SearchResult,
     _escape_fts,
     _extract_context,
     _generate_id,
@@ -22,7 +16,6 @@ from jarvis.knowledge_manager import (
     _parse_front_matter,
     _parse_wikilinks,
 )
-
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS notes (

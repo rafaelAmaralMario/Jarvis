@@ -4,7 +4,7 @@ import importlib
 import importlib.util
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

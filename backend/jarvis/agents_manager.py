@@ -1,7 +1,6 @@
 import datetime
 import json
 import secrets
-import uuid
 from dataclasses import dataclass, field
 
 from jarvis.database import Database
@@ -415,7 +414,7 @@ class AgentsManager:
         return _row_to_agent(row) if row else None
 
     def create_agent(self, dto: CreateAgentDTO) -> Agent:
-        now = _now()
+        _now()
         tools_json = json.dumps(dto.tools)
         agent_id = secrets.token_hex(16).lower()
         self._db.execute(

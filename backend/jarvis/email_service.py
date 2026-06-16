@@ -10,7 +10,6 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
-from email import encoders
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +74,6 @@ class EmailService:
                 part = MIMEBase("application", "octet-stream")
                 with open(att["path"], "rb") as f:
                     part.set_payload(f.read())
-                import encodings.base64_codec
                 from email import encoders
                 encoders.encode_base64(part)
                 part.add_header(

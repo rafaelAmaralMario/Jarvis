@@ -1,11 +1,11 @@
-import pytest
 import httpx
+import pytest
 
 from jarvis.ollama_client import (
     OllamaClient,
-    OllamaModel,
-    OllamaGenerateRequest,
     OllamaError,
+    OllamaGenerateRequest,
+    OllamaModel,
 )
 
 

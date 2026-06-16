@@ -4,7 +4,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Callable
 
 import httpx
 
@@ -387,7 +387,7 @@ class WorkflowEngine:
                 "error": step_result.get("error", ""),
             })
 
-            step_id = step.get("id", "")
+            step.get("id", "")
             success = step_result.get("success", False)
 
             if success:

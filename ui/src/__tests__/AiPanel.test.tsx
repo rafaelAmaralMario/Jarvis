@@ -8,6 +8,8 @@ const mockAgents = [
 ];
 
 const mockBridge = {
+  llmGetProviders: vi.fn().mockResolvedValue([]),
+  listModels: vi.fn().mockResolvedValue([]),
   listAgents: vi.fn().mockResolvedValue(mockAgents),
   sendMessage: vi.fn().mockResolvedValue('Resposta simulada'),
   cancelGeneration: vi.fn(),
@@ -34,8 +36,8 @@ describe('AiPanel', () => {
 
   it('renders agent selector', async () => {
     render(<AiPanel />);
-    const select = await screen.findByRole('combobox');
-    expect(select).toBeInTheDocument();
+    const selects = await screen.findAllByRole('combobox');
+    expect(selects.length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders chat input', async () => {

@@ -6,12 +6,8 @@ import platform
 import subprocess
 import sys
 import tempfile
-import time
 from dataclasses import dataclass, field
-from typing import Optional
-from urllib.request import urlopen, Request
-
-import httpx
+from urllib.request import Request, urlopen
 
 APP_NAME = "JARVIS"
 APP_VERSION = "0.2.0"
@@ -147,28 +143,28 @@ def _create_updater_bat(
         "@echo off",
         "title JARVIS Updater",
         "",
-        f":wait",
+        ":wait",
         f"  tasklist /FI \"PID eq {current_pid}\" 2>NUL | find \"{current_pid}\" >NUL",
-        f"  if not errorlevel 1 (",
-        f"    timeout /t 1 /nobreak >NUL",
-        f"    goto wait",
-        f"  )",
+        "  if not errorlevel 1 (",
+        "    timeout /t 1 /nobreak >NUL",
+        "    goto wait",
+        "  )",
         "",
     ]
     if is_installer:
         lines += [
-            f"echo Instalando JARVIS...",
+            "echo Instalando JARVIS...",
             f"start /wait \"\" \"{downloaded_path}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-",
             "",
             f'if exist "{_get_installed_exe_path()}" (',
             f'  start "" "{_get_installed_exe_path()}"',
-            f")",
+            ")",
         ]
     else:
         current_exe = sys.executable if getattr(sys, 'frozen', False) else ""
         if current_exe:
             lines += [
-                f'echo Atualizando JARVIS...',
+                'echo Atualizando JARVIS...',
                 f'copy /Y "{downloaded_path}" "{current_exe}"',
                 f'start "" "{current_exe}"',
             ]

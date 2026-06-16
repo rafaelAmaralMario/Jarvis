@@ -1,18 +1,13 @@
 """Tool system for Computer Use — AI can act on the local environment."""
 
-import datetime
 import json
 import logging
 import os
-import re
 import subprocess
 import sys
-import time
-import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable
-from urllib.parse import quote_plus
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -946,7 +941,6 @@ class ToolManager:
         workdir = self._resolve_path(workdir)
 
         try:
-            shell = True
             if sys.platform == "win32":
                 proc = subprocess.run(
                     ["powershell", "-NoProfile", "-Command", command],
@@ -1208,7 +1202,7 @@ class ToolManager:
                 output += "\n--- stderr ---\n" + result.stderr.strip()
             return ToolResult(success=result.returncode == 0, output=output or f"Installed {pkg}")
         except subprocess.TimeoutExpired:
-            return ToolResult(success=False, error=f"Installation timed out")
+            return ToolResult(success=False, error="Installation timed out")
         except Exception as e:
             return ToolResult(success=False, error=f"Install failed: {e}")
 
@@ -1765,8 +1759,9 @@ class ToolManager:
             return ToolResult(success=False, error=f"Image generation failed: {e}")
 
     def _handle_clone_voice(self, args: dict[str, Any]) -> ToolResult:
-        from jarvis.voice_clone import VoiceCloneService
         import base64
+
+        from jarvis.voice_clone import VoiceCloneService
         audio_base64 = args["audio_base64"]
         language = args.get("language", "pt")
         try:
@@ -1784,8 +1779,9 @@ class ToolManager:
             return ToolResult(success=False, error=f"Voice clone failed: {e}")
 
     def _handle_synthesize_speech_with_voice(self, args: dict[str, Any]) -> ToolResult:
-        from jarvis.voice_clone import VoiceCloneService
         import base64
+
+        from jarvis.voice_clone import VoiceCloneService
         text = args["text"]
         speaker_id = args["speaker_id"]
         language = args.get("language", "pt")
@@ -1940,7 +1936,6 @@ class ToolManager:
         return wm
 
     def _handle_start_worker(self, args: dict[str, Any]) -> ToolResult:
-        from jarvis.microservices import WorkerManager
         name = args["name"]
         module_path = args["module_path"]
         try:

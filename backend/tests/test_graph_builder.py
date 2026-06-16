@@ -13,7 +13,6 @@ from jarvis.knowledge_manager import (
     KnowledgeManager,
 )
 
-
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS notes (
     id TEXT PRIMARY KEY,
@@ -84,7 +83,7 @@ class TestGraphBuilder:
         assert labels == {"Alpha", "Beta"}
 
     def test_build_with_wikilink_edge(self, km, gb):
-        b = km.create_note(CreateNoteDTO(title="Target"))
+        km.create_note(CreateNoteDTO(title="Target"))
         km.create_note(CreateNoteDTO(title="Source", content="link to [[Target]]"))
         graph = gb.build()
         assert len(graph.nodes) == 2
@@ -92,7 +91,7 @@ class TestGraphBuilder:
         assert graph.edges[0].link_type == "wikilink"
 
     def test_edge_only_includes_existing_nodes(self, km, gb):
-        a = km.create_note(CreateNoteDTO(title="A", content="link to [[B]]"))
+        km.create_note(CreateNoteDTO(title="A", content="link to [[B]]"))
         graph = gb.build()
         assert len(graph.nodes) >= 1
         for e in graph.edges:
@@ -101,9 +100,9 @@ class TestGraphBuilder:
             assert e.target in ids
 
     def test_link_count(self, km, gb):
-        a = km.create_note(CreateNoteDTO(title="A"))
-        b = km.create_note(CreateNoteDTO(title="B"))
-        c = km.create_note(CreateNoteDTO(title="C", content="links to [[A]] and [[B]]"))
+        km.create_note(CreateNoteDTO(title="A"))
+        km.create_note(CreateNoteDTO(title="B"))
+        km.create_note(CreateNoteDTO(title="C", content="links to [[A]] and [[B]]"))
         graph = gb.build()
         counts = {n.label: n.link_count for n in graph.nodes}
         assert counts.get("C", 0) >= 2
@@ -129,8 +128,8 @@ class TestGraphBuilder:
         assert "folder" in node
 
     def test_build_json_edge_structure(self, km, gb):
-        b = km.create_note(CreateNoteDTO(title="B"))
-        a = km.create_note(CreateNoteDTO(title="A", content="[[B]]"))
+        km.create_note(CreateNoteDTO(title="B"))
+        km.create_note(CreateNoteDTO(title="A", content="[[B]]"))
         raw = gb.build_json()
         data = json.loads(raw)
         assert len(data["edges"]) >= 1
@@ -145,16 +144,16 @@ class TestGraphBuilder:
         assert data == {"nodes": [], "edges": []}
 
     def test_multiple_edges_between_same_nodes_combined(self, km, gb):
-        a = km.create_note(CreateNoteDTO(title="A"))
-        b = km.create_note(CreateNoteDTO(title="B", content="[[A]]"))
-        c = km.create_note(CreateNoteDTO(title="C", content="[[A]] and [[B]]"))
+        km.create_note(CreateNoteDTO(title="A"))
+        km.create_note(CreateNoteDTO(title="B", content="[[A]]"))
+        km.create_note(CreateNoteDTO(title="C", content="[[A]] and [[B]]"))
         graph = gb.build()
         sources = [(e.source, e.target) for e in graph.edges]
         assert len(sources) >= 2
 
     def test_link_count_includes_both_directions(self, km, gb):
-        a = km.create_note(CreateNoteDTO(title="A", content="[[B]]"))
-        b = km.create_note(CreateNoteDTO(title="B", content="[[A]]"))
+        km.create_note(CreateNoteDTO(title="A", content="[[B]]"))
+        km.create_note(CreateNoteDTO(title="B", content="[[A]]"))
         graph = gb.build()
         for n in graph.nodes:
             if n.label == "A":

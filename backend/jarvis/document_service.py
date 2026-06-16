@@ -49,7 +49,6 @@ class DocumentReader:
 
     def read_docx(self, path: str) -> DocumentContent:
         from docx import Document as DocxDocument
-        from docx.shared import Pt
         result = DocumentContent(file_path=path, file_type="docx")
         result.size_bytes = os.path.getsize(path)
         doc = DocxDocument(path)

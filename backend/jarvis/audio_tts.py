@@ -1,6 +1,5 @@
 """Piper TTS — fast local text-to-speech synthesis."""
 
-import base64
 import io
 import json
 import logging
@@ -44,7 +43,7 @@ def _download_file(url: str, dest: Path) -> bool:
     try:
         with httpx.stream("GET", url, follow_redirects=True, timeout=120) as r:
             r.raise_for_status()
-            total = int(r.headers.get("content-length", 0))
+            int(r.headers.get("content-length", 0))
             downloaded = 0
             with open(dest, "wb") as f:
                 for chunk in r.iter_bytes(8192):

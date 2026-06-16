@@ -1,7 +1,6 @@
 import logging
 import os
-import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
@@ -106,7 +105,7 @@ class ModelsManager:
         self._progress_cb = cb
 
     def list_models(self) -> list[ModelInfo]:
-        from jarvis.llm_gateway import get_llm_client, LLMProvider, LLMProviderConfig
+        from jarvis.llm_gateway import LLMProvider, LLMProviderConfig, get_llm_client
 
         result: list[ModelInfo] = []
         seen: set[str] = set()

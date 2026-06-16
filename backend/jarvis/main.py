@@ -17,6 +17,7 @@ from jarvis.git_manager import GitManager
 from jarvis.graph_builder import GraphBuilder
 from jarvis.knowledge_manager import KnowledgeManager
 from jarvis.llm_gateway import LLMGateway
+from jarvis.logging_config import install_exception_hooks, on_crash, setup_logging
 from jarvis.mcp_manager import MCPManager
 from jarvis.migration_runner import MigrationRunner
 from jarvis.models_manager import ModelsManager
@@ -24,13 +25,11 @@ from jarvis.module_loader import ModuleLoader
 from jarvis.network_manager import NetworkManager
 from jarvis.ollama_client import OllamaClient
 from jarvis.orchestration_manager import OrchestrationManager
+from jarvis.output_manager import OutputManager
 from jarvis.security_manager import SecurityManager
 from jarvis.terminal_manager import TerminalManager
 from jarvis.workflow_engine import WorkflowEngine
 from jarvis.workspace_manager import WorkspaceManager
-from jarvis.output_manager import OutputManager
-from jarvis.logging_config import setup_logging, install_exception_hooks, on_crash
-
 
 APP_NAME = "JARVIS"
 
@@ -94,7 +93,7 @@ def main():
     parser.add_argument("--log-level", default="DEBUG", help="Log level (DEBUG/INFO/WARNING/ERROR)")
     args = parser.parse_args()
 
-    log_file = setup_logging(level=getattr(logging, args.log_level.upper(), logging.DEBUG))
+    setup_logging(level=getattr(logging, args.log_level.upper(), logging.DEBUG))
     install_exception_hooks()
 
     logger.info("Starting %s (frozen=%s, dev=%s)", APP_NAME, getattr(sys, "frozen", False), args.dev)
@@ -193,7 +192,7 @@ def main():
     logger.info("UI path: %s", get_ui_path(args.dev))
     import webview
 
-    window = webview.create_window(
+    webview.create_window(
         title=APP_NAME,
         url=str(get_ui_path(args.dev)),
         js_api=bridge,

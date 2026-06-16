@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MainArea } from '@/components/MainArea';
 
 const mockBridge = {
+  llmGetProviders: vi.fn().mockResolvedValue([]),
   getRoots: vi.fn().mockResolvedValue([]),
   gitIsRepo: vi.fn().mockResolvedValue(false),
   listModels: vi.fn().mockResolvedValue([]),

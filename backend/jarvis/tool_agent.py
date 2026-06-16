@@ -11,8 +11,8 @@ import threading
 import time
 from typing import Any, Callable
 
-from jarvis.llm_gateway import LLMGateway, LLMProvider, LLMRequest, LLMMessage, LLMResponse
-from jarvis.tool_manager import ToolManager, ToolResult, RiskLevel
+from jarvis.llm_gateway import LLMGateway, LLMMessage, LLMProvider, LLMRequest
+from jarvis.tool_manager import RiskLevel, ToolManager, ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -335,7 +335,7 @@ class ToolAgent:
             lines.append(f"**Nível de Risco:** {t['risk']}")
             lines.append(f"**Parâmetros:**\n```json\n{params}\n```")
             if t["examples"]:
-                lines.append(f"**Exemplos:**\n- " + "\n- ".join(t["examples"]))
+                lines.append("**Exemplos:**\n- " + "\n- ".join(t["examples"]))
             lines.append("")
         return "\n".join(lines)
 

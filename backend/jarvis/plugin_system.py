@@ -3,7 +3,6 @@
 import importlib.util
 import inspect
 import logging
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -145,7 +144,7 @@ class PluginLoader:
                 self._load_plugin(path)
                 events.append(f"reloaded:{path.stem}")
 
-        loaded_stems = {p.stem for p in Path(self._plugin_dir).glob("*.py") if p.name != "__init__.py"}
+        {p.stem for p in Path(self._plugin_dir).glob("*.py") if p.name != "__init__.py"}
         for plugin_name in list(self._plugins.keys()):
             if plugin_name not in {p.stem for p in Path(self._plugin_dir).glob("*.py") if p.name != "__init__.py"}:
                 logger.info("Plugin removed, unloading: %s", plugin_name)

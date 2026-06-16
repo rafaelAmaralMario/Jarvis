@@ -1,7 +1,6 @@
 """Workspace management — file I/O, directory watching, project info."""
 
 import json
-import os
 import shutil
 import time
 from dataclasses import dataclass, field
@@ -9,7 +8,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from jarvis.database import Database
-
 
 _BINARY_EXTS = {
     ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".svg",

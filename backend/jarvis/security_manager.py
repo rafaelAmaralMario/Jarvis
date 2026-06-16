@@ -1,10 +1,7 @@
 """Security Manager — permissions, audit log, secret storage."""
 
 import datetime
-import json
-import os
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from jarvis.database import Database
 

@@ -9,7 +9,6 @@ import httpx
 
 from jarvis.database import Database
 
-
 _HTTP_TIMEOUT = 30
 _OAUTH_REDIRECT_URI = "http://localhost/callback"
 

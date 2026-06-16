@@ -14,24 +14,24 @@ from jarvis.agents_manager import AgentsManager, CreateAgentDTO
 from jarvis.chat_manager import ChatManager
 from jarvis.database import Database
 from jarvis.editor_manager import EditorManager
+from jarvis.gguf_manager import GGUFManager
 from jarvis.git_manager import GitManager
 from jarvis.graph_builder import GraphBuilder
 from jarvis.knowledge_manager import CreateNoteDTO, KnowledgeManager
-from jarvis.gguf_manager import GGUFManager
-from jarvis.llm_gateway import LLMGateway, LLMRequest, LLMMessage
-from jarvis.llm_router import LLMRouter, RouterRule, RouterMatch
+from jarvis.llm_gateway import LLMGateway, LLMMessage, LLMRequest
+from jarvis.llm_router import LLMRouter, RouterMatch, RouterRule
 from jarvis.mcp_manager import MCPManager
-from jarvis.models_manager import ModelMetadata, ModelSpecialty, ModelsManager
+from jarvis.models_manager import ModelMetadata, ModelsManager, ModelSpecialty
 from jarvis.module_loader import ModuleLoader
 from jarvis.network_manager import NetworkManager
 from jarvis.ollama_client import OllamaClient
 from jarvis.orchestration_manager import OrchestrationConfig, OrchestrationManager
-from jarvis.security_manager import SecurityManager
-from jarvis.terminal_manager import TerminalManager
-from jarvis.tool_agent import ToolAgent, TaskPlanner
-from jarvis.self_improvement import SelfImprovement
-from jarvis.tool_manager import ToolManager
 from jarvis.output_manager import OutputManager
+from jarvis.security_manager import SecurityManager
+from jarvis.self_improvement import SelfImprovement
+from jarvis.terminal_manager import TerminalManager
+from jarvis.tool_agent import TaskPlanner, ToolAgent
+from jarvis.tool_manager import ToolManager
 from jarvis.workflow_engine import WorkflowEngine
 from jarvis.workspace_manager import WorkspaceManager
 
@@ -2473,7 +2473,7 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
                 return result
             if not self._llm_router:
                 return {"success": False, "error": "LLM not available"}
-            from jarvis.llm_gateway import LLMRequest, LLMMessage, LLMProvider
+            from jarvis.llm_gateway import LLMMessage, LLMProvider, LLMRequest
             req = LLMRequest(
                 provider=LLMProvider.OLLAMA,
                 model="",

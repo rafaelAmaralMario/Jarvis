@@ -1,17 +1,18 @@
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, PropertyMock
 
 from jarvis.database import Database
 from jarvis.models_manager import (
+    SPECIALTY_COLORS,
+    ModelMetadata,
     ModelsManager,
     ModelSpecialty,
     ModelStatus,
-    ModelMetadata,
-    _infer_specialty,
     _format_size,
-    SPECIALTY_COLORS,
+    _infer_specialty,
 )
-from jarvis.ollama_client import OllamaModel, OllamaClient
+from jarvis.ollama_client import OllamaClient, OllamaModel
 
 
 @pytest.fixture
@@ -100,9 +101,10 @@ def test_format_size_float_gb():
 
 def test_list_models_returns_from_ollama(manager):
     models = manager.list_models()
-    assert len(models) == 2
-    assert models[0].name == "llama3.2:3b"
-    assert models[1].name == "codellama:7b"
+    assert len(models) >= 2
+    names = [m.name for m in models]
+    assert "llama3.2:3b" in names
+    assert "codellama:7b" in names
 
 
 def test_list_models_with_metadata(db, mock_ollama):

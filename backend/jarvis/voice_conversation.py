@@ -31,8 +31,8 @@ def run_pipeline(
     tts_voice: str = "pt_BR-faber-medium",
     on_progress=None,
 ) -> dict:
-    from jarvis.tool_agent import ToolAgent
     from jarvis.audio_tts import synthesize as tts_synthesize
+    from jarvis.tool_agent import ToolAgent
 
     start = time.time()
     result = {"text": "", "response": "", "audioBase64": "", "timings": {}}

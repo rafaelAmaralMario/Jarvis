@@ -8,7 +8,7 @@ import uuid
 from dataclasses import dataclass, field
 
 from jarvis.database import Database
-from jarvis.graph_builder import GraphBuilder, GraphData, GraphEdge, GraphNode
+from jarvis.graph_builder import GraphBuilder, GraphData
 
 
 @dataclass

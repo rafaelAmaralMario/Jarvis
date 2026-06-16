@@ -9,12 +9,9 @@ import logging
 import os
 import re
 import threading
-import time
-import uuid
-from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Callable
 
-from jarvis.llm_gateway import LLMGateway, LLMProvider, LLMRequest, LLMMessage
+from jarvis.llm_gateway import LLMGateway, LLMMessage, LLMProvider, LLMRequest
 from jarvis.tool_agent import ToolAgent
 from jarvis.tool_manager import ToolManager
 

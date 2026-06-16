@@ -1,17 +1,14 @@
 """Background agents — scheduler, directory watcher, periodic analysis, notifications."""
 
 import datetime
-import json
 import logging
 import os
 import queue
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
-
-import httpx
 
 logger = logging.getLogger(__name__)
 
