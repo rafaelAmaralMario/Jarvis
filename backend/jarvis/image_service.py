@@ -165,6 +165,115 @@ class ImageGenerator:
             "model": self._model_id,
         }
 
+    def edit_image(
+        self,
+        image_base64: str,
+        mask_base64: str,
+        prompt: str,
+        negative_prompt: str = "",
+        strength: float = 0.8,
+        steps: int = 30,
+        seed: int = 0,
+        output_dir: str = "",
+    ) -> dict[str, Any]:
+        self._load_pipeline()
+
+        if seed == 0:
+            seed = random.randint(0, 2**32 - 1)
+        if strength < 0.0 or strength > 1.0:
+            return {"success": False, "error": "Strength must be between 0.0 and 1.0"}
+
+        try:
+            import torch
+            from diffusers import StableDiffusionXLInpaintPipeline
+            from PIL import Image
+        except ImportError:
+            raise ImportError("diffusers, torch and Pillow required for image editing")
+
+        try:
+            import base64
+            img_data = base64.b64decode(image_base64)
+            mask_data = base64.b64decode(mask_base64)
+            init_image = Image.open(io.BytesIO(img_data)).convert("RGB")
+            mask_image = Image.open(io.BytesIO(mask_data)).convert("RGB")
+        except Exception as e:
+            return {"success": False, "error": f"Failed to decode images: {e}"}
+
+        if self._pipeline.__class__.__name__ not in (
+            "StableDiffusionXLInpaintPipeline",
+            "StableDiffusionInpaintPipeline",
+        ):
+            logger.info("Converting pipeline to inpainting...")
+            orig_cls = self._pipeline.__class__
+            if "xl" in self._model_id.lower():
+                self._pipeline = StableDiffusionXLInpaintPipeline(
+                    vae=self._pipeline.vae,
+                    text_encoder=self._pipeline.text_encoder,
+                    text_encoder_2=self._pipeline.text_encoder_2,
+                    tokenizer=self._pipeline.tokenizer,
+                    tokenizer_2=self._pipeline.tokenizer_2,
+                    unet=self._pipeline.unet,
+                    scheduler=self._pipeline.scheduler,
+                )
+            else:
+                from diffusers import StableDiffusionInpaintPipeline
+                self._pipeline = StableDiffusionInpaintPipeline(
+                    vae=self._pipeline.vae,
+                    text_encoder=self._pipeline.text_encoder,
+                    tokenizer=self._pipeline.tokenizer,
+                    unet=self._pipeline.unet,
+                    scheduler=self._pipeline.scheduler,
+                )
+            if self._device == "cuda":
+                self._pipeline = self._pipeline.to("cuda")
+
+        generator = torch.manual_seed(seed)
+
+        try:
+            result = self._pipeline(
+                prompt=prompt,
+                negative_prompt=negative_prompt if negative_prompt else None,
+                image=init_image,
+                mask_image=mask_image,
+                strength=strength,
+                num_inference_steps=steps,
+                generator=generator,
+            )
+            image = result.images[0]
+        except Exception as e:
+            logger.exception("Image editing failed")
+            if "out of memory" in str(e).lower():
+                try:
+                    import torch
+                    torch.cuda.empty_cache()
+                except Exception:
+                    pass
+                return {"success": False, "error": "GPU out of memory. Try CPU fallback or lower resolution."}
+            return {"success": False, "error": f"Editing failed: {e}"}
+
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        img_bytes = buf.getvalue()
+        b64 = base64.b64encode(img_bytes).decode()
+
+        output_path = ""
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+            ts = int(time.time())
+            filename = f"jarvis_edit_{ts}.png"
+            output_path = os.path.join(output_dir, filename)
+            image.save(output_path)
+
+        return {
+            "success": True,
+            "base64": b64,
+            "path": output_path,
+            "format": "png",
+            "width": image.width,
+            "height": image.height,
+            "seed": seed,
+        }
+
     @staticmethod
     def resolve_model_id(model_key: str) -> str:
         return MODEL_MAP.get(model_key, model_key)

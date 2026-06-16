@@ -729,6 +729,19 @@ class ToolManager:
                 }, "required": ["description"]},
                 risk=RiskLevel.SAFE,
             ),
+            "edit_image": ToolDefinition(
+                name="edit_image",
+                description="Edit an image using inpainting. Provide the image and a mask (both base64-encoded), plus a prompt describing the edit.",
+                parameters={"type": "object", "properties": {
+                    "image_base64": {"type": "string", "description": "Base64-encoded PNG/JPEG image"},
+                    "mask_base64": {"type": "string", "description": "Base64-encoded mask (white = edit area, black = keep)"},
+                    "prompt": {"type": "string", "description": "Description of what to generate in the masked area"},
+                    "negative_prompt": {"type": "string", "description": "What to avoid", "default": ""},
+                    "strength": {"type": "number", "description": "How much to transform (0.0-1.0)", "default": 0.8},
+                    "steps": {"type": "number", "description": "Inference steps", "default": 30},
+                }, "required": ["image_base64", "mask_base64", "prompt"]},
+                risk=RiskLevel.SAFE,
+            ),
             "generate_image": ToolDefinition(
                 name="generate_image",
                 description="Generate an image from a text prompt using Stable Diffusion or Flux.",
@@ -1744,3 +1757,33 @@ class ToolManager:
             return ToolResult(success=False, error=f"Missing dependencies: {e}. Install with: pip install transformers torch")
         except Exception as e:
             return ToolResult(success=False, error=f"Sound effect generation failed: {e}")
+
+    def _handle_edit_image(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.image_service import ImageGenerator
+        image_base64 = args["image_base64"]
+        mask_base64 = args["mask_base64"]
+        prompt = args["prompt"]
+        negative_prompt = args.get("negative_prompt", "")
+        strength = args.get("strength", 0.8)
+        steps = args.get("steps", 30)
+        try:
+            gen = ImageGenerator()
+            result = gen.edit_image(
+                image_base64=image_base64,
+                mask_base64=mask_base64,
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                strength=strength,
+                steps=steps,
+            )
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Edit failed"))
+            return ToolResult(
+                success=True,
+                output=f"Image edited (strength={strength}, steps={steps})",
+                data=result,
+            )
+        except ImportError as e:
+            return ToolResult(success=False, error=f"Missing dependencies: {e}. Install with: pip install jarvis-backend[image]")
+        except Exception as e:
+            return ToolResult(success=False, error=f"Image editing failed: {e}")
