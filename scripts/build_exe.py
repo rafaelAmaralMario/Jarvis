@@ -1,7 +1,6 @@
 """Build JARVIS as a standalone Windows executable using PyInstaller."""
 
 import os
-import shutil
 import subprocess
 import sys
 
@@ -10,6 +9,10 @@ BACKEND_DIR = os.path.join(PROJECT_ROOT, "backend")
 UI_DIR = os.path.join(PROJECT_ROOT, "ui")
 DIST_DIR = os.path.join(PROJECT_ROOT, "dist")
 SPEC_FILE = os.path.join(PROJECT_ROOT, "scripts", "jarvis.spec")
+
+# Read version from version.py
+sys.path.insert(0, BACKEND_DIR)
+from jarvis.version import APP_VERSION  # noqa: E402
 
 
 def build_ui():
@@ -40,9 +43,14 @@ def build_exe():
 
 
 def main():
-    build_ui()
+    skip_ui = "--skip-ui" in sys.argv
+    if not skip_ui:
+        build_ui()
     build_exe()
-    print(f"\nOK - Build complete! Executable in: {os.path.join(DIST_DIR, 'JARVIS.exe')}")
+    exe_path = os.path.join(DIST_DIR, "JARVIS.exe")
+    print(f"\nOK - Build complete! Version: {APP_VERSION}")
+    print(f"  Executable: {exe_path}")
+    print(f"  Size: {os.path.getsize(exe_path) / 1024 / 1024:.1f} MB")
 
 
 if __name__ == "__main__":

@@ -7,8 +7,15 @@ echo   JARVIS - Build do Instalador Completo
 echo ============================================
 echo.
 
+:: 0. Ler versao atual do codigo
+echo ^>^>^> [0/4] Obtendo versao...
+for /f "tokens=2 delims== " %%a in ('python -c "import sys; sys.path.insert(0,'backend'); from jarvis.version import APP_VERSION; print(f'VERSION={APP_VERSION}')"') do set APP_VERSION=%%a
+if "%APP_VERSION%"=="" set APP_VERSION=0.2.0
+echo Versao: %APP_VERSION%
+echo.
+
 :: 1. Build do frontend + PyInstaller
-echo ^>^>^> [1/3] Compilando executavel (npm + PyInstaller)...
+echo ^>^>^> [1/4] Compilando executavel (npm + PyInstaller)...
 echo.
 python scripts\build_exe.py
 if %ERRORLEVEL% neq 0 (
@@ -19,17 +26,17 @@ if %ERRORLEVEL% neq 0 (
 echo.
 
 :: 2. Verificar se o .exe foi gerado
-echo ^>^>^> [2/3] Verificando executavel...
+echo ^>^>^> [2/4] Verificando executavel...
 if not exist "dist\JARVIS.exe" (
     echo [ERRO] dist\JARVIS.exe nao encontrado!
     pause
     exit /b 1
 )
-echo OK - dist\JARVIS.exe encontrado
+echo OK - dist\JARVIS.exe encontrado (%APP_VERSION%)
 echo.
 
 :: 3. Compilar instalador com Inno Setup
-echo ^>^>^> [3/3] Compilando instalador (Inno Setup)...
+echo ^>^>^> [3/4] Compilando instalador (Inno Setup)...
 echo.
 
 :: Tenta encontrar ISCC automaticamente
@@ -45,10 +52,10 @@ if "%ISCC_PATH%"=="" (
     echo.
     echo Para compilar o instalador manualmente:
     echo   1. Instale Inno Setup 6+ em: https://jrsoftware.org/isdl.php
-    echo   2. Execute: iscc scripts\installer.iss
+    echo   2. Execute: iscc /dMyAppVersion=%APP_VERSION% scripts\installer.iss
     echo.
 ) else (
-    %ISCC_PATH% scripts\installer.iss
+    %ISCC_PATH% /dMyAppVersion=%APP_VERSION% scripts\installer.iss
     if %ERRORLEVEL% neq 0 (
         echo [ERRO] Compilacao do instalador falhou!
         pause
@@ -56,14 +63,22 @@ if "%ISCC_PATH%"=="" (
     )
 )
 
+:: 4. Renomear instalador para incluir versao se necessario
+echo ^>^>^> [4/4] Finalizando...
+for %%f in (dist\JARVIS-Setup-*.exe) do (
+    if not "%%f"=="dist\JARVIS-Setup-%APP_VERSION%.exe" (
+        move "%%f" "dist\JARVIS-Setup-%APP_VERSION%.exe" >nul 2>&1
+    )
+)
+
 echo.
 echo ============================================
-echo   BUILD CONCLUIDO!
+echo   BUILD CONCLUIDO! - Versao %APP_VERSION%
 echo ============================================
 echo.
-dir /b dist\JARVIS-Setup-*.exe 2>nul && echo   Instalador: dist\JARVIS-Setup-*.exe
+if exist "dist\JARVIS-Setup-%APP_VERSION%.exe" echo   Instalador: dist\JARVIS-Setup-%APP_VERSION%.exe
 echo   Executavel: dist\JARVIS.exe
 echo.
-echo   Para instalar, execute o JARVIS-Setup-*.exe
+echo   Para instalar, execute o instalador acima.
 echo.
 pause

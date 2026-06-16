@@ -15,10 +15,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python 3.14
+      - name: Setup Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: '3.12'
 
       - name: Install backend dependencies
         run: |
@@ -37,15 +37,23 @@ jobs:
           npm ci
           npm run build
 
-      - name: Build executable
-        run: python scripts/build_exe.py
+      - name: Build executable (skip UI, already built)
+        run: python scripts/build_exe.py --skip-ui
+
+      - name: Get version for installer
+        shell: python
+        run: |
+          import sys; sys.path.insert(0, 'backend')
+          from jarvis.version import APP_VERSION
+          print(f"APP_VERSION={APP_VERSION}")
+          # Write version to GITHUB_ENV
+          with open(r"$env:GITHUB_ENV", "a") as f:
+              f.write(f"APP_VERSION={APP_VERSION}\n")
 
       - name: Build installer
         run: |
-          # Install Inno Setup via Chocolatey
           choco install innosetup --no-progress --confirm
-          # Compile installer
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" scripts\installer.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /dMyAppVersion="$env:APP_VERSION" scripts\installer.iss
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

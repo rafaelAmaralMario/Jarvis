@@ -1,14 +1,17 @@
 ; Inno Setup script for JARVIS Installer
 ; Requires Inno Setup 6+ (https://jrsoftware.org/isdl.php)
 ;
-; Build .exe first with:
-;   python scripts/build_exe.py
-;
-; Then compile installer with:
+; Usage (version auto-read from jarvis/version.py):
+;   python scripts/build_exe.py --skip-ui
 ;   iscc scripts/installer.iss
+;
+; Or with explicit version:
+;   iscc /dMyAppVersion=0.3.0 scripts/installer.iss
 
 #define MyAppName "JARVIS"
-#define MyAppVersion "0.2.0"
+#ifndef MyAppVersion
+  #define MyAppVersion "0.2.0"
+#endif
 #define MyAppPublisher "JARVIS AI"
 #define MyAppURL "https://github.com/rafaelAmaralMario/Jarvis"
 #define MyAppExeName "JARVIS.exe"

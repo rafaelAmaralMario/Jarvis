@@ -11,8 +11,8 @@ from urllib.request import Request, urlopen
 
 APP_NAME = "JARVIS"
 APP_VERSION = "0.2.0"
-REPO_OWNER = "anomalyco"
-REPO_NAME = "jarvis"
+REPO_OWNER = "rafaelAmaralMario"
+REPO_NAME = "Jarvis"
 GITHUB_API = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases"
 UPDATER_SCRIPT = "jarvis_update.bat"
 
