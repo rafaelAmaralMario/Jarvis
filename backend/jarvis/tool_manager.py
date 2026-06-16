@@ -796,6 +796,18 @@ class ToolManager:
                 parameters={"type": "object", "properties": {}, "required": []},
                 risk=RiskLevel.SAFE,
             ),
+            "list_agents": ToolDefinition(
+                name="list_agents",
+                description="List all background agents and their status.",
+                parameters={"type": "object", "properties": {}, "required": []},
+                risk=RiskLevel.SAFE,
+            ),
+            "agent_log": ToolDefinition(
+                name="agent_log",
+                description="Get recent background agent activity log.",
+                parameters={"type": "object", "properties": {"limit": {"type": "number", "description": "Max entries", "default": 20}}, "required": []},
+                risk=RiskLevel.SAFE,
+            ),
             "list_plugins": ToolDefinition(
                 name="list_plugins",
                 description="List all loaded plugins from ~/.jarvis/plugins/.",
@@ -1964,3 +1976,36 @@ class ToolManager:
             return ToolResult(success=True, output="Workers:\n" + "\n".join(lines), data={"workers": workers})
         except Exception as e:
             return ToolResult(success=False, error=f"Failed to list workers: {e}")
+
+    def _get_background_agents(self) -> Any:
+        if not hasattr(self, "_bg_agents") or self._bg_agents is None:
+            from jarvis.background_agents import BackgroundAgentManager
+            self._bg_agents = BackgroundAgentManager(workspace_root=self._workspace_root or "")
+            self._bg_agents.start()
+        return self._bg_agents
+
+    def _handle_list_agents(self, args: dict[str, Any]) -> ToolResult:
+        try:
+            mgr = self._get_background_agents()
+            agents = mgr.list_agents()
+            lines = []
+            for a in agents:
+                lines.append(f"- {a['name']} ({a['type']})")
+                if a.get("tasks"):
+                    for t in a["tasks"]:
+                        lines.append(f"  - {t['name']}: every {t['interval_seconds']}s {'enabled' if t['enabled'] else 'disabled'}")
+            return ToolResult(success=True, output="Background agents:\n" + "\n".join(lines), data={"agents": agents})
+        except Exception as e:
+            return ToolResult(success=False, error=f"Failed to list agents: {e}")
+
+    def _handle_agent_log(self, args: dict[str, Any]) -> ToolResult:
+        try:
+            mgr = self._get_background_agents()
+            limit = args.get("limit", 20)
+            log = mgr.get_log(limit=limit)
+            if not log:
+                return ToolResult(success=True, output="No agent activity yet.")
+            lines = [f"[{e['timestamp']}] {e['agent']}: {e['message']}" for e in log]
+            return ToolResult(success=True, output="Agent log:\n" + "\n".join(lines), data={"log": log})
+        except Exception as e:
+            return ToolResult(success=False, error=f"Failed to get agent log: {e}")
