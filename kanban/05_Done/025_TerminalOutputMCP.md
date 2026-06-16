@@ -4,13 +4,13 @@
 Unificar terminal, painéis de saída (build, debug, problemas) e interface de servidores MCP em um único painel de ferramentas. Abas no bottom panel: Terminal, Output, MCP Servers, Problemas. Cada aba com sua própria toolbar.
 
 ## Critérios de Aceitação
-- [ ] Bottom panel unificado com abas: Terminal, Output, MCP, Problemas
-- [ ] Terminal existente migrado para nova aba
-- [ ] Output mostra logs de build/execução
-- [ ] MCP Servers: lista, status, start/stop, log
-- [ ] Problemas: erros e warnings do código
-- [ ] Toolbar própria por aba
-- [ ] Painel redimensionável
+- [x] Bottom panel unificado com abas: Terminal, Output, MCP, Problemas
+- [x] Terminal existente migrado para nova aba
+- [x] Output mostra logs de build/execução (OutputManager + bridge + UI)
+- [x] MCP Servers: lista, status, start/stop
+- [x] Problemas: erros e warnings do código
+- [x] Toolbar própria por aba
+- [x] Painel redimensionável (mesmo resize handler do terminal anterior)
 
 ## Dependências
 - [ ] — (independente, UI + backend de MCP)

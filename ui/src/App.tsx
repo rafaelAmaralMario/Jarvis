@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { ActivityBar } from '@/components/ActivityBar';
 import { Sidebar } from '@/components/Sidebar';
 import { MainArea } from '@/components/MainArea';
-import { TerminalPanel } from '@/components/Terminal/TerminalPanel';
+import { BottomPanel } from '@/components/BottomPanel/BottomPanel';
 import { StatusBar } from '@/components/StatusBar';
 import { AppErrorBoundary } from '@/components/ErrorBoundary';
 import { SearchPalette } from '@/components/SearchPalette';
@@ -124,7 +124,7 @@ export function App() {
                     document.addEventListener('mouseup', onUp);
                   }}
                 />
-                <TerminalPanel />
+                <BottomPanel />
               </div>
             )}
           </div>

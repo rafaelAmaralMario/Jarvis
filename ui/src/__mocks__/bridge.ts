@@ -52,6 +52,12 @@ interface MockBridge {
   plannerCancel: ReturnType<typeof vi.fn>;
   plannerListCheckpoints: ReturnType<typeof vi.fn>;
   plannerResumeCheckpoint: ReturnType<typeof vi.fn>;
+  outputGetLogs: ReturnType<typeof vi.fn>;
+  outputLog: ReturnType<typeof vi.fn>;
+  outputClearLogs: ReturnType<typeof vi.fn>;
+  problemsGet: ReturnType<typeof vi.fn>;
+  problemsAdd: ReturnType<typeof vi.fn>;
+  problemsClear: ReturnType<typeof vi.fn>;
 }
 
 const handlers = new Map<string, MessageHandler[]>();
@@ -144,6 +150,12 @@ export const mockBridge: MockBridge = {
   plannerCancel: vi.fn().mockResolvedValue({ success: true }),
   plannerListCheckpoints: vi.fn().mockResolvedValue([]),
   plannerResumeCheckpoint: vi.fn().mockResolvedValue({ taskId: 'mock-resume-task' }),
+  outputGetLogs: vi.fn().mockResolvedValue([]),
+  outputLog: vi.fn().mockResolvedValue(true),
+  outputClearLogs: vi.fn().mockResolvedValue(true),
+  problemsGet: vi.fn().mockResolvedValue([]),
+  problemsAdd: vi.fn().mockResolvedValue(true),
+  problemsClear: vi.fn().mockResolvedValue(true),
 };
 
 beforeEach(() => {

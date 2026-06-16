@@ -54,3 +54,7 @@
 - `12:15` — **Card `020_LongTermMemory`** → **Done**: Verificado. MemoryService + tools + auto-memory in tool_agent.
 - `12:30` — **Removidos**: 015_WhatsAppIntegration, 028_InstagramIntegration (sem valor). Movidos para 00_Removed/.
 - `12:40` — **Fim da sessão**. Cards processados hoje: 5 (VoiceConversation, CameraCapture, RAG, LongTermMemory). Kanban: **Backlog 9, Done 28, Removed 2**.
+
+## 2026-06-16
+
+- `07:30` — **Card `025_TerminalOutputMCP`** → **Done**: Bottom panel unificado com abas (Terminal, Output, MCP Servers, Problems). Terminal existente migrado, `OutputManager` com log de build/execução, MCP com lista/status/start/stop, Problems com erros/warnings, resize handler. TypeScript compila sem erros. Kanban: **Backlog 8, Done 29, Removed 2**.

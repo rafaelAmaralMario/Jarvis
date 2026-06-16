@@ -208,6 +208,13 @@ export interface JarvisBridge {
   cameraCapture(): Promise<{ success: boolean; imageBase64?: string; format?: string; error?: string }>;
   cameraAnalyze(prompt?: string): Promise<{ success: boolean; imageBase64?: string; description?: string; error?: string }>;
 
+  outputGetLogs(source?: string, level?: string, limit?: number): Promise<OutputLogEntry[]>;
+  outputLog(message: string, level?: string, source?: string): Promise<boolean>;
+  outputClearLogs(): Promise<boolean>;
+  problemsGet(file?: string, severity?: string): Promise<ProblemEntry[]>;
+  problemsAdd(file: string, line: number, column: number, severity: string, message: string, code?: string): Promise<boolean>;
+  problemsClear(file?: string): Promise<boolean>;
+
   onEvent(event: string, callback: (data: unknown) => void): void;
   offEvent(event: string, callback: (data: unknown) => void): void;
 }
@@ -835,6 +842,22 @@ export interface PlannerCheckpoint {
   total_steps: number;
   completed_steps: number;
   updated_at: string;
+}
+
+export interface OutputLogEntry {
+  timestamp: number;
+  level: string;
+  source: string;
+  message: string;
+}
+
+export interface ProblemEntry {
+  file: string;
+  line: number;
+  column: number;
+  severity: string;
+  message: string;
+  code: string;
 }
 
 export type ActivityView = 'knowledge' | 'ide' | 'editor' | 'ai' | 'automation' | 'planner' | 'settings' | 'git';

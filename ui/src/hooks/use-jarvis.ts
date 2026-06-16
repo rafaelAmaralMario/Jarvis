@@ -11,7 +11,7 @@ import type {
   PermissionInfo, AuditEntry, SecretInfo, ModelServerStatus, UpdateStatus,
   ConversationSummary, ChatMessage,
   ToolDefinition, ToolCallResult, ToolAgentResponse, ToolAgentAnswerResult,
-  StreamTask, StreamState, SIProgress, LLMFallbackConfig, GGUFModelInfo, GGUFModelCatalog, AudioTranscribeResult, RouterRule, ProviderMetrics, RouterCacheInfo, TaskPlannerResult, PlannerProgress, PlannerCheckpoint, VoiceConversationState,
+  StreamTask, StreamState, SIProgress, LLMFallbackConfig, GGUFModelInfo, GGUFModelCatalog, AudioTranscribeResult, RouterRule, ProviderMetrics, RouterCacheInfo, TaskPlannerResult, PlannerProgress, PlannerCheckpoint, VoiceConversationState, OutputLogEntry, ProblemEntry,
 } from '@/types';
 
 declare global {
@@ -87,6 +87,12 @@ function createBridge(): JarvisBridge {
   toolAgentGetStream: { content: '', toolCalls: [], toolResults: [], cancelled: false, done: true, error: null },
   aiGenerateAgent: { error: 'Backend not available' },
   aiGenerateWorkflow: { error: 'Backend not available' },
+  outputGetLogs: [],
+  outputLog: false,
+  outputClearLogs: false,
+  problemsGet: [],
+  problemsAdd: false,
+  problemsClear: false,
 };
 
 function send(method: string, ...args: unknown[]): Promise<unknown> {
@@ -339,6 +345,13 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     getAvailableVersions: () => send('getAvailableVersions') as Promise<string[]>,
     downloadAndInstall: (version) => send('downloadAndInstall', version) as Promise<{ success: boolean; path?: string; error?: string; restart?: boolean; message?: string }>,
     quitApp: () => { send('quitApp'); },
+
+    outputGetLogs: (source?, level?, limit?) => send('outputGetLogs', source, level, limit) as Promise<OutputLogEntry[]>,
+    outputLog: (message, level?, source?) => send('outputLog', message, level, source) as Promise<boolean>,
+    outputClearLogs: () => send('outputClearLogs') as Promise<boolean>,
+    problemsGet: (file?, severity?) => send('problemsGet', file, severity) as Promise<ProblemEntry[]>,
+    problemsAdd: (file, line, column, severity, message, code?) => send('problemsAdd', file, line, column, severity, message, code) as Promise<boolean>,
+    problemsClear: (file?) => send('problemsClear', file) as Promise<boolean>,
 
     onEvent: (event, cb) => {
       if (!callbacks.has(event)) callbacks.set(event, new Set());

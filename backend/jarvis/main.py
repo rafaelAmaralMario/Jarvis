@@ -28,6 +28,7 @@ from jarvis.security_manager import SecurityManager
 from jarvis.terminal_manager import TerminalManager
 from jarvis.workflow_engine import WorkflowEngine
 from jarvis.workspace_manager import WorkspaceManager
+from jarvis.output_manager import OutputManager
 from jarvis.logging_config import setup_logging, install_exception_hooks, on_crash
 
 
@@ -121,6 +122,7 @@ def main():
     mcp = MCPManager(db)
     workflows = WorkflowEngine(db)
     security = SecurityManager(db)
+    output_manager = OutputManager()
 
     bridge = JARVISBridge(
         db=db,
@@ -140,6 +142,7 @@ def main():
         mcp=mcp,
         workflows=workflows,
         security=security,
+        output=output_manager,
     )
 
     # Fix agent models that don't exist in any provider (Ollama or GGUF)

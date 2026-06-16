@@ -31,6 +31,7 @@ from jarvis.terminal_manager import TerminalManager
 from jarvis.tool_agent import ToolAgent, TaskPlanner
 from jarvis.self_improvement import SelfImprovement
 from jarvis.tool_manager import ToolManager
+from jarvis.output_manager import OutputManager
 from jarvis.workflow_engine import WorkflowEngine
 from jarvis.workspace_manager import WorkspaceManager
 
@@ -84,6 +85,7 @@ class JARVISBridge:
         mcp: MCPManager | None = None,
         workflows: WorkflowEngine | None = None,
         security: SecurityManager | None = None,
+        output: OutputManager | None = None,
     ):
         self._workspace = workspace
         self._git = git
@@ -100,6 +102,7 @@ class JARVISBridge:
         self._mcp = mcp
         self._workflows = workflows
         self._security = security
+        self._output = output
         self._llm_router = LLMRouter(gateway=llm_gateway, db=db) if llm_gateway else None
         self._db = db
         self._chat = ChatManager(db) if db else None
@@ -2485,6 +2488,68 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    # ========================================================================
+    # Output & Problems
+    # ========================================================================
+
+    def outputGetLogs(self, source: str = "", level: str = "", limit: int = 200) -> list:
+        if not self._output:
+            return []
+        try:
+            return self._output.get_logs(source, level, limit)
+        except Exception as e:
+            logger.warning("outputGetLogs failed: %s", e)
+            return []
+
+    def outputLog(self, message: str, level: str = "info", source: str = "system") -> bool:
+        if not self._output:
+            return False
+        try:
+            self._output.log(message, level, source)
+            return True
+        except Exception as e:
+            logger.warning("outputLog failed: %s", e)
+            return False
+
+    def outputClearLogs(self) -> bool:
+        if not self._output:
+            return False
+        try:
+            self._output.clear_logs()
+            return True
+        except Exception as e:
+            logger.warning("outputClearLogs failed: %s", e)
+            return False
+
+    def problemsGet(self, file: str = "", severity: str = "") -> list:
+        if not self._output:
+            return []
+        try:
+            return self._output.get_problems(file, severity)
+        except Exception as e:
+            logger.warning("problemsGet failed: %s", e)
+            return []
+
+    def problemsAdd(self, file: str, line: int, column: int, severity: str, message: str, code: str = "") -> bool:
+        if not self._output:
+            return False
+        try:
+            self._output.add_problem(file, line, column, severity, message, code)
+            return True
+        except Exception as e:
+            logger.warning("problemsAdd failed: %s", e)
+            return False
+
+    def problemsClear(self, file: str = "") -> bool:
+        if not self._output:
+            return False
+        try:
+            self._output.clear_problems(file)
+            return True
+        except Exception as e:
+            logger.warning("problemsClear failed: %s", e)
+            return False
 
     def quitApp(self) -> None:
         """Close the application window."""
