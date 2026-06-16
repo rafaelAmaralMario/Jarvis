@@ -6,9 +6,12 @@ Supports waiting for user answers and cancellation via threading primitives.
 
 import json
 import logging
+import os
 import re
 import threading
 import time
+import uuid
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 from jarvis.llm_gateway import LLMGateway, LLMMessage, LLMProvider, LLMRequest
@@ -108,14 +111,16 @@ class ToolAgent:
         self._messages.append({"role": "user", "content": query})
 
         if system_override:
-            self._system = system_override.format(
-                tool_descriptions=tool_descriptions,
-                workspace=workspace,
+            self._system = system_override.replace(
+                "{tool_descriptions}", tool_descriptions
+            ).replace(
+                "{workspace}", workspace
             )
         else:
-            self._system = _DEFAULT_TOOL_AGENT_SYSTEM.format(
-                tool_descriptions=tool_descriptions,
-                workspace=workspace,
+            self._system = _DEFAULT_TOOL_AGENT_SYSTEM.replace(
+                "{tool_descriptions}", tool_descriptions
+            ).replace(
+                "{workspace}", workspace
             )
         self._tool_rounds = 0
         self._full_response = ""

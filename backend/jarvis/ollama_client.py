@@ -1,4 +1,5 @@
 import json
+import time as _time
 from dataclasses import dataclass
 from typing import Callable
 
@@ -38,52 +39,62 @@ class OllamaError(Exception):
 
 
 class OllamaClient:
+    _CACHE_TTL = 2.0
+
     def __init__(self, base_url: str = "http://localhost:11434", timeout: float = 120.0):
         base_url = base_url or "http://localhost:11434"
         if base_url.endswith("/"):
             base_url = base_url[:-1]
         self._base_url = base_url
         self._client = httpx.Client(base_url=base_url, timeout=timeout)
+        self._cache_tags: tuple[float, list[OllamaModel] | None, bool | None] = (0.0, None, None)
 
     def close(self) -> None:
         self._client.close()
 
-    def ping(self) -> bool:
+    def _fetch_tags(self) -> tuple[list[OllamaModel], bool]:
+        now = _time.monotonic()
+        if now - self._cache_tags[0] < self._CACHE_TTL:
+            return self._cache_tags[1] or [], self._cache_tags[2] or False
         try:
             resp = self._client.get("/api/tags")
-            return resp.status_code == 200
+            ok = resp.status_code == 200
+            if ok:
+                resp.raise_for_status()
+                data = resp.json()
+                models: list[OllamaModel] = []
+                for m in data.get("models", []):
+                    model = OllamaModel(
+                        name=m.get("name", ""),
+                        modified_at=m.get("modified_at", ""),
+                        size_bytes=m.get("size", 0),
+                        digest=m.get("digest", ""),
+                    )
+                    details = m.get("details", {})
+                    families = details.get("families", [])
+                    if families:
+                        model.details = families[0]
+                    models.append(model)
+                self._cache_tags = (now, models, True)
+                return models, True
+            self._cache_tags = (now, [], False)
+            return [], False
         except Exception:
-            return False
+            self._cache_tags = (now, [], False)
+            return [], False
+
+    def ping(self) -> bool:
+        _, ok = self._fetch_tags()
+        return ok
 
     def list_models(self) -> list[OllamaModel]:
-        try:
-            resp = self._client.get("/api/tags")
-            resp.raise_for_status()
-        except httpx.ConnectError:
+        models, ok = self._fetch_tags()
+        if not ok:
             raise OllamaError(
                 "Não foi possível conectar ao servidor Ollama em "
                 f"{self._base_url}. Execute 'ollama serve' ou inicie "
                 "pela interface Settings -> Models."
             )
-        except httpx.HTTPStatusError:
-            raise OllamaError(
-                f"Ollama retornou erro HTTP {resp.status_code}. "
-                "Verifique se o servidor está funcionando."
-            )
-        data = resp.json()
-        models: list[OllamaModel] = []
-        for m in data.get("models", []):
-            model = OllamaModel(
-                name=m.get("name", ""),
-                modified_at=m.get("modified_at", ""),
-                size_bytes=m.get("size", 0),
-                digest=m.get("digest", ""),
-            )
-            details = m.get("details", {})
-            families = details.get("families", [])
-            if families:
-                model.details = families[0]
-            models.append(model)
         return models
 
     def pull_model(self, name: str) -> bool:
