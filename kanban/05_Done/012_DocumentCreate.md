@@ -103,11 +103,11 @@ Reutiliza `python-docx` e `openpyxl` instalados pelo Card 011. Adiciona `reportl
 4. [ ] Path inválido ou permissão negada → `success=False`, erro descritivo
 
 ## Critérios de Aceitação
-- [ ] Tool `create_docx`: texto → arquivo .docx formatado
-- [ ] Tool `create_pdf`: texto + layout → arquivo .pdf
-- [ ] Tool `create_xlsx`: dados → arquivo .xlsx com fórmulas
-- [ ] Suporte a formatação (títulos, listas, tabelas, imagens)
-- [ ] Download do documento gerado
+- [x] Tool `create_docx`: texto → arquivo .docx formatado
+- [x] Tool `create_pdf`: texto + layout → arquivo .pdf
+- [x] Tool `create_xlsx`: dados → arquivo .xlsx com fórmulas
+- [x] Suporte a formatação (títulos, listas, tabelas, imagens)
+- [x] Download do documento gerado
 
 ## Dependências
 - [ ] 011_DocumentRead (bibliotecas compartilhadas)
@@ -120,3 +120,4 @@ Média
 
 ## Esforço Estimado
 Médio
+

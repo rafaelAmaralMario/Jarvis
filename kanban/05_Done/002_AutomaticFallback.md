@@ -195,11 +195,11 @@ LLMGateway.generate(req)
 5. [ ] **Timeout hit exactly**: Set timeout to 1s, mock client to sleep 2s. Verify it moves to next provider within reasonable time (< 3s total).
 
 ## Critérios de Aceitação
-- [ ] Lógica de fallback no LLMGateway.generate()
-- [ ] Configuração de ordem de fallback (ex: Native → Ollama → OpenAI)
-- [ ] Tempo máximo de tentativa por provedor
-- [ ] Notificação ao usuário sobre fallback ativo
-- [ ] Log de falhas de provedor
+- [x] Lógica de fallback no LLMGateway.generate()
+- [x] Configuração de ordem de fallback (ex: Native → Ollama → OpenAI)
+- [x] Tempo máximo de tentativa por provedor
+- [x] Notificação ao usuário sobre fallback ativo
+- [x] Log de falhas de provedor
 
 ## Fase
 Fase 1 — LLM Dual Provider
@@ -209,3 +209,4 @@ Média
 
 ## Esforço Estimado
 Pequeno
+

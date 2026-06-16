@@ -11,7 +11,7 @@ import type {
   PermissionInfo, AuditEntry, SecretInfo, ModelServerStatus, UpdateStatus,
   ConversationSummary, ChatMessage,
   ToolDefinition, ToolCallResult, ToolAgentResponse, ToolAgentAnswerResult,
-  StreamTask, StreamState, SIProgress, LLMFallbackConfig, GGUFModelInfo, GGUFModelCatalog, AudioTranscribeResult, RouterRule, ProviderMetrics, RouterCacheInfo, TaskPlannerResult, PlannerProgress, PlannerCheckpoint,
+  StreamTask, StreamState, SIProgress, LLMFallbackConfig, GGUFModelInfo, GGUFModelCatalog, AudioTranscribeResult, RouterRule, ProviderMetrics, RouterCacheInfo, TaskPlannerResult, PlannerProgress, PlannerCheckpoint, VoiceConversationState,
 } from '@/types';
 
 declare global {
@@ -301,6 +301,7 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     llmGetFallbackConfig: (provider?) => send('llmGetFallbackConfig', provider) as Promise<LLMFallbackConfig[] | LLMFallbackConfig | null>,
     llmSaveFallbackConfig: (config) => send('llmSaveFallbackConfig', config) as Promise<boolean>,
 
+    hfSearchModels: (query) => send('hfSearchModels', query) as Promise<{ modelId: string; pipelineTag: string; downloads: number; likes: number; description: string }[]>,
     ggufDownload: (repoId, filename) => send('ggufDownload', repoId, filename) as Promise<{ success: boolean; path?: string; error?: string }>,
     ggufList: () => send('ggufList') as Promise<GGUFModelInfo[]>,
     ggufDelete: (name) => send('ggufDelete', name) as Promise<{ success: boolean }>,
@@ -317,6 +318,12 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     llmRouterGetMetrics: () => send('llmRouterGetMetrics') as Promise<ProviderMetrics[]>,
     llmRouterClearCache: () => send('llmRouterClearCache') as Promise<{ cleared: number }>,
     llmRouterGetCacheInfo: () => send('llmRouterGetCacheInfo') as Promise<RouterCacheInfo>,
+
+    voiceConversationStream: (audioBase64, convId?, history?, agentId?) => send('voiceConversationStream', audioBase64, convId, history, agentId) as Promise<{ taskId: string }>,
+    voiceConversationGetStream: (taskId) => send('voiceConversationGetStream', taskId) as Promise<VoiceConversationState>,
+
+    cameraCapture: () => send('cameraCapture') as Promise<{ success: boolean; imageBase64?: string; format?: string; error?: string }>,
+    cameraAnalyze: (prompt?) => send('cameraAnalyze', prompt) as Promise<{ success: boolean; imageBase64?: string; description?: string; error?: string }>,
 
     copyToClipboard: (text) => send('copyToClipboard', text) as Promise<boolean>,
     getLogPath: () => send('getLogPath') as Promise<string>,

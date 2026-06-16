@@ -169,6 +169,7 @@ export interface JarvisBridge {
   llmGetFallbackConfig(provider?: string): Promise<LLMFallbackConfig[] | LLMFallbackConfig | null>;
   llmSaveFallbackConfig(config: LLMFallbackConfig): Promise<boolean>;
 
+  hfSearchModels(query: string): Promise<{ modelId: string; pipelineTag: string; downloads: number; likes: number; description: string }[]>;
   ggufDownload(repoId: string, filename: string): Promise<{ success: boolean; path?: string; error?: string }>;
   ggufList(): Promise<GGUFModelInfo[]>;
   ggufDelete(name: string): Promise<{ success: boolean }>;
@@ -201,8 +202,24 @@ export interface JarvisBridge {
   downloadAndInstall(version: string): Promise<{ success: boolean; path?: string; error?: string; restart?: boolean; message?: string }>;
   quitApp(): void;
 
+  voiceConversationStream(audioBase64: string, convId?: string, history?: { role: string; content: string }[], agentId?: string): Promise<{ taskId: string }>;
+  voiceConversationGetStream(taskId: string): Promise<VoiceConversationState>;
+
+  cameraCapture(): Promise<{ success: boolean; imageBase64?: string; format?: string; error?: string }>;
+  cameraAnalyze(prompt?: string): Promise<{ success: boolean; imageBase64?: string; description?: string; error?: string }>;
+
   onEvent(event: string, callback: (data: unknown) => void): void;
   offEvent(event: string, callback: (data: unknown) => void): void;
+}
+
+export interface VoiceConversationState {
+  text: string;
+  response: string;
+  audioBase64?: string;
+  status: 'idle' | 'recording' | 'transcribing' | 'thinking' | 'speaking' | 'done' | 'error';
+  timings?: { stt: number; llm: number; tts: number; total: number };
+  done: boolean;
+  error?: string | null;
 }
 
 export interface ModuleInfo {

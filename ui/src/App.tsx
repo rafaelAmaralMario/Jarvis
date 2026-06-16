@@ -18,7 +18,7 @@ export function App() {
   const commands = [
     { id: 'toggle-terminal', label: 'Toggle Terminal', description: 'Show/hide the terminal panel', action: () => setShowTerminal(v => !v) },
     { id: 'view-ai', label: 'Switch to AI Chat', description: 'Open the AI chat view', action: () => setActiveView('ai') },
-    { id: 'view-editor', label: 'Switch to Editor', description: 'Open the editor/workspace view', action: () => setActiveView('editor') },
+    { id: 'view-ide', label: 'Switch to Workspace', description: 'Open the editor/workspace view', action: () => setActiveView('ide') },
     { id: 'view-knowledge', label: 'Switch to Knowledge', description: 'Open the knowledge base view', action: () => setActiveView('knowledge') },
     { id: 'view-git', label: 'Switch to Git', description: 'Open the Git source control view', action: () => setActiveView('git') },
     { id: 'view-settings', label: 'Open Settings', description: 'Open the settings panel', action: () => setActiveView('settings') },
@@ -30,6 +30,9 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const views: ActivityView[] = ['ai', 'knowledge', 'ide', 'git', 'planner', 'automation', 'settings'];
+    let viewIndex = views.indexOf(activeView);
+
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
         e.preventDefault();
@@ -47,6 +50,19 @@ export function App() {
     };
     window.addEventListener('contextmenu', preventContext);
 
+    const mouseHandler = (e: MouseEvent) => {
+      if (e.button === 3 || e.button === 4) {
+        e.preventDefault();
+        if (e.button === 3) {
+          viewIndex = Math.max(0, viewIndex - 1);
+        } else {
+          viewIndex = Math.min(views.length - 1, viewIndex + 1);
+        }
+        setActiveView(views[viewIndex]);
+      }
+    };
+    window.addEventListener('mouseup', mouseHandler);
+
     const viewHandler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail?.view) setActiveView(detail.view as ActivityView);
@@ -59,9 +75,10 @@ export function App() {
     return () => {
       window.removeEventListener('keydown', handler);
       window.removeEventListener('contextmenu', preventContext);
+      window.removeEventListener('mouseup', mouseHandler);
       window.removeEventListener('jarvis:send-to-chat', viewHandler);
     };
-  }, []);
+  }, [activeView]);
 
   return (
     <AppErrorBoundary>
@@ -112,10 +129,7 @@ export function App() {
             )}
           </div>
         </div>
-        <StatusBar
-          moduleCount={3}
-          modelName="Ollama qwen2.5-coder"
-        />
+        <StatusBar />
         <SearchPalette
           isOpen={searchOpen}
           onClose={() => setSearchOpen(false)}

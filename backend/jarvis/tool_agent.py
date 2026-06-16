@@ -132,11 +132,29 @@ class ToolAgent:
 
             self._tool_rounds += 1
 
+            memory_context = ""
+            try:
+                from jarvis.memory_service import MemoryService
+                ms = MemoryService()
+                user_query = self._messages[-1].get("content", "") if self._messages else ""
+                if user_query:
+                    mem_results = ms.recall(user_query, 3)
+                    if mem_results:
+                        memory_context = "Memory context:\n" + "\n".join(
+                            f"- {r['content'][:200]}" for r in mem_results
+                        )
+            except Exception:
+                pass
+
+            system = self._system
+            if memory_context:
+                system = self._system + "\n\n" + memory_context
+
             req = LLMRequest(
                 provider=LLMProvider(self._provider),
                 model=self._model,
                 messages=[LLMMessage(role=m["role"], content=m["content"]) for m in self._messages],
-                system=self._system,
+                system=system,
                 temperature=0.3,
                 max_tokens=4096,
                 stream=False,

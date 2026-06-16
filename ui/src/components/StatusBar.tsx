@@ -3,19 +3,18 @@ import { motion } from 'framer-motion';
 import { useJarvis } from '@/hooks/use-jarvis';
 import type { ModelServerStatus } from '@/types';
 
-interface StatusBarProps {
-  moduleCount: number;
-  modelName: string;
-}
-
-export function StatusBar({ moduleCount, modelName }: StatusBarProps) {
+export function StatusBar() {
   const bridge = useJarvis();
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [latestVersion, setLatestVersion] = useState('');
+  const [appVersion, setAppVersion] = useState('v0.1');
   const [serverStatus, setServerStatus] = useState<ModelServerStatus | null>(null);
+  const [modelName, setModelName] = useState('');
+  const [moduleCount, setModuleCount] = useState(0);
 
   useEffect(() => {
-    bridge.getAppVersion().then(() => {
+    bridge.getAppVersion().then(v => {
+      if (v?.version) setAppVersion(v.version);
       bridge.checkForUpdates().then(result => {
         if (result.update_available) {
           setUpdateAvailable(true);
@@ -23,6 +22,10 @@ export function StatusBar({ moduleCount, modelName }: StatusBarProps) {
         }
       });
     });
+    bridge.getModules().then(m => setModuleCount(m.length)).catch(() => {});
+    bridge.listModels().then(ms => {
+      if (ms.length > 0) setModelName(ms[0].name);
+    }).catch(() => {});
   }, [bridge]);
 
   useEffect(() => {
@@ -43,11 +46,15 @@ export function StatusBar({ moduleCount, modelName }: StatusBarProps) {
       animate={{ y: 0 }}
       className="h-6 bg-primary flex items-center px-4 text-xs text-primary-foreground"
     >
-      <span className="font-medium">JARVIS v0.1</span>
+      <span className="font-medium">JARVIS {appVersion}</span>
       <span className="mx-3 opacity-50">|</span>
       <span>{moduleCount} módulos ativos</span>
-      <span className="mx-3 opacity-50">|</span>
-      <span>Modelo: {modelName}</span>
+      {modelName && (
+        <>
+          <span className="mx-3 opacity-50">|</span>
+          <span>Modelo: {modelName.split(':')[0]}</span>
+        </>
+      )}
       <div className="flex-1" />
       {updateAvailable && (
         <motion.a

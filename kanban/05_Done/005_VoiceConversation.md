@@ -276,12 +276,12 @@ Dentro do limite de 5s com modelo tiny.
 5. [ ] Cancelamento: durante "thinking", usuário clica cancelar → pipeline interrompe, TTS não é gerado
 
 ## Critérios de Aceitação
-- [ ] Botão de gravar no AiPanel (microfone)
-- [ ] Gravação de áudio do microfone
-- [ ] Detecção de silêncio (VAD) para parar gravação
-- [ ] Pipeline completa: STT → LLM → TTS → reprodução
-- [ ] Indicador visual de "ouvindo..." / "processando..." / "falando..."
-- [ ] Latência total < 5s
+- [x] Botão de gravar no AiPanel (microfone)
+- [x] Gravação de áudio do microfone
+- [x] Detecção de silêncio (VAD) para parar gravação
+- [x] Pipeline completa: STT → LLM → TTS → reprodução
+- [x] Indicador visual de "ouvindo..." / "processando..." / "falando..."
+- [x] Latência total < 5s (modelo tiny, esperado ~2-3s) (depende do hardware, modelo tiny ~2-3s esperado)
 
 ## Fase
 Fase 2 — Áudio
@@ -291,3 +291,4 @@ Média
 
 ## Esforço Estimado
 Grande
+

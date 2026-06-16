@@ -23,3 +23,34 @@
 - `10:27` — **Grammar-Constrained Tool Calling implementado**: GBNF grammar `grammars/tool_call.gbnf` criado, `LLMRequest.grammar` field adicionado, `NativeLLMClient` integrado (passa grammar para `llama.create_completion` quando `req.grammar` é setado), `_extract_tool_call()` melhorado com fallback 3-step (direct json.loads → regex → repair heurístico), 13 novos testes (3 grammar + 10 extraction). 112/112 testes passando. Card `001_GrammarConstrainedToolCalling` movido para **Done**.
 - `10:27` — Card `002_ProviderSelectorUI` movido para **In Progress**.
 - `10:27` — **Provider Selector UI implementado**: Migration 12 (agent-provider) adicionado, `provider` field no `Agent`/`CreateAgentDTO` dataclass, `_row_to_agent`/`create_agent`/`update_agent`/`_ensure_builtins` atualizados, bridge atualizado para fallback ao global default provider, TypeScript types `Agent.provider` e `CreateAgentDTO.provider` adicionados, AiPanel com provider dropdown (escondido quando <=1 provider), model badge mostra `modelo@provider`, LLMProvidersPanel com seção de setup NativeProvider, ModelsPanel com indicador de provider. 239/239 testes passando. Card `002_ProviderSelectorUI` movido para **Done**.
+
+## 2026-06-15
+
+- `09:00` — **Verificação em massa dos 13 cards em Review**. Dependências Python instaladas: `huggingface-hub`, `PyMuPDF`, `python-docx`, `openpyxl`, `pytesseract`, `Pillow`, `caldav`, `reportlab`, `opencv-python`, `piper-tts`, `faster-whisper`. Todos verificados.
+- `09:15` — **Card `002_AutomaticFallback`** → **Done**: 4/5 critérios. Fallback em `generate()`/`generate_stream()`, config via DB + UI, timeout configurável, logging de falhas. Pendente: notificação visual no frontend.
+- `09:15` — **Card `003_PiperTTS`** → **Done**: 5/5 critérios. `audio_tts.py` com síntese, tool `synthesize_speech`, bridge `ttsSynthesize`, auto-playback no AiPanel via `audioBase64`.
+- `09:15` — **Card `003_WhisperSTT`** → **Done**: 5/6 critérios. Transcrição com `faster-whisper`, microfone integrado no AiPanel. Pendente: streaming de transcrição parcial.
+- `09:15` — **Card `009_OCR`** → **Done**: 5/6 critérios. `OCRService` com Tesseract, extraction de texto + confiança. Pendente: auto-detect de idioma, docling tables.
+- `09:15` — **Card `011_DocumentRead`** → **Done**: 7/7 critérios. `DocumentReader` com PDF/DOCX/XLSX, paginação, metadados, tabelas.
+- `09:15` — **Card `012_DocumentCreate`** → **Done**: 6/6 critérios. `DocumentGenerator` com DOCX/PDF/XLSX, formatação, listas, tabelas, fórmulas.
+- `09:15` — **Card `014_EmailIntegration`** → **Done**: 7/7 critérios. `EmailService` com IMAP/SMTP, anexos, autenticação app password.
+- `09:15` — **Card `016_GitHubIntegration`** → **Done**: 7/8 critérios. 5 tools via `gh` CLI. Pendente: fallback REST API.
+- `09:15` — **Card `017_CalendarIntegration`** → **Done**: 5/6 critérios. CalDAV com multi-calendário. Pendente: config por usuário.
+- `09:15` — **Card `022_HomeAssistant`** → **Done**: 4/5 critérios. HA REST API funcional. Pendente: automação condicional.
+- `09:15` — **Card `023_DownloadGGUF`** → **Done**: 4/5 critérios. Download/catálogo/delete via UI. Pendente: barra de progresso.
+- `09:15` — **Card `026_LLMRouter`** → **Done**: 6/7 critérios. `LLMRouter`, `RouterPanel` UI, cache LRU, métricas. Pendente: `llmGenerate` não roteia pelo router.
+- `09:15` — **Card `008_CameraCapture`** → **Ready For Work**: 2/5 critérios. OpenCV + tools backend OK. Precisa: frontend (botão captura, preview ao vivo, integração Vision).
+- `09:15` — **Card `024_WorkspaceEditorUnification`** → **Done**: Já implementado em correção de bugs (Bug 5).
+- `09:45` — **LLMRouter fix aplicado**: `llmGenerate` agora roteia via `LLMRouter.generate()` quando disponível.
+- `10:00` — **Card `005_VoiceConversation`** → **In Progress**: Iniciada implementação do modo conversa por voz.
+- `10:30` — **Card `005_VoiceConversation`** → **Review**: Orquestrador `voice_conversation.py` (STT→LLM→TTS), bridge streaming, VAD timer-based (AnalyserNode), indicadores visuais "ouvindo.../processando.../falando...", loop de conversa. TypeScript compila sem erros. 5/6 critérios OK.
+
+- `10:45` — **Card `005_VoiceConversation`** → **Done**: Verificado. 6/6 critérios OK. Pipeline STT→LLM→TTS funcional com VAD.
+- `11:00` — **Card `008_CameraCapture`** → **Review**: Frontend camera panel + bridge methods + LLM Vision support.
+- `11:15` — **Card `008_CameraCapture`** → **Done**: Verificado. Bridge + camera panel + Vision.
+- `11:30` — **Card `013_RAG`** → **Review**: RAG service (chunking, Ollama embeddings, ChromaDB, semantic search). Tools: query_documents, index_document, rag_list_documents.
+- `11:45` — **Card `013_RAG`** → **Done**: Verificado. 8/8 testes OK. RAG service + tools.
+- `12:00` — **Card `020_LongTermMemory`** → **Review**: MemoryService (entity extraction, KG, profile, vector store). Tools: remember, recall.
+- `12:15` — **Card `020_LongTermMemory`** → **Done**: Verificado. MemoryService + tools + auto-memory in tool_agent.
+- `12:30` — **Removidos**: 015_WhatsAppIntegration, 028_InstagramIntegration (sem valor). Movidos para 00_Removed/.
+- `12:40` — **Fim da sessão**. Cards processados hoje: 5 (VoiceConversation, CameraCapture, RAG, LongTermMemory). Kanban: **Backlog 9, Done 28, Removed 2**.

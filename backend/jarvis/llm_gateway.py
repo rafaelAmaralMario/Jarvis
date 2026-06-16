@@ -40,6 +40,7 @@ class LLMRequest:
     max_tokens: int = 2048
     stream: bool = False
     grammar: str = ""
+    images: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -133,6 +134,8 @@ class OllamaLLMClient(BaseLLMClient):
         }
         if req.system:
             body["system"] = req.system
+        if req.images:
+            body["images"] = req.images
         return body
 
     def generate(self, req: LLMRequest) -> LLMResponse:

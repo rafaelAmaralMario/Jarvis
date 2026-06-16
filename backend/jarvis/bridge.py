@@ -1043,6 +1043,34 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                     break
         return GGUFManager(models_dir)
 
+    def hfSearchModels(self, query: str = "") -> list:
+        """Search HuggingFace for GGUF models by query string."""
+        try:
+            import httpx
+            search_query = query.strip() or "gguf"
+            url = f"https://huggingface.co/api/models?search={search_query}&sort=downloads&direction=-1&limit=20"
+            resp = httpx.get(url, timeout=15)
+            if resp.status_code != 200:
+                logger.warning("HF search returned %d", resp.status_code)
+                return []
+            data = resp.json()
+            results = []
+            for item in data:
+                model_id = item.get("modelId", "")
+                if not model_id:
+                    continue
+                results.append({
+                    "modelId": model_id,
+                    "pipelineTag": item.get("pipeline_tag") or "",
+                    "downloads": item.get("downloads", 0),
+                    "likes": item.get("likes", 0),
+                    "description": (item.get("cardData") or {}).get("short_description", "") or "",
+                })
+            return results[:20]
+        except Exception as e:
+            logger.warning("hfSearchModels failed: %s", e)
+            return []
+
     def ggufDownload(self, repo_id: str, filename: str) -> dict:
         manager = self._get_gguf_manager()
         if not manager.validate_remote_file(repo_id, filename):
@@ -1902,7 +1930,10 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                 temperature=request.get("temperature", 0.7),
                 max_tokens=request.get("maxTokens", 2048),
             )
-            resp = self._llm.generate(req)
+            if self._llm_router:
+                resp = self._llm_router.generate(req)
+            else:
+                resp = self._llm.generate(req)
             return {
                 "content": resp.content,
                 "model": resp.model,
@@ -2272,11 +2303,14 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                 return True
             cmd = status.get("command", "ollama serve")
             if sys.platform == "win32":
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                 subprocess.Popen(
                     cmd,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                    startupinfo=startupinfo,
                 )
             else:
                 subprocess.Popen(
@@ -2356,6 +2390,101 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
             return result
         except Exception as e:
             return {"success": False, "error": str(e), "restart": False}
+
+    # ========================================================================
+    # Voice Conversation (streaming)
+    # ========================================================================
+
+    _voice_streams: dict[str, dict] = {}
+
+    def voiceConversationStream(self, audio_base64: str, conv_id: str = "", history: list | None = None, agent_id: str = "") -> dict:
+        task_id = str(uuid.uuid4())
+        stream = {
+            "text": "", "response": "", "audioBase64": "",
+            "status": "transcribing", "timings": {},
+            "done": False, "error": None,
+        }
+        JARVISBridge._voice_streams[task_id] = stream
+
+        def _run():
+            try:
+                agent_model = ""
+                agent_provider = ""
+                if agent_id and self._agents:
+                    agent = self._agents.get_agent(agent_id)
+                    if agent:
+                        agent_model = agent.model or ""
+                        agent_provider = getattr(agent, "provider", "")
+
+                from jarvis.voice_conversation import run_pipeline
+
+                def on_progress(**kw):
+                    JARVISBridge._voice_streams[task_id].update(kw)
+
+                stream["status"] = "transcribing"
+                result = run_pipeline(
+                    audio_base64,
+                    llm_gateway=self._llm,
+                    tools=self._tools,
+                    model=agent_model,
+                    provider=agent_provider,
+                    history=history,
+                    on_progress=on_progress,
+                )
+                JARVISBridge._voice_streams[task_id].update(result)
+                stream["status"] = "done" if not result.get("error") else "error"
+            except Exception as e:
+                logger.exception("voiceConversationStream failed")
+                JARVISBridge._voice_streams[task_id].update({"error": str(e), "status": "error"})
+            finally:
+                JARVISBridge._voice_streams[task_id]["done"] = True
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        return {"taskId": task_id}
+
+    def voiceConversationGetStream(self, task_id: str) -> dict:
+        stream = JARVISBridge._voice_streams.get(task_id)
+        if not stream:
+            return {"done": True, "error": "Task not found"}
+        return dict(stream)
+
+    # ========================================================================
+    # Camera capture
+    # ========================================================================
+
+    def cameraCapture(self) -> dict:
+        try:
+            from jarvis.camera_service import CameraService
+            cam = CameraService()
+            return cam.capture()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def cameraAnalyze(self, prompt: str = "Describe what you see in this image") -> dict:
+        try:
+            from jarvis.camera_service import CameraService
+            cam = CameraService()
+            result = cam.capture()
+            if not result["success"]:
+                return result
+            if not self._llm_router:
+                return {"success": False, "error": "LLM not available"}
+            from jarvis.llm_gateway import LLMRequest, LLMMessage, LLMProvider
+            req = LLMRequest(
+                provider=LLMProvider.OLLAMA,
+                model="",
+                messages=[LLMMessage(role="user", content=prompt)],
+                images=[result["imageBase64"]],
+            )
+            resp = self._llm_router.generate(req)
+            return {
+                "success": True,
+                "imageBase64": result["imageBase64"],
+                "description": resp.content,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def quitApp(self) -> None:
         """Close the application window."""

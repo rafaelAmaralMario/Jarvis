@@ -90,7 +90,7 @@ export function MainArea({ activeView }: MainAreaProps) {
     );
   }
 
-  if (activeView === 'ide' || activeView === 'editor') {
+  if (activeView === 'ide') {
     return (
       <Suspense fallback={<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm animate-pulse">Carregando...</div>}>
         <WorkspacePanel />

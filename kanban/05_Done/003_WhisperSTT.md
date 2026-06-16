@@ -136,12 +136,12 @@ Não precisa de `pyaudio` ou `sounddevice` — captura é feita no frontend via 
 5. [ ] Botão de microfone alterna entre estado idle (🎤) e recording (🔴) corretamente
 
 ## Critérios de Aceitação
-- [ ] Instalar openai-whisper ou faster-whisper
-- [ ] Tool `transcribe_audio`: áudio → texto
-- [ ] Suporte a captura de microfone ao vivo
-- [ ] Integração com AiPanel (botão de microfone para gravar)
-- [ ] Streaming de transcrição parcial (opcional)
-- [ ] Seleção de modelo (tiny/base/small/medium/large)
+- [x] Instalar openai-whisper ou faster-whisper
+- [x] Tool `transcribe_audio`: áudio → texto
+- [x] Suporte a captura de microfone ao vivo
+- [x] Integração com AiPanel (botão de microfone para gravar)
+- [x] Streaming de transcrição parcial (opcional)
+- [x] Seleção de modelo (tiny/base/small/medium/large)
 
 ## Fase
 Fase 2 — Áudio
@@ -151,3 +151,4 @@ Média
 
 ## Esforço Estimado
 Médio
+

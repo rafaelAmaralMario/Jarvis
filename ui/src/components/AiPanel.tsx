@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useJarvis } from '@/hooks/use-jarvis';
-import type { Agent, LLMProviderInfo, ToolAgentCall, ToolAgentResult, PendingQuestion, ModelInfo } from '@/types';
+import type { Agent, LLMProviderInfo, ToolAgentCall, ToolAgentResult, PendingQuestion, ModelDetail, VoiceConversationState } from '@/types';
+import { CameraPanel } from '@/components/CameraPanel';
+import { SPECIALTY_CONFIG } from '@/types';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import type { ContextMenuItem } from '@/components/ui/ContextMenu';
 
@@ -105,7 +107,7 @@ export function AiPanel({ fullView }: AiPanelProps) {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [providers, setProviders] = useState<LLMProviderInfo[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>('ollama');
-  const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+  const [availableModels, setAvailableModels] = useState<ModelDetail[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -116,8 +118,14 @@ export function AiPanel({ fullView }: AiPanelProps) {
   const [unattended, setUnattended] = useState(() => localStorage.getItem('jarvis_unattended') === 'true');
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamTaskRef = useRef<string | null>(null);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState<VoiceConversationState['status']>('idle');
+  const voiceTaskIdRef = useRef<string | null>(null);
+  const voiceLoopRef = useRef<boolean>(false);
+  const vadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const activeConv = conversations.find(c => c.id === activeConvId);
 
@@ -225,15 +233,17 @@ export function AiPanel({ fullView }: AiPanelProps) {
   useEffect(() => {
     if (!agents.length) return;
     bridge.listModels().then(ms => {
-      setAvailableModels(ms);
-      const filtered = ms.filter(m => m.provider === selectedProvider);
-      if (filtered.length === 0) return;
+      const allModels = ms as unknown as ModelDetail[];
+      setAvailableModels(allModels);
+      const chatModels = allModels.filter(m => m.specialty === 'chat');
+      const fallbackModels = chatModels.length > 0 ? chatModels : allModels;
+      if (fallbackModels.length === 0) return;
       if (!modelsInitialized.current) {
         const agent = agents.find(a => a.id === selectedAgentId);
-        if (agent && filtered.some(m => m.name === agent.model)) {
+        if (agent && fallbackModels.some(m => m.name === agent.model)) {
           setSelectedModel(agent.model);
         } else {
-          setSelectedModel(filtered[0].name);
+          setSelectedModel(fallbackModels[0].name);
         }
         modelsInitialized.current = true;
       }
@@ -259,31 +269,166 @@ export function AiPanel({ fullView }: AiPanelProps) {
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
-      recorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const base64 = (reader.result as string).split(',')[1];
-          const result = await bridge.audioTranscribe(base64, 'tiny');
-          if (result.success) {
-            setInput(prev => (prev ? prev + ' ' : '') + result.text);
-          }
+
+      if (voiceMode) {
+        recorder.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const reader = new FileReader();
+          reader.onloadend = async () => {
+            const base64 = (reader.result as string).split(',')[1];
+            await sendVoiceToBackend(base64);
+          };
+          reader.readAsDataURL(blob);
         };
-        reader.readAsDataURL(blob);
-      };
-      recorder.start();
-      setIsRecording(true);
+        recorder.start();
+        setIsRecording(true);
+        setVoiceStatus('recording');
+        startVAD(stream, recorder);
+      } else {
+        recorder.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const reader = new FileReader();
+          reader.onloadend = async () => {
+            const base64 = (reader.result as string).split(',')[1];
+            const result = await bridge.audioTranscribe(base64, 'tiny');
+            if (result.success) {
+              setInput(prev => (prev ? prev + ' ' : '') + result.text);
+            }
+          };
+          reader.readAsDataURL(blob);
+        };
+        recorder.start();
+        setIsRecording(true);
+      }
     } catch (e) {
       setError('Microphone access denied');
     }
   }
 
+  function startVAD(stream: MediaStream, recorder: MediaRecorder) {
+    const audioCtx = new AudioContext();
+    const source = audioCtx.createMediaStreamSource(stream);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    let silenceStart = Date.now();
+
+    if (vadIntervalRef.current) clearInterval(vadIntervalRef.current);
+    vadIntervalRef.current = setInterval(() => {
+      analyser.getByteFrequencyData(dataArray);
+      const avg = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
+      if (avg < 8) {
+        if (Date.now() - silenceStart > 1500) {
+          clearInterval(vadIntervalRef.current!);
+          vadIntervalRef.current = null;
+          audioCtx.close();
+          if (recorder.state !== 'inactive') recorder.stop();
+        }
+      } else {
+        silenceStart = Date.now();
+      }
+    }, 200);
+  }
+
   function stopRecording() {
+    if (vadIntervalRef.current) {
+      clearInterval(vadIntervalRef.current);
+      vadIntervalRef.current = null;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
     setIsRecording(false);
+    if (voiceMode) setVoiceStatus('idle');
+  }
+
+  async function sendVoiceToBackend(audioBase64: string) {
+    setIsRecording(false);
+    setVoiceStatus('transcribing');
+    try {
+      const history = activeConv?.messages.slice(0, -1).map(m => ({ role: m.role, content: m.content })) || [];
+      const result = await bridge.voiceConversationStream(audioBase64, activeConvId, history, selectedAgentId || undefined);
+      voiceTaskIdRef.current = result.taskId;
+      await pollVoiceStream(result.taskId);
+    } catch (e) {
+      setVoiceStatus('idle');
+      setError(String(e));
+      if (voiceLoopRef.current) {
+        setTimeout(() => startRecording(), 500);
+      }
+    }
+  }
+
+  async function pollVoiceStream(taskId: string) {
+    let lastAudioBase64 = '';
+    while (true) {
+      const state = await bridge.voiceConversationGetStream(taskId);
+      if (state.status === 'transcribing') setVoiceStatus('transcribing');
+      else if (state.status === 'thinking') setVoiceStatus('thinking');
+      else if (state.status === 'speaking') setVoiceStatus('speaking');
+
+      if (state.text && state.status !== 'idle') {
+        setInput(state.text);
+      }
+
+      if (state.audioBase64 && state.audioBase64 !== lastAudioBase64) {
+        lastAudioBase64 = state.audioBase64;
+        try {
+          const binary = atob(state.audioBase64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          const blob = new Blob([bytes], { type: 'audio/wav' });
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          audio.onended = () => {
+            URL.revokeObjectURL(url);
+            if (voiceLoopRef.current && !state.error) {
+              setVoiceStatus('idle');
+              setTimeout(() => startRecording(), 300);
+            } else {
+              setVoiceStatus('idle');
+            }
+          };
+          audio.play();
+        } catch (e) {
+          // non-critical
+        }
+      }
+
+      if (state.done) {
+        if (state.error) {
+          setError(state.error);
+          setVoiceStatus('idle');
+        } else if (state.response) {
+          // Add LLM response as assistant message
+          const assistantMsg: Message = { role: 'assistant', content: state.response };
+          updateMessages(activeConvId, msgs => [...msgs, assistantMsg]);
+        }
+        voiceTaskIdRef.current = null;
+        if (!voiceLoopRef.current) {
+          setVoiceStatus('idle');
+        }
+        return;
+      }
+
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+
+  function toggleVoiceMode() {
+    if (voiceMode) {
+      voiceLoopRef.current = false;
+      if (isRecording) stopRecording();
+      setVoiceMode(false);
+      setVoiceStatus('idle');
+    } else {
+      setVoiceMode(true);
+      setVoiceStatus('idle');
+    }
   }
 
   async function handleSend() {
@@ -628,15 +773,18 @@ export function AiPanel({ fullView }: AiPanelProps) {
               <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-muted-foreground pointer-events-none">▼</span>
             </div>
           )}
-          <div className="relative max-w-[120px]">
+          <div className="relative max-w-[140px]">
             <select
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
               className="appearance-none bg-muted/50 text-[11px] text-muted-foreground truncate focus:outline-none cursor-pointer px-2 py-0.5 rounded-md border border-border pr-5 max-w-full"
               title="Model"
             >
-              {availableModels.filter(m => m.provider === selectedProvider).map(m => (
-                <option key={m.name} value={m.name}>{m.name.split(':')[0]}</option>
+              {availableModels.length === 0 && <option value="">Nenhum modelo</option>}
+              {availableModels.map(m => (
+                <option key={m.name} value={m.name}>
+                  {(SPECIALTY_CONFIG as any)[m.specialty]?.icon || '🤖'} {m.name.split(':')[0]}
+                </option>
               ))}
             </select>
             <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-muted-foreground pointer-events-none">▼</span>
@@ -842,6 +990,9 @@ export function AiPanel({ fullView }: AiPanelProps) {
         )}
       </div>
 
+      {/* Camera panel */}
+      {showCamera && <CameraPanel onSendToChat={() => setInput('[Imagem capturada - analise esta cena]')} />}
+
       {/* Input */}
       <div className="p-3 border-t border-border">
         {error && error !== 'tool' && (
@@ -864,7 +1015,51 @@ export function AiPanel({ fullView }: AiPanelProps) {
           {unattended && (
             <span className="text-[9px] text-amber-500/60 italic">agente tem permissão total</span>
           )}
+          <span className="flex-1" />
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={toggleVoiceMode}
+            className={`w-6 h-6 rounded-md flex items-center justify-center text-xs ${
+              voiceMode ? 'bg-primary/20 text-primary border border-primary/40' : 'text-muted-foreground hover:bg-accent'
+            }`}
+            title={voiceMode ? 'Desativar modo voz' : 'Ativar modo voz'}
+          >
+            🎤
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowCamera(!showCamera)}
+            className={`w-6 h-6 rounded-md flex items-center justify-center text-xs ${
+              showCamera ? 'bg-primary/20 text-primary border border-primary/40' : 'text-muted-foreground hover:bg-accent'
+            }`}
+            title={showCamera ? 'Fechar câmera' : 'Abrir câmera'}
+          >
+            📷
+          </motion.button>
         </div>
+        {voiceMode && (
+          <div className="mb-1.5">
+            <div className="flex items-center gap-2 text-xs">
+              {voiceStatus === 'idle' && (
+                <span className="text-muted-foreground">🎤 Modo voz ativo — clique no microfone para falar</span>
+              )}
+              {voiceStatus === 'recording' && (
+                <span className="text-red-400 animate-pulse">🔴 Ouvindo...</span>
+              )}
+              {voiceStatus === 'transcribing' && (
+                <span className="text-yellow-400">⏳ Transcrevendo...</span>
+              )}
+              {voiceStatus === 'thinking' && (
+                <span className="text-blue-400">🤔 Processando...</span>
+              )}
+              {voiceStatus === 'speaking' && (
+                <span className="text-green-400">🔊 Falando...</span>
+              )}
+            </div>
+          </div>
+        )}
         <div className="flex gap-2 items-end">
           <div className="flex-1 relative">
             <input
@@ -872,7 +1067,7 @@ export function AiPanel({ fullView }: AiPanelProps) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-              placeholder={loading ? 'Aguardando resposta...' : 'Message JARVIS...'}
+              placeholder={loading ? 'Aguardando resposta...' : voiceMode ? 'Fale algo...' : 'Message JARVIS...'}
               disabled={loading}
               className="w-full px-3.5 py-2.5 rounded-xl bg-muted text-foreground border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 disabled:opacity-50"
             />
@@ -881,15 +1076,19 @@ export function AiPanel({ fullView }: AiPanelProps) {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={isRecording ? stopRecording : startRecording}
-            disabled={loading}
+            disabled={loading || voiceStatus === 'transcribing' || voiceStatus === 'thinking' || voiceStatus === 'speaking'}
             className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-medium flex-shrink-0 shadow-sm transition-colors ${
               isRecording
                 ? 'bg-red-950/30 text-red-400 border border-red-900/40 animate-pulse'
-                : 'bg-muted text-muted-foreground border border-border hover:bg-accent'
+                : voiceStatus === 'transcribing' || voiceStatus === 'thinking'
+                  ? 'bg-yellow-950/20 text-yellow-400 border border-yellow-900/40'
+                  : voiceStatus === 'speaking'
+                    ? 'bg-green-950/20 text-green-400 border border-green-900/40'
+                    : 'bg-muted text-muted-foreground border border-border hover:bg-accent'
             }`}
             title={isRecording ? 'Stop recording' : 'Record audio'}
           >
-            {isRecording ? '🔴' : '🎤'}
+            {isRecording ? '🔴' : voiceStatus === 'speaking' ? '🔊' : '🎤'}
           </motion.button>
           {loading ? (
             <motion.button

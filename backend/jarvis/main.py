@@ -174,6 +174,16 @@ def main():
                         "Agent '%s': model '%s' not found, fixed to '%s'",
                         agent.name, old_model, first_available,
                     )
+
+        # Auto-start local GGUF models (Bug 6)
+        if gguf_models:
+            logger.info("Found %d local GGUF model(s), auto-starting...", len(gguf_models))
+            for gguf_name in gguf_models:
+                try:
+                    models.start_model(gguf_name)
+                    logger.info("Auto-started local model: %s", gguf_name)
+                except Exception as e:
+                    logger.warning("Failed to auto-start model '%s': %s", gguf_name, e)
     except Exception as e:
         logger.warning("Agent model validation failed: %s", e)
 

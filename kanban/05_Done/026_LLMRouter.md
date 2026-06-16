@@ -503,13 +503,13 @@ class ProviderMetrics:
 6. [ ] **Router as drop-in replacement**: Create `LLMRouter(gateway)` and call `router.generate(req)`. Compare response format with `gateway.generate(req)` — must be identical `LLMResponse` shape. No breaking changes to existing callers.
 
 ## Critérios de Aceitação
-- [ ] Roteamento por modelo: qual provedor tem o modelo
-- [ ] Roteamento por capacidade: chat vs visão vs embedding
-- [ ] Fallback em cascata: Native → Ollama → OpenAI
-- [ ] Cache de respostas (hash do prompt → resposta)
-- [ ] Métricas de latência por provedor
-- [ ] UI de configuração de regras de roteamento
-- [ ] Provider proxy substitui chamadas diretas a provedores
+- [x] Roteamento por modelo: qual provedor tem o modelo
+- [x] Roteamento por capacidade: chat vs visão vs embedding
+- [x] Fallback em cascata: Native → Ollama → OpenAI
+- [x] Cache de respostas (hash do prompt → resposta)
+- [x] Métricas de latência por provedor
+- [x] UI de configuração de regras de roteamento
+- [x] Provider proxy substitui chamadas diretas a provedores
 
 ## Fase
 Fase 0 — Estabilização
@@ -519,3 +519,4 @@ Média
 
 ## Esforço Estimado
 Grande
+

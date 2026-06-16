@@ -5,8 +5,7 @@ import { cn } from '@/lib/utils';
 const activityItems = [
   { id: 'ai' as ActivityView, icon: '🧠', label: 'Assistente IA' },
   { id: 'knowledge' as ActivityView, icon: '📁', label: 'Conhecimento' },
-  { id: 'ide' as ActivityView, icon: '📂', label: 'Workspace' },
-  { id: 'editor' as ActivityView, icon: '⌨️', label: 'Editor' },
+  { id: 'ide' as ActivityView, icon: '📂', label: 'Workspace + Editor' },
   { id: 'git' as ActivityView, icon: '⎇', label: 'Git' },
   { id: 'planner' as ActivityView, icon: '📋', label: 'Planner' },
   { id: 'automation' as ActivityView, icon: '⚡', label: 'Automação' },

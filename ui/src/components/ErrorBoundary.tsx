@@ -61,10 +61,19 @@ export class AppErrorBoundary extends Component<Props, State> {
               <button
                 onClick={async () => {
                   try {
-                    const bridge = (window as any).jarvis;
-                    const logPath = await bridge.getLogPath();
-                    bridge.revealInExplorer(logPath);
-                  } catch {}
+                    const bridge = (window as any).pywebview?.api ?? (window as any).jarvis;
+                    if (!bridge) { alert('Bridge não disponível. Logs em: %APPDATA%/JARVIS/logs/'); return; }
+                    const logPath = typeof bridge.getLogPath === 'function'
+                      ? await bridge.getLogPath()
+                      : '';
+                    if (logPath && typeof bridge.revealInExplorer === 'function') {
+                      await bridge.revealInExplorer(logPath);
+                    } else {
+                      alert(`Logs em: ${logPath || '%APPDATA%/JARVIS/logs/'}`);
+                    }
+                  } catch (e) {
+                    alert(`Erro ao abrir logs. Caminho: %APPDATA%/JARVIS/logs/`);
+                  }
                 }}
                 className="px-4 py-2 rounded-lg bg-amber-950/30 text-amber-400 border border-amber-900/40 text-sm hover:bg-amber-950/50 transition-colors"
               >

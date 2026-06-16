@@ -218,11 +218,11 @@ Total: ~35MB de bibliotecas + ~30MB por voz baixada sob demanda.
 5. [ ] `ttsSynthesize` com texto vazio → retorna erro "Text cannot be empty"
 
 ## Critérios de Aceitação
-- [ ] Instalar Piper TTS (sistema + python bindings)
-- [ ] Tool `synthesize_speech`: texto → arquivo de áudio (.wav)
-- [ ] Download e seleção de vozes
-- [ ] Reprodução automática no frontend
-- [ ] Suporte a português brasileiro
+- [x] Instalar Piper TTS (sistema + python bindings)
+- [x] Tool `synthesize_speech`: texto → arquivo de áudio (.wav)
+- [x] Download e seleção de vozes
+- [x] Reprodução automática no frontend
+- [x] Suporte a português brasileiro
 
 ## Fase
 Fase 2 — Áudio
@@ -232,3 +232,4 @@ Média
 
 ## Esforço Estimado
 Médio
+

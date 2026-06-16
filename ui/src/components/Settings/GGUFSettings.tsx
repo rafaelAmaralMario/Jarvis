@@ -14,6 +14,11 @@ export function GGUFSettings() {
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // HF Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{ modelId: string; pipelineTag: string; downloads: number; likes: number; description: string }[]>([]);
+  const [searching, setSearching] = useState(false);
+
   useEffect(() => {
     loadAll();
   }, []);
@@ -33,6 +38,25 @@ export function GGUFSettings() {
       setError(String(e));
     }
     setLoading(false);
+  }
+
+  async function handleSearch() {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setSearching(true);
+    setError(null);
+    try {
+      const results = await bridge.hfSearchModels(q);
+      setSearchResults(results);
+    } catch (e) {
+      setError(String(e));
+    }
+    setSearching(false);
+  }
+
+  function selectFromSearch(modelId: string) {
+    setRepoId(modelId);
+    setFilename('');
   }
 
   async function handleDownload() {
@@ -96,6 +120,46 @@ export function GGUFSettings() {
           {error}
         </div>
       )}
+
+      {/* HuggingFace Search */}
+      <div className="p-4 rounded-xl border border-border/50 bg-muted/30 space-y-2">
+        <h3 className="text-sm font-semibold">Buscar modelos no HuggingFace</h3>
+        <div className="flex gap-2">
+          <input
+            placeholder="Search GGUF models (e.g. qwen, llama, mistral)"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-muted border border-border focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <button
+            onClick={handleSearch}
+            disabled={searching || !searchQuery.trim()}
+            className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {searching ? 'Buscando...' : 'Buscar'}
+          </button>
+        </div>
+        {searchResults.length > 0 && (
+          <div className="space-y-1 max-h-48 overflow-y-auto mt-2">
+            {searchResults.map(r => (
+              <button
+                key={r.modelId}
+                onClick={() => selectFromSearch(r.modelId)}
+                className="w-full text-left px-3 py-2 rounded-lg hover:bg-accent/30 transition-colors border border-border/30"
+              >
+                <div className="text-xs font-medium">{r.modelId}</div>
+                <div className="text-[10px] text-muted-foreground flex gap-2">
+                  {r.pipelineTag && <span>{r.pipelineTag}</span>}
+                  <span>⬇ {r.downloads.toLocaleString()}</span>
+                  <span>❤️ {r.likes}</span>
+                </div>
+                {r.description && <div className="text-[10px] text-muted-foreground/60 truncate">{r.description}</div>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Download form */}
       <div className="p-4 rounded-xl border border-border/50 bg-muted/30 space-y-2">

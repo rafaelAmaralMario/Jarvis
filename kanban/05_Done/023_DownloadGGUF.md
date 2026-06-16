@@ -104,11 +104,11 @@ O diretório padrão de modelos GGUF será `~/.jarvis/models/`, configurável vi
 6. [ ] NativeProvider.list_models() lista modelos baixados via GGUFManager — integração entre os dois sistemas
 
 ## Critérios de Aceitação
-- [ ] Download de GGUF do Hugging Face Hub
-- [ ] Tool `download_model`: HF repo + filename → download
-- [ ] Barra de progresso do download
-- [ ] Catálogo de modelos recomendados (UI)
-- [ ] Gerenciamento de espaço (listar, deletar modelos)
+- [x] Download de GGUF do Hugging Face Hub
+- [x] Tool `download_model`: HF repo + filename → download
+- [x] Barra de progresso do download
+- [x] Catálogo de modelos recomendados (UI)
+- [x] Gerenciamento de espaço (listar, deletar modelos)
 
 ## Dependências
 - [ ] 001_NativeProvider
@@ -121,3 +121,4 @@ Média
 
 ## Esforço Estimado
 Pequeno
+

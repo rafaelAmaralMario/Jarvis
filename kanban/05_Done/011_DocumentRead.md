@@ -106,12 +106,12 @@ Novo módulo `backend/jarvis/document_service.py` com classe `DocumentReader` qu
 4. [ ] Arquivo inexistente ou protegido → `success=False`, mensagem de erro clara sem traceback
 
 ## Critérios de Aceitação
-- [ ] Instalar pdfplumber/PyMuPDF, python-docx, openpyxl
-- [ ] Tool `read_pdf`: extrai texto e tabelas de PDF
-- [ ] Tool `read_docx`: extrai texto de documentos Word
-- [ ] Tool `read_xlsx`: extrai dados de planilhas Excel
-- [ ] Suporte a documentos grandes (paginação)
-- [ ] Extração de metadados (autor, data, etc.)
+- [x] Instalar pdfplumber/PyMuPDF, python-docx, openpyxl
+- [x] Tool `read_pdf`: extrai texto e tabelas de PDF
+- [x] Tool `read_docx`: extrai texto de documentos Word
+- [x] Tool `read_xlsx`: extrai dados de planilhas Excel
+- [x] Suporte a documentos grandes (paginação)
+- [x] Extração de metadados (autor, data, etc.)
 
 ## Dependências
 - [ ] — (independente)
@@ -124,3 +124,4 @@ Média
 
 ## Esforço Estimado
 Pequeno
+

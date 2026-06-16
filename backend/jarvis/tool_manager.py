@@ -619,6 +619,51 @@ class ToolManager:
                 parameters={"type": "object", "properties": {}, "required": []},
                 risk=RiskLevel.SAFE,
             ),
+            "query_documents": ToolDefinition(
+                name="query_documents",
+                description="Search indexed documents using semantic search (RAG). Returns relevant passages with source citations.",
+                parameters={"type": "object", "properties": {
+                    "query": {"type": "string", "description": "The search query"},
+                    "n_results": {"type": "number", "description": "Number of results", "default": 5},
+                }, "required": ["query"]},
+                examples=["query_documents query='What is the budget for 2025?'", "query_documents query='architecture overview' n_results=3"],
+                risk=RiskLevel.SAFE,
+            ),
+            "index_document": ToolDefinition(
+                name="index_document",
+                description="Read a document (PDF, DOCX, TXT) and index it for semantic search.",
+                parameters={"type": "object", "properties": {
+                    "path": {"type": "string", "description": "Path to the document file"},
+                }, "required": ["path"]},
+                examples=["index_document path='report.pdf'"],
+                risk=RiskLevel.SAFE,
+            ),
+            "rag_list_documents": ToolDefinition(
+                name="rag_list_documents",
+                description="List all indexed documents and their chunk counts.",
+                parameters={"type": "object", "properties": {}, "required": []},
+                risk=RiskLevel.SAFE,
+            ),
+            "remember": ToolDefinition(
+                name="remember",
+                description="Store an important piece of information in long-term memory. Use when the user explicitly asks you to remember something or shares personal information.",
+                parameters={"type": "object", "properties": {
+                    "content": {"type": "string", "description": "What to remember"},
+                    "importance": {"type": "number", "description": "Importance (1-10)", "default": 5},
+                }, "required": ["content"]},
+                examples=["remember content='User prefers dark mode'", "remember content='Meeting scheduled for next Friday' importance=8"],
+                risk=RiskLevel.SAFE,
+            ),
+            "recall": ToolDefinition(
+                name="recall",
+                description="Search long-term memory for information about a topic. Use when the user asks about something you might have learned before.",
+                parameters={"type": "object", "properties": {
+                    "query": {"type": "string", "description": "What to search for"},
+                    "n_results": {"type": "number", "description": "Number of results", "default": 5},
+                }, "required": ["query"]},
+                examples=["recall query='user preferences'", "recall query='what do I know about John'"],
+                risk=RiskLevel.SAFE,
+            ),
             "send_whatsapp": ToolDefinition(
                 name="send_whatsapp",
                 description="Send a WhatsApp message via Web.",
@@ -1420,3 +1465,79 @@ class ToolManager:
             )
         except Exception as e:
             return ToolResult(success=False, error=f"Camera error: {e}")
+
+    def _handle_query_documents(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.rag_service import RAGService
+        try:
+            rag = RAGService()
+            result = rag.query_with_context(args["query"], args.get("n_results", 5))
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "RAG error"))
+            return ToolResult(
+                success=True,
+                output=result["context"],
+                data={"query": args["query"], "chunks": result["chunks"]},
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=f"RAG error: {e}")
+
+    def _handle_index_document(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.rag_service import RAGService
+        try:
+            path = self._resolve_path(args["path"])
+            rag = RAGService()
+            result = rag.index_document(path)
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Index error"))
+            return ToolResult(
+                success=True,
+                output=f"Document indexed: {result['chunks']} chunks from {result['file']}",
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=f"Index error: {e}")
+
+    def _handle_rag_list_documents(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.rag_service import RAGService
+        try:
+            rag = RAGService()
+            docs = rag.list_indexed_documents()
+            if not docs:
+                return ToolResult(success=True, output="No documents indexed yet.")
+            lines = [f"- {d['file']} ({d['chunks']} chunks)" for d in docs]
+            return ToolResult(success=True, output="Indexed documents:\n" + "\n".join(lines))
+        except Exception as e:
+            return ToolResult(success=False, error=f"RAG error: {e}")
+
+    def _handle_remember(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.memory_service import MemoryService
+        try:
+            ms = MemoryService()
+            importance = args.get("importance", 5) / 10.0
+            result = ms.remember(args["content"], importance)
+            return ToolResult(
+                success=True,
+                output=f"Memorized: {result['entities']} entities extracted.",
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=f"Memory error: {e}")
+
+    def _handle_recall(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.memory_service import MemoryService
+        try:
+            ms = MemoryService()
+            results = ms.recall(args["query"], args.get("n_results", 5))
+            if not results:
+                return ToolResult(success=True, output="Nothing found in memory.")
+            lines = []
+            for r in results:
+                score = r.get("score", "?")
+                source = r.get("source", "?")
+                content = r["content"][:300]
+                lines.append(f"[{source}] (score: {score})\n{content}")
+            return ToolResult(
+                success=True,
+                output="Memory results:\n\n" + "\n\n---\n\n".join(lines),
+                data={"results": results},
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=f"Memory error: {e}")
