@@ -773,6 +773,29 @@ class ToolManager:
                 }, "required": ["description"]},
                 risk=RiskLevel.SAFE,
             ),
+            "start_worker": ToolDefinition(
+                name="start_worker",
+                description="Start a micro-service worker process (isolated subprocess).",
+                parameters={"type": "object", "properties": {
+                    "name": {"type": "string", "description": "Worker name (e.g., image, audio, video)"},
+                    "module_path": {"type": "string", "description": "Python module path (e.g., image_service, audio_gen)"},
+                }, "required": ["name", "module_path"]},
+                risk=RiskLevel.ASK,
+            ),
+            "stop_worker": ToolDefinition(
+                name="stop_worker",
+                description="Stop a running worker process.",
+                parameters={"type": "object", "properties": {
+                    "name": {"type": "string", "description": "Worker name"},
+                }, "required": ["name"]},
+                risk=RiskLevel.ASK,
+            ),
+            "list_workers": ToolDefinition(
+                name="list_workers",
+                description="List all registered workers and their status.",
+                parameters={"type": "object", "properties": {}, "required": []},
+                risk=RiskLevel.SAFE,
+            ),
             "list_plugins": ToolDefinition(
                 name="list_plugins",
                 description="List all loaded plugins from ~/.jarvis/plugins/.",
@@ -1898,3 +1921,46 @@ class ToolManager:
             return ToolResult(success=True, output="Loaded plugins:\n" + "\n".join(lines), data={"plugins": plugins})
         except Exception as e:
             return ToolResult(success=False, error=f"Failed to list plugins: {e}")
+
+    def _init_worker_manager(self) -> Any:
+        from jarvis.microservices import WorkerManager
+        wm = WorkerManager()
+        return wm
+
+    def _handle_start_worker(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.microservices import WorkerManager
+        name = args["name"]
+        module_path = args["module_path"]
+        try:
+            if not hasattr(self, "_worker_manager") or self._worker_manager is None:
+                self._worker_manager = self._init_worker_manager()
+            self._worker_manager.register(name, module_path)
+            ok = self._worker_manager.start(name)
+            if ok:
+                w = self._worker_manager._workers[name]
+                return ToolResult(success=True, output=f"Worker '{name}' started on port {w.port} (pid={w.info.pid})")
+            return ToolResult(success=False, error=f"Worker '{name}' failed to start")
+        except Exception as e:
+            return ToolResult(success=False, error=f"Failed to start worker: {e}")
+
+    def _handle_stop_worker(self, args: dict[str, Any]) -> ToolResult:
+        name = args["name"]
+        try:
+            if not hasattr(self, "_worker_manager") or self._worker_manager is None:
+                return ToolResult(success=False, error="No worker manager initialized")
+            self._worker_manager.stop(name)
+            return ToolResult(success=True, output=f"Worker '{name}' stopped")
+        except Exception as e:
+            return ToolResult(success=False, error=f"Failed to stop worker: {e}")
+
+    def _handle_list_workers(self, args: dict[str, Any]) -> ToolResult:
+        try:
+            if not hasattr(self, "_worker_manager") or self._worker_manager is None:
+                return ToolResult(success=True, output="No workers registered")
+            workers = self._worker_manager.list_workers()
+            if not workers:
+                return ToolResult(success=True, output="No workers registered")
+            lines = [f"- {w['name']}: {w['status']} (port={w['port']}, pid={w['pid']})" for w in workers]
+            return ToolResult(success=True, output="Workers:\n" + "\n".join(lines), data={"workers": workers})
+        except Exception as e:
+            return ToolResult(success=False, error=f"Failed to list workers: {e}")
