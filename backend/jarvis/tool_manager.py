@@ -729,6 +729,21 @@ class ToolManager:
                 }, "required": ["description"]},
                 risk=RiskLevel.SAFE,
             ),
+            "generate_video": ToolDefinition(
+                name="generate_video",
+                description="Generate a short animated video from a text prompt using AnimateDiff.",
+                parameters={"type": "object", "properties": {
+                    "prompt": {"type": "string", "description": "Description of the video scene"},
+                    "negative_prompt": {"type": "string", "description": "What to avoid", "default": ""},
+                    "steps": {"type": "number", "description": "Inference steps", "default": 25},
+                    "seed": {"type": "number", "description": "Random seed (0 = random)", "default": 0},
+                    "num_frames": {"type": "number", "description": "Number of frames (8-64)", "default": 16},
+                    "fps": {"type": "number", "description": "Frames per second", "default": 8},
+                    "guidance_scale": {"type": "number", "description": "CFG scale", "default": 7.5},
+                }, "required": ["prompt"]},
+                risk=RiskLevel.SAFE,
+                examples=["generate_video prompt='a cat walking on a beach' num_frames=24"],
+            ),
             "edit_image": ToolDefinition(
                 name="edit_image",
                 description="Edit an image using inpainting. Provide the image and a mask (both base64-encoded), plus a prompt describing the edit.",
@@ -1787,3 +1802,35 @@ class ToolManager:
             return ToolResult(success=False, error=f"Missing dependencies: {e}. Install with: pip install jarvis-backend[image]")
         except Exception as e:
             return ToolResult(success=False, error=f"Image editing failed: {e}")
+
+    def _handle_generate_video(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.video_service import VideoGenerator
+        prompt = args["prompt"]
+        negative_prompt = args.get("negative_prompt", "")
+        steps = args.get("steps", 25)
+        seed = args.get("seed", 0)
+        num_frames = args.get("num_frames", 16)
+        fps = args.get("fps", 8)
+        guidance_scale = args.get("guidance_scale", 7.5)
+        try:
+            gen = VideoGenerator()
+            result = gen.generate_video(
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                steps=steps,
+                seed=seed,
+                num_frames=num_frames,
+                fps=fps,
+                guidance_scale=guidance_scale,
+            )
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Generation failed"))
+            return ToolResult(
+                success=True,
+                output=f"Video generated ({num_frames} frames @ {fps}fps = {result['duration']:.1f}s)",
+                data=result,
+            )
+        except ImportError as e:
+            return ToolResult(success=False, error=f"Missing dependencies: {e}. Install with: pip install jarvis-backend[image]")
+        except Exception as e:
+            return ToolResult(success=False, error=f"Video generation failed: {e}")
