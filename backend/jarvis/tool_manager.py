@@ -707,6 +707,28 @@ class ToolManager:
                 parameters={"type": "object", "properties": {}, "required": []},
                 risk=RiskLevel.SAFE,
             ),
+            "generate_music": ToolDefinition(
+                name="generate_music",
+                description="Generate music from a text description using MusicGen.",
+                parameters={"type": "object", "properties": {
+                    "description": {"type": "string", "description": "Text description of the music"},
+                    "duration": {"type": "number", "description": "Duration in seconds (1-60)", "default": 8},
+                    "seed": {"type": "number", "description": "Random seed (0 = random)", "default": 0},
+                    "temperature": {"type": "number", "description": "Sampling temperature (0-2)", "default": 1.0},
+                }, "required": ["description"]},
+                risk=RiskLevel.SAFE,
+                examples=["generate_music description='upbeat electronic dance music' duration=15"],
+            ),
+            "generate_sound_effect": ToolDefinition(
+                name="generate_sound_effect",
+                description="Generate a sound effect from a text description using AudioGen.",
+                parameters={"type": "object", "properties": {
+                    "description": {"type": "string", "description": "Text description of the sound effect"},
+                    "duration": {"type": "number", "description": "Duration in seconds (1-30)", "default": 5},
+                    "seed": {"type": "number", "description": "Random seed (0 = random)", "default": 0},
+                }, "required": ["description"]},
+                risk=RiskLevel.SAFE,
+            ),
             "generate_image": ToolDefinition(
                 name="generate_image",
                 description="Generate an image from a text prompt using Stable Diffusion or Flux.",
@@ -1681,3 +1703,44 @@ class ToolManager:
             return ToolResult(success=True, output="Cloned voices:\n" + "\n".join(lines), data={"voices": voices})
         except Exception as e:
             return ToolResult(success=False, error=f"Failed to list voices: {e}")
+
+    def _handle_generate_music(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.audio_gen import AudioGenService
+        desc = args["description"]
+        duration = args.get("duration", 8)
+        seed = args.get("seed", 0)
+        temperature = args.get("temperature", 1.0)
+        try:
+            svc = AudioGenService()
+            result = svc.generate_music(desc, duration=duration, seed=seed, temperature=temperature)
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Generation failed"))
+            return ToolResult(
+                success=True,
+                output=f"Music generated ({duration}s, seed={seed})",
+                data=result,
+            )
+        except ImportError as e:
+            return ToolResult(success=False, error=f"Missing dependencies: {e}. Install with: pip install transformers torch")
+        except Exception as e:
+            return ToolResult(success=False, error=f"Music generation failed: {e}")
+
+    def _handle_generate_sound_effect(self, args: dict[str, Any]) -> ToolResult:
+        from jarvis.audio_gen import AudioGenService
+        desc = args["description"]
+        duration = args.get("duration", 5)
+        seed = args.get("seed", 0)
+        try:
+            svc = AudioGenService()
+            result = svc.generate_sound_effect(desc, duration=duration, seed=seed)
+            if not result["success"]:
+                return ToolResult(success=False, error=result.get("error", "Generation failed"))
+            return ToolResult(
+                success=True,
+                output=f"Sound effect generated ({duration}s, seed={seed})",
+                data=result,
+            )
+        except ImportError as e:
+            return ToolResult(success=False, error=f"Missing dependencies: {e}. Install with: pip install transformers torch")
+        except Exception as e:
+            return ToolResult(success=False, error=f"Sound effect generation failed: {e}")

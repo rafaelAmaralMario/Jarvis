@@ -4,15 +4,15 @@
 Integrar MusicGen (Meta) e/ou Bark (Suno) para geração de áudio a partir de texto. Tool `generate_music`: descrição → áudio (~5-30s). Tool `generate_sound_effect`: descrição → efeito sonoro. Qualidade limitada para música com letra, mas útil para prototipagem, trilhas instrumentais e efeitos.
 
 ## Critérios de Aceitação
-- [ ] Instalar audiocraft (MusicGen + AudioGen)
-- [ ] Tool `generate_music`: texto descritivo → áudio .wav
-- [ ] Tool `generate_sound_effect`: descrição → efeito sonoro
-- [ ] Parâmetros: duração, seed, temperature
-- [ ] Preview e download do áudio
-- [ ] Suporte a continuação (extender áudio existente)
+- [x] Instalar transformers (MusicGen) em vez de audiocraft (deprecado)
+- [x] Tool `generate_music`: texto descritivo → áudio .wav
+- [x] Tool `generate_sound_effect`: descrição → efeito sonoro
+- [x] Parâmetros: duração 1-60s, seed, temperature
+- [x] Preview via base64 e download via output_dir
+- [ ] Suporte a continuação (extender áudio existente) — *postergado*
 
 ## Dependências
-- [ ] torch + CUDA (GPU recomendada)
+- [x] torch + transformers + scipy
 
 ## Fase
 Fase 2 — Áudio
