@@ -51,6 +51,8 @@ class ToolManager:
         self._unattended: bool = False
         self._tools: dict[str, ToolDefinition] = {}
         self._register_tools()
+        self._plugin_loader: Any = None
+        self._init_plugins()
 
     @property
     def workspace_root(self) -> str | None:
@@ -89,23 +91,65 @@ class ToolManager:
         t = self._tools.get(name)
         return t.risk if t else RiskLevel.DANGER
 
+    def _init_plugins(self) -> None:
+        try:
+            from jarvis.plugin_system import PluginLoader
+            self._plugin_loader = PluginLoader()
+            self._plugin_loader.load_all()
+            self._sync_plugin_tools()
+        except Exception as e:
+            logger.warning("Plugin system init failed: %s", e)
+
+    def _sync_plugin_tools(self) -> None:
+        if not self._plugin_loader:
+            return
+        existing_plugin_tools = {n for n in self._tools if n.startswith("plugin_")}
+        current_plugin_tools = set()
+        for pt in self._plugin_loader.tools:
+            tool_name = pt["name"]
+            current_plugin_tools.add(tool_name)
+            if tool_name not in self._tools:
+                self._tools[tool_name] = ToolDefinition(
+                    name=tool_name,
+                    description=pt.get("description", ""),
+                    parameters=pt.get("parameters", {"type": "object", "properties": {}, "required": []}),
+                    risk=RiskLevel.ASK,
+                )
+        stale = existing_plugin_tools - current_plugin_tools
+        for s in stale:
+            self._tools.pop(s, None)
+
     def execute(self, name: str, args: dict[str, Any]) -> ToolResult:
         tool = self._tools.get(name)
         if not tool:
             return ToolResult(success=False, error=f"Unknown tool: {name}")
 
         handler = getattr(self, f"_handle_{name}", None)
-        if not handler:
-            return ToolResult(success=False, error=f"Tool '{name}' has no handler")
+        if handler:
+            try:
+                result = handler(args)
+                return result
+            except ToolError as e:
+                return ToolResult(success=False, error=str(e))
+            except Exception as e:
+                logger.exception("Tool %s failed", name)
+                return ToolResult(success=False, error=f"Unexpected error: {e}")
 
-        try:
-            result = handler(args)
-            return result
-        except ToolError as e:
-            return ToolResult(success=False, error=str(e))
-        except Exception as e:
-            logger.exception("Tool %s failed", name)
-            return ToolResult(success=False, error=f"Unexpected error: {e}")
+        if self._plugin_loader:
+            for pt in self._plugin_loader.tools:
+                if pt["name"] == name:
+                    try:
+                        plugin_handler = pt.get("handler")
+                        if plugin_handler:
+                            result = plugin_handler(args)
+                            if isinstance(result, ToolResult):
+                                return result
+                            return ToolResult(success=True, output=str(result), data=result)
+                        return ToolResult(success=False, error=f"Plugin tool '{name}' has no handler")
+                    except Exception as e:
+                        return ToolResult(success=False, error=f"Plugin tool '{name}' failed: {e}")
+
+        return ToolResult(success=False, error=f"Tool '{name}' has no handler")
 
     def _register_tools(self) -> None:
         self._tools = {
@@ -727,6 +771,12 @@ class ToolManager:
                     "duration": {"type": "number", "description": "Duration in seconds (1-30)", "default": 5},
                     "seed": {"type": "number", "description": "Random seed (0 = random)", "default": 0},
                 }, "required": ["description"]},
+                risk=RiskLevel.SAFE,
+            ),
+            "list_plugins": ToolDefinition(
+                name="list_plugins",
+                description="List all loaded plugins from ~/.jarvis/plugins/.",
+                parameters={"type": "object", "properties": {}, "required": []},
                 risk=RiskLevel.SAFE,
             ),
             "generate_video": ToolDefinition(
@@ -1834,3 +1884,17 @@ class ToolManager:
             return ToolResult(success=False, error=f"Missing dependencies: {e}. Install with: pip install jarvis-backend[image]")
         except Exception as e:
             return ToolResult(success=False, error=f"Video generation failed: {e}")
+
+    def _handle_list_plugins(self, args: dict[str, Any]) -> ToolResult:
+        if not self._plugin_loader:
+            return ToolResult(success=False, error="Plugin system not available")
+        try:
+            self._plugin_loader.check_hot_reload()
+            self._sync_plugin_tools()
+            plugins = self._plugin_loader.list_plugins()
+            if not plugins:
+                return ToolResult(success=True, output="No plugins loaded. Add .py files to ~/.jarvis/plugins/")
+            lines = [f"- {p['name']} v{p['version']} ({p['tools']} tools)" for p in plugins]
+            return ToolResult(success=True, output="Loaded plugins:\n" + "\n".join(lines), data={"plugins": plugins})
+        except Exception as e:
+            return ToolResult(success=False, error=f"Failed to list plugins: {e}")
