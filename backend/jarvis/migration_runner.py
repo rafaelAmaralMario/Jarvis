@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Callable
 
 from jarvis.database import Database
 
@@ -8,6 +9,7 @@ class Migration:
     version: int
     name: str
     sql: str = field(repr=False)
+    skip_if: Callable[[Database], bool] | None = None
 
 
 MIGRATIONS: list[Migration] = [
@@ -270,7 +272,10 @@ MIGRATIONS: list[Migration] = [
     Migration(11, "builtin-agents-workflows", """
         ALTER TABLE agents ADD COLUMN is_builtin INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE workflows ADD COLUMN is_builtin INTEGER NOT NULL DEFAULT 0;
-    """),
+    """, skip_if=lambda db: (
+        _column_exists(db, "agents", "is_builtin")
+        and _column_exists(db, "workflows", "is_builtin")
+    )),
     Migration(12, "llm-fallback-config", """
         CREATE TABLE IF NOT EXISTS llm_fallback_config (
             provider TEXT PRIMARY KEY,
@@ -293,8 +298,16 @@ MIGRATIONS: list[Migration] = [
     """),
     Migration(14, "agent-provider", """
         ALTER TABLE agents ADD COLUMN provider TEXT NOT NULL DEFAULT 'ollama';
-    """),
+    """, skip_if=lambda db: _column_exists(db, "agents", "provider")),
 ]
+
+
+def _column_exists(db: Database, table: str, column: str) -> bool:
+    row = db.fetchone(
+        f"SELECT COUNT(*) AS cnt FROM pragma_table_info('{table}') WHERE name=?",
+        (column,),
+    )
+    return row["cnt"] > 0 if row else False
 
 
 class MigrationRunner:
@@ -326,6 +339,12 @@ class MigrationRunner:
         if not pending:
             return False
         for m in pending:
+            if m.skip_if and m.skip_if(self._db):
+                self._db.execute(
+                    "INSERT OR IGNORE INTO schema_version (version, name) VALUES (?, ?)",
+                    (m.version, m.name),
+                )
+                continue
             self._db.exec(m.sql)
             self._db.execute(
                 "INSERT INTO schema_version (version, name) VALUES (?, ?)",
