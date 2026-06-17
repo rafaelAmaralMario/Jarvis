@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+import * as os from 'node:os';
 import { z } from 'zod';
 
 const envSchema = z.object({
@@ -10,3 +12,5 @@ const envSchema = z.object({
 });
 
 export const config = envSchema.parse(process.env);
+
+export const logDir = process.env.LOG_DIR || path.join(os.homedir(), '.jarvis', 'logs');

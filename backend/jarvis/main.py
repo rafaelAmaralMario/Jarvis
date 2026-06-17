@@ -90,10 +90,18 @@ def get_ui_path(dev_mode: bool = False) -> str:
 def main():
     parser = argparse.ArgumentParser(description=f"{APP_NAME} AI Assistant")
     parser.add_argument("--dev", action="store_true", help="Connect to Vite dev server")
-    parser.add_argument("--log-level", default="DEBUG", help="Log level (DEBUG/INFO/WARNING/ERROR)")
+    parser.add_argument("--debug", action="store_true", help="Debug mode: verbose logs, console all levels")
+    parser.add_argument("--log-level", default=None, help="Log level (DEBUG/INFO/WARNING/ERROR)")
     args = parser.parse_args()
 
-    setup_logging(level=getattr(logging, args.log_level.upper(), logging.DEBUG))
+    if args.debug:
+        log_level = "DEBUG"
+    elif args.log_level:
+        log_level = args.log_level
+    else:
+        log_level = "DEBUG"
+
+    setup_logging(level=getattr(logging, log_level.upper(), logging.DEBUG), component="backend")
     install_exception_hooks()
 
     logger.info("Starting %s (frozen=%s, dev=%s)", APP_NAME, getattr(sys, "frozen", False), args.dev)

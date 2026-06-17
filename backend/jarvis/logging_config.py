@@ -1,7 +1,9 @@
-"""Logging configuration — writes to separate files per level:
-  logs/errors/<session>.log    (ERROR, CRITICAL + full traceback)
-  logs/warnings/<session>.log  (WARNING)
-  logs/info/<session>.log      (DEBUG, INFO)
+"""Logging configuration — writes to separate files per component and level.
+
+Layout:
+  logs/backend/{errors,warnings,info}/<session>.log
+  logs/frontend/{errors,warnings,info}/<session>.log
+  logs/server/{errors,warnings,info}/<session>.log
 """
 
 import logging
@@ -11,7 +13,9 @@ import sys
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Literal
+
+Component = Literal["backend", "frontend", "server"]
 
 
 def get_log_dir() -> Path:
@@ -27,39 +31,32 @@ def get_log_dir() -> Path:
 SESSION_TS = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 
-class _LevelRouterHandler(logging.Handler):
-    """Routes log records to subdirectories based on severity level.
+class _ComponentRouterHandler(logging.Handler):
+    """Routes log records to component + level subdirectories.
 
     Layout:
-      logs/errors/<session>.log     → ERROR / CRITICAL
-      logs/warnings/<session>.log   → WARNING
-      logs/info/<session>.log       → DEBUG / INFO
+      logs/{component}/{errors|warnings|info}/<session>.log
     """
 
-    _SUBDIRS = {
-        "errors": logging.ERROR,
-        "warnings": logging.WARNING,
-        "info": logging.DEBUG,
-    }
-
-    def __init__(self, base_dir: Path, level: int = logging.DEBUG):
+    def __init__(self, base_dir: Path, component: Component, level: int = logging.DEBUG):
         super().__init__(level)
+        self._component = component
         self._base_dir = base_dir
-        self._sub_to_handler: dict[str, logging.FileHandler] = {}
+        self._handlers: dict[str, logging.FileHandler] = {}
         self._formatter = logging.Formatter(
             "[%(asctime)s] %(levelname)-8s %(name)s:%(lineno)d — %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
-        self._setup_handlers()
+        self._setup_levels()
 
-    def _setup_handlers(self) -> None:
-        for sub in self._SUBDIRS:
-            path = self._base_dir / sub / f"{SESSION_TS}.log"
+    def _setup_levels(self) -> None:
+        for sub in ("errors", "warnings", "info"):
+            path = self._base_dir / self._component / sub / f"{SESSION_TS}.log"
             path.parent.mkdir(parents=True, exist_ok=True)
             h = logging.FileHandler(path, encoding="utf-8")
             h.setFormatter(self._formatter)
             h.setLevel(logging.DEBUG)
-            self._sub_to_handler[sub] = h
+            self._handlers[sub] = h
 
     def _sub_for(self, levelno: int) -> str:
         if levelno >= logging.ERROR:
@@ -71,12 +68,12 @@ class _LevelRouterHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             sub = self._sub_for(record.levelno)
-            self._sub_to_handler[sub].handle(record)
+            self._handlers[sub].handle(record)
         except Exception:
             self.handleError(record)
 
     def close(self) -> None:
-        for h in self._sub_to_handler.values():
+        for h in self._handlers.values():
             h.close()
         super().close()
 
@@ -97,37 +94,88 @@ def _notify_crash(message: str) -> None:
             pass
 
 
-def setup_logging(level: int = logging.DEBUG) -> str:
+def setup_logging(
+    level: int = logging.DEBUG,
+    component: Component = "backend",
+) -> str:
     global _initialized
-    # Always return the path even when already initialized (for crash dialogs)
     log_dir = get_log_dir()
-    if _initialized:
-        return str(log_dir / "errors" / f"{SESSION_TS}.log")
-    _initialized = True
 
-    root = logging.getLogger()
-    root.setLevel(level)
+    if not _initialized:
+        _initialized = True
+        root = logging.getLogger()
+        root.setLevel(level)
 
-    formatter = logging.Formatter(
-        "[%(asctime)s] %(levelname)-8s %(name)s:%(lineno)d — %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+        formatter = logging.Formatter(
+            "[%(asctime)s] %(levelname)-8s %(name)s:%(lineno)d — %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
 
-    # Level‑based file routing
-    router = _LevelRouterHandler(log_dir)
-    router.setLevel(logging.DEBUG)
-    root.addHandler(router)
+        # Component router for the main component
+        router = _ComponentRouterHandler(log_dir, component, level)
+        root.addHandler(router)
 
-    # Console: only WARNING+
-    console_handler = logging.StreamHandler(sys.stderr)
-    console_handler.setLevel(logging.WARNING)
-    console_handler.setFormatter(formatter)
-    root.addHandler(console_handler)
+        # Console: only WARNING+ by default, DEBUG in debug mode
+        console_level = logging.DEBUG if level <= logging.DEBUG else logging.WARNING
+        console_handler = logging.StreamHandler(sys.stderr)
+        console_handler.setLevel(console_level)
+        console_handler.setFormatter(formatter)
+        root.addHandler(console_handler)
 
-    info_path = log_dir / "info" / f"{SESSION_TS}.log"
-    logging.getLogger("jarvis").info("Logging initialized — %s", info_path)
+    return str(log_dir / component / "info" / f"{SESSION_TS}.log")
 
-    return str(info_path)
+
+def get_component_logger(component: Component) -> logging.Logger:
+    """Get or create a logger for a specific component.
+
+    Each component has its own handler so logs go to the right subdirectory.
+    """
+    log_dir = get_log_dir()
+    name = f"jarvis.{component}"
+    logger = logging.getLogger(name)
+
+    # Only add the component router once
+    if not any(isinstance(h, _ComponentRouterHandler) and h._component == component for h in logger.handlers):
+        router = _ComponentRouterHandler(log_dir, component, logging.DEBUG)
+        logger.addHandler(router)
+        logger.propagate = False  # Don't duplicate to root
+
+    return logger
+
+
+def log_from_frontend(level: str, message: str, data: dict | None = None) -> None:
+    """Bridge method: receives logs from the frontend and writes to frontend log files."""
+    logger = get_component_logger("frontend")
+    text = message
+    if data:
+        text += f" | {data}"
+    level_map = {
+        "debug": logger.debug,
+        "info": logger.info,
+        "warn": logger.warning,
+        "error": logger.error,
+    }
+    level_map.get(level, logger.info)(text)
+
+
+def log_from_server(level: str, message: str, data: dict | None = None) -> None:
+    """Receives logs from the sync server via bridge."""
+    logger = get_component_logger("server")
+    text = message
+    if data:
+        text += f" | {data}"
+    level_map = {
+        "debug": logger.debug,
+        "info": logger.info,
+        "warn": logger.warning,
+        "error": logger.error,
+    }
+    level_map.get(level, logger.info)(text)
+
+
+# Shortcut to write frontend logs directly
+def frontend_log(level: str, message: str, data: dict | None = None) -> None:
+    log_from_frontend(level, message, data)
 
 
 def install_exception_hooks() -> None:

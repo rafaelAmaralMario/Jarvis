@@ -156,6 +156,7 @@ export const mockBridge: MockBridge = {
   problemsGet: vi.fn().mockResolvedValue([]),
   problemsAdd: vi.fn().mockResolvedValue(true),
   problemsClear: vi.fn().mockResolvedValue(true),
+  logFromFrontend: vi.fn().mockResolvedValue(undefined),
 };
 
 beforeEach(() => {

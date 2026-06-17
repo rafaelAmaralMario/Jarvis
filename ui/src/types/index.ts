@@ -179,6 +179,7 @@ export interface JarvisBridge {
   audioTranscribe(audioBase64: string, model?: string): Promise<AudioTranscribeResult>;
   ttsSynthesize(text: string, voice?: string): Promise<{ success: boolean; audioBase64?: string; format?: string; error?: string }>;
   logError(message: string, stack?: string): Promise<void>;
+  logFromFrontend(level: string, message: string, data?: string): Promise<void>;
 
   llmRouterGetRules(): Promise<RouterRule[]>;
   llmRouterSaveRule(rule: RouterRule): Promise<boolean>;

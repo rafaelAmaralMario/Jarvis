@@ -317,6 +317,7 @@ function send(method: string, ...args: unknown[]): Promise<unknown> {
     audioTranscribe: (audioBase64, model?) => send('audioTranscribe', audioBase64, model) as Promise<AudioTranscribeResult>,
     ttsSynthesize: (text, voice?) => send('ttsSynthesize', text, voice) as Promise<{ success: boolean; audioBase64?: string; format?: string; error?: string }>,
     logError: (message, stack?) => send('logError', message, stack ?? '') as Promise<void>,
+    logFromFrontend: (level, message, data?) => send('logFromFrontend', level, message, data ?? '') as Promise<void>,
 
     llmRouterGetRules: () => send('llmRouterGetRules') as Promise<RouterRule[]>,
     llmRouterSaveRule: (rule) => send('llmRouterSaveRule', rule) as Promise<boolean>,

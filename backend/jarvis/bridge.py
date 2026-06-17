@@ -2190,6 +2190,13 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
             logger.warning("revealInExplorer failed: %s", e)
             return False
 
+    def logFromFrontend(self, level: str, message: str, data: str = "") -> None:
+        """Receives structured logs from the frontend and writes to frontend log files."""
+        from jarvis.logging_config import log_from_frontend
+        import json
+        parsed = json.loads(data) if data else None
+        log_from_frontend(level, message, parsed)
+
     def getLogPath(self) -> str:
         from jarvis.logging_config import get_log_dir
         return str(get_log_dir())

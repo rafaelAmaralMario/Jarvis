@@ -9,6 +9,9 @@ import workspacesRoutes from './routes/workspaces.js';
 import usersRoutes from './routes/users.js';
 import { authMiddleware } from './auth/middleware.js';
 import { handleWsConnection } from './ws/handler.js';
+import { serverLogger as log } from './logger.js';
+
+log.info('Server starting', { port: config.PORT, wsPort: config.WS_PORT, env: config.NODE_ENV });
 
 const app = express();
 app.use(express.json());
@@ -34,7 +37,7 @@ app.use('/api/users', authMiddleware, usersRoutes);
 // ---- HTTP Server ----
 const httpServer = createServer(app);
 httpServer.listen(config.PORT, () => {
-  console.log(`[sync] REST API on :${config.PORT}`);
+  log.info(`REST API on :${config.PORT}`);
 });
 
 // ---- WebSocket Server ----
@@ -44,11 +47,11 @@ wss.on('connection', (ws, req) => {
   handleWsConnection(ws, req);
 });
 
-console.log(`[sync] WebSocket on :${config.WS_PORT}`);
+log.info(`WebSocket on :${config.WS_PORT}`);
 
 // ---- Graceful shutdown ----
 const shutdown = async () => {
-  console.log('[sync] shutting down...');
+  log.info('shutting down...');
   wss.close();
   httpServer.close();
   await pool.end();
