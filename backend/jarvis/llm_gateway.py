@@ -5,6 +5,7 @@ import glob
 import json
 import logging
 import os
+import struct
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -409,6 +410,94 @@ class NativeLLMClient(BaseLLMClient):
             return name
         return os.path.join(self._model_dir, name)
 
+    _CTX_TRAIN_KEYS: tuple[str, ...] = (
+        "llama.context_length", "llama_rope.context_length",
+        "qwen2.context_length", "qwen2_5.context_length", "qwen35.context_length",
+        "mistral.context_length", "gemma.context_length",
+        "phi3.context_length", "command_r.context_length",
+    )
+
+    @staticmethod
+    def _is_ctx_key(key: str) -> bool:
+        if key == "context_length":
+            return True
+        if key.endswith(".context_length") and not key.startswith("tokenizer"):
+            return True
+        return key in NativeLLMClient._CTX_TRAIN_KEYS
+
+    _GGUF_TYPE_MAP = {
+        0: ("uint8", 1), 1: ("int8", 1), 2: ("uint16", 2), 3: ("int16", 2),
+        4: ("uint32", 4), 5: ("int32", 4), 6: ("float32", 4), 7: ("bool", 1),
+        8: ("string", -1), 9: ("array", -2),
+        10: ("uint64", 8), 11: ("int64", 8), 12: ("float64", 8),
+    }
+
+    @staticmethod
+    def _skip_gguf_value(f, vtype: int, len_fmt: str, len_size: int) -> None:
+        """Skip a GGUF metadata value of the given type."""
+        if vtype in (0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12):
+            size_map = {0: 1, 1: 1, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 1, 10: 8, 11: 8, 12: 8}
+            f.read(size_map.get(vtype, 4))
+        elif vtype == 8:
+            slen = struct.unpack(len_fmt, f.read(len_size))[0]
+            f.read(min(slen, 10_000_000))  # sanity cap
+        elif vtype == 9:
+            elem_type = struct.unpack("<I", f.read(4))[0]
+            alen = struct.unpack(len_fmt, f.read(len_size))[0]
+            for _ in range(min(alen, 1_000_000)):
+                NativeLLMClient._skip_gguf_value(f, elem_type, len_fmt, len_size)
+
+    @staticmethod
+    def _detect_n_ctx_train(path: str) -> int:
+        """Read the model's native context window from GGUF metadata."""
+        try:
+            with open(path, "rb") as f:
+                magic = f.read(4)
+                if magic != b"GGUF":
+                    return 4096
+                version = struct.unpack("<I", f.read(4))[0]
+                if version not in (1, 2, 3):
+                    return 4096
+                if version == 3:
+                    _ = struct.unpack("<Q", f.read(8))[0]
+                    kv_count = struct.unpack("<Q", f.read(8))[0]
+                else:
+                    _ = struct.unpack("<I", f.read(4))[0]
+                    kv_count = struct.unpack("<I", f.read(4))[0]
+
+                len_fmt = "<Q" if version == 3 else "<I"
+                len_size = struct.calcsize(len_fmt)
+
+                for _ in range(kv_count):
+                    klen_raw = f.read(len_size)
+                    klen = struct.unpack(len_fmt, klen_raw)[0]
+                    if klen > 256:
+                        return 4096
+                    key = f.read(klen).decode("utf-8", errors="replace")
+                    vtype = struct.unpack("<I", f.read(4))[0]
+
+                    if NativeLLMClient._is_ctx_key(key):
+                        if vtype in (4, 10):
+                            raw = f.read(4 if vtype == 4 else 8)
+                            val = struct.unpack("<I" if vtype == 4 else "<Q", raw)[0]
+                            return max(1024, min(val, 65536))
+                        if vtype in (5, 11):
+                            raw = f.read(4 if vtype == 5 else 8)
+                            val = struct.unpack("<i" if vtype == 5 else "<q", raw)[0]
+                            return max(1024, min(val, 65536))
+                        if vtype == 8:
+                            slen = struct.unpack(len_fmt, f.read(len_size))[0]
+                            val = f.read(slen).decode("utf-8", errors="replace").strip()
+                            try:
+                                return max(1024, min(int(val), 65536))
+                            except ValueError:
+                                return 4096
+
+                    NativeLLMClient._skip_gguf_value(f, vtype, len_fmt, len_size)
+            return 4096
+        except Exception:
+            return 4096
+
     def _get_model(self, model_name: str = ""):
         path = self._get_model_path(model_name)
         if not os.path.isfile(path):
@@ -422,8 +511,9 @@ class NativeLLMClient(BaseLLMClient):
                         "llama-cpp-python not installed. "
                         "Run: pip install jarvis-backend[native]"
                     )
+                n_ctx_train = NativeLLMClient._detect_n_ctx_train(path)
                 NativeLLMClient._model_cache[path] = Llama(
-                    model_path=path, n_ctx=4096, verbose=False
+                    model_path=path, n_ctx=n_ctx_train, verbose=False
                 )
             return NativeLLMClient._model_cache[path]
 
@@ -436,15 +526,19 @@ class NativeLLMClient(BaseLLMClient):
         parts.append("assistant:")
         return "\n".join(parts)
 
+    def _cap_max_tokens(self, model, req: LLMRequest) -> int:
+        raw = getattr(model, "n_ctx", 4096)
+        n_ctx = raw() if callable(raw) else raw
+        return max(1, min(req.max_tokens, n_ctx - 128))
+
     def generate(self, req: LLMRequest) -> LLMResponse:
         model = self._get_model(req.model)
         prompt = self._build_prompt(req)
         kwargs: dict[str, Any] = dict(
-            max_tokens=req.max_tokens,
+            max_tokens=self._cap_max_tokens(model, req),
             temperature=req.temperature,
             stop=["</s>", "<|eot_id|>"],
         )
-        # Apply GBNF grammar for tool calling when explicitly requested
         if req.grammar:
             kwargs["grammar"] = req.grammar
         t1 = time.monotonic()
@@ -466,7 +560,7 @@ class NativeLLMClient(BaseLLMClient):
         model = self._get_model(req.model)
         prompt = self._build_prompt(req)
         kwargs: dict[str, Any] = dict(
-            max_tokens=req.max_tokens,
+            max_tokens=self._cap_max_tokens(model, req),
             temperature=req.temperature,
             stop=["</s>", "<|eot_id|>"],
             stream=True,
