@@ -81,4 +81,4 @@ backend/build/
 __pycache__/
 
 # Old C++ tests
-tests/
+/tests/
