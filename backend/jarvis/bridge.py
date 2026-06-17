@@ -1,5 +1,6 @@
 """Bridge layer: exposes all backend methods as window.jarvis.* to the React frontend."""
 
+import functools
 import json
 import logging
 import os
@@ -9,6 +10,20 @@ import threading
 import uuid
 from dataclasses import asdict, is_dataclass
 from typing import Any
+
+
+def bridge_method(default_return=None):
+    """Decorator that catches exceptions in bridge methods and returns a default value."""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            try:
+                return func(self, *args, **kwargs)
+            except Exception as e:
+                logger.warning("%s(%s) failed: %s", func.__name__, args[0] if args else "", e)
+                return default_return() if callable(default_return) else default_return
+        return wrapper
+    return decorator
 
 from jarvis.agents_manager import AgentsManager, CreateAgentDTO
 from jarvis.chat_manager import ChatManager
@@ -793,18 +808,39 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
     # ========================================================================
 
     _streams: dict[str, dict] = {}
+    _streams_lock: threading.Lock = threading.Lock()
+
+    @staticmethod
+    def _with_lock(d: dict, lock: threading.Lock, key: str, default=None) -> dict:
+        with lock:
+            return dict(d.get(key) or default or {})
+
+    @staticmethod
+    def _stream_get(streams: dict, lock: threading.Lock, task_id: str, default: dict | None = None) -> dict:
+        with lock:
+            s = streams.get(task_id)
+            if not s:
+                return default or {"done": True, "error": "Task not found"}
+            return dict(s)
+
+    @staticmethod
+    def _stream_set(streams: dict, lock: threading.Lock, task_id: str, **kw) -> None:
+        with lock:
+            if task_id in streams:
+                streams[task_id].update(kw)
 
     def toolAgentExecuteStream(self, query: str, conv_id: str = "", history: list | None = None, agent_id: str = "", unattended: bool = False, provider_override: str = "", model_override: str = "") -> dict:
         task_id = str(uuid.uuid4())
-        JARVISBridge._streams[task_id] = {
-            "content": "",
-            "toolCalls": [],
-            "toolResults": [],
-            "pendingQuestion": None,
-            "cancelled": False,
-            "done": False,
-            "error": None,
-        }
+        with JARVISBridge._streams_lock:
+            JARVISBridge._streams[task_id] = {
+                "content": "",
+                "toolCalls": [],
+                "toolResults": [],
+                "pendingQuestion": None,
+                "cancelled": False,
+                "done": False,
+                "error": None,
+            }
 
         def _run():
             try:
@@ -827,13 +863,11 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                         if default.system_prompt:
                             agent_system = default.system_prompt
 
-                # Chat overrides take highest priority
                 if model_override:
                     agent_model = model_override
                 if provider_override:
                     agent_provider = provider_override
 
-                # Fallback to default provider if still not set
                 if not agent_provider or agent_provider == "ollama":
                     try:
                         if self._llm:
@@ -843,18 +877,20 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
 
                 tool_calls_log: list[dict] = []
                 tool_results_log: list[dict] = []
-                stream = JARVISBridge._streams[task_id]
+
+                def _update(**kw):
+                    JARVISBridge._stream_set(JARVISBridge._streams, JARVISBridge._streams_lock, task_id, **kw)
 
                 def on_token(token: str) -> None:
-                    stream["content"] += token
+                    _update(content=(JARVISBridge._streams.get(task_id, {})).get("content", "") + token)
 
                 def on_tool_call(tc: dict) -> None:
                     tool_calls_log.append(tc)
-                    stream["toolCalls"] = list(tool_calls_log)
+                    _update(toolCalls=list(tool_calls_log))
 
                 def on_tool_result(tr: dict) -> None:
                     tool_results_log.append(tr)
-                    stream["toolResults"] = list(tool_results_log)
+                    _update(toolResults=list(tool_results_log))
 
                 self._tools.unattended = unattended
                 agent_instance = ToolAgent(
@@ -888,25 +924,20 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                     history=history_list if history_list else None,
                     system_override=agent_system,
                 )
-                stream["content"] = result.get("content", "")
-                stream["pendingQuestion"] = result.get("pendingQuestion")
-                stream["cancelled"] = result.get("cancelled", False)
+                _update(content=result.get("content", ""), pendingQuestion=result.get("pendingQuestion"), cancelled=result.get("cancelled", False))
 
             except Exception as e:
                 logger.exception("toolAgentExecuteStream failed")
-                JARVISBridge._streams[task_id]["error"] = str(e)
+                _update(error=str(e))
             finally:
-                JARVISBridge._streams[task_id]["done"] = True
+                _update(done=True)
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
         return {"taskId": task_id}
 
     def toolAgentGetStream(self, task_id: str) -> dict:
-        stream = JARVISBridge._streams.get(task_id)
-        if not stream:
-            return {"done": True, "error": "Task not found"}
-        return dict(stream)
+        return JARVISBridge._stream_get(JARVISBridge._streams, JARVISBridge._streams_lock, task_id)
 
     def _resolve_model_provider(self) -> tuple[str, str]:
         model = ""
@@ -938,10 +969,11 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
         return planner.execute(query, resume=resume)
 
     _planner_streams: dict[str, dict] = {}
+    _planner_streams_lock: threading.Lock = threading.Lock()
 
     def plannerExecuteStream(self, query: str, resume_plan_id: str = "") -> dict:
         task_id = str(uuid.uuid4())
-        stream: dict = {
+        init = {
             "plan_id": resume_plan_id or "",
             "task": "",
             "total_steps": 0,
@@ -954,12 +986,15 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
             "done": False,
             "error": None,
         }
-        JARVISBridge._planner_streams[task_id] = stream
+        with JARVISBridge._planner_streams_lock:
+            JARVISBridge._planner_streams[task_id] = init
 
         def _run() -> None:
+            def _update(**kw):
+                JARVISBridge._stream_set(JARVISBridge._planner_streams, JARVISBridge._planner_streams_lock, task_id, **kw)
             try:
                 def on_progress(p: dict) -> None:
-                    stream.update(p)
+                    _update(**p)
 
                 model, provider = self._resolve_model_provider()
                 planner = TaskPlanner(
@@ -975,34 +1010,32 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                     if cp:
                         result = planner.execute(cp.get("plan", {}).get("summary", ""), resume=True)
                     else:
-                        stream["error"] = f"Checkpoint {resume_plan_id} not found"
+                        _update(error=f"Checkpoint {resume_plan_id} not found")
                         return
                 else:
                     result = planner.execute(query)
 
-                stream["status"] = "completed" if result.get("success") else "failed"
+                _update(status="completed" if result.get("success") else "failed")
             except Exception as e:
                 logger.exception("plannerExecuteStream failed")
-                stream["error"] = str(e)
+                _update(error=str(e))
             finally:
-                stream["done"] = True
+                _update(done=True)
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
         return {"taskId": task_id}
 
     def plannerGetProgress(self, task_id: str) -> dict:
-        stream = JARVISBridge._planner_streams.get(task_id)
-        if not stream:
-            return {"done": True, "error": "Task not found"}
-        return dict(stream)
+        return JARVISBridge._stream_get(JARVISBridge._planner_streams, JARVISBridge._planner_streams_lock, task_id)
 
     def plannerCancel(self, task_id: str) -> dict:
-        stream = JARVISBridge._planner_streams.get(task_id)
-        if stream:
-            stream["cancelled"] = True
-            stream["status"] = "cancelled"
-            stream["done"] = True
+        with JARVISBridge._planner_streams_lock:
+            stream = JARVISBridge._planner_streams.get(task_id)
+            if stream:
+                stream["cancelled"] = True
+                stream["status"] = "cancelled"
+                stream["done"] = True
         return {"success": True}
 
     def plannerListCheckpoints(self) -> list:
@@ -1189,18 +1222,23 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
     # ========================================================================
 
     _sistreams: dict[str, dict] = {}
+    _sistreams_lock: threading.Lock = threading.Lock()
 
     def selfImprovementStream(self, action: str = "full_cycle") -> dict:
         task_id = str(uuid.uuid4())
-        JARVISBridge._sistreams[task_id] = {
-            "step": "init",
-            "status": "starting",
-            "detail": "",
-            "progress": 0.0,
-            "pendingQuestion": None,
-            "done": False,
-            "error": None,
-        }
+        with JARVISBridge._sistreams_lock:
+            JARVISBridge._sistreams[task_id] = {
+                "step": "init",
+                "status": "starting",
+                "detail": "",
+                "progress": 0.0,
+                "pendingQuestion": None,
+                "done": False,
+                "error": None,
+            }
+
+        def _si_update(**kw):
+            JARVISBridge._stream_set(JARVISBridge._sistreams, JARVISBridge._sistreams_lock, task_id, **kw)
 
         def _run():
             try:
@@ -1212,7 +1250,7 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
                     model=agent_model,
                     provider=agent_provider,
                     on_token=lambda t: None,
-                    on_progress=lambda p: JARVISBridge._sistreams[task_id].update(p),
+                    on_progress=lambda p: _si_update(**p),
                 )
 
                 def _on_answer(qid: str, ans: str):
@@ -1222,88 +1260,65 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
 
                 if action == "analyze":
                     result = si.analyze()
-                    JARVISBridge._sistreams[task_id].update({
-                        "step": "analyze", "status": "completed",
-                        "detail": json.dumps(result, ensure_ascii=False)[:5000],
-                        "progress": 1.0, "done": True,
-                        "result": result,
-                    })
+                    _si_update(step="analyze", status="completed",
+                               detail=json.dumps(result, ensure_ascii=False)[:5000],
+                               progress=1.0, done=True, result=result)
                 elif action == "propose_and_execute":
                     proposal = si.analyze()
                     if proposal.get("steps"):
                         self._emit_si_progress(task_id, "proposal", "ready",
                                                json.dumps(proposal, indent=2, ensure_ascii=False)[:5000])
-                        JARVISBridge._sistreams[task_id].update({
-                            "pendingQuestion": {
-                                "questionId": "si_proposal",
-                                "question": (
-                                    f"**Proposta de Melhoria**\n\n"
-                                    f"**{proposal.get('summary', 'N/A')}**\n"
-                                    f"Prioridade: {proposal.get('priority', 'N/A')}\n"
-                                    f"Passos: {len(proposal.get('steps', []))}\n"
-                                    f"{proposal.get('rationale', '')}\n\n"
-                                    f"Deseja executar? (sim/não)"
-                                ),
-                                "toolName": "self_improvement",
-                            }
+                        _si_update(pendingQuestion={
+                            "questionId": "si_proposal",
+                            "question": (
+                                f"**Proposta de Melhoria**\n\n"
+                                f"**{proposal.get('summary', 'N/A')}**\n"
+                                f"Prioridade: {proposal.get('priority', 'N/A')}\n"
+                                f"Passos: {len(proposal.get('steps', []))}\n"
+                                f"{proposal.get('rationale', '')}\n\n"
+                                f"Deseja executar? (sim/não)"
+                            ),
+                            "toolName": "self_improvement",
                         })
                         si._answer_event = threading.Event()
                         si._answer_data = None
                         si._answer_event.wait(timeout=600)
                         if si._cancelled:
-                            JARVISBridge._sistreams[task_id].update({
-                                "step": "cancelled", "status": "cancelled", "done": True,
-                            })
+                            _si_update(step="cancelled", status="cancelled", done=True)
                             return
                         if si._answer_data and si._answer_data[1].strip().lower() in ("sim", "s", "yes", "y"):
-                            JARVISBridge._sistreams[task_id].update({"pendingQuestion": None})
+                            _si_update(pendingQuestion=None)
                             exec_result = si.execute_proposal(proposal)
-                            JARVISBridge._sistreams[task_id].update({
-                                "step": "executed", "status": "completed",
-                                "detail": json.dumps(exec_result, ensure_ascii=False)[:5000],
-                                "progress": 1.0, "done": True,
-                                "result": {"proposal": proposal, "execution": exec_result},
-                            })
+                            _si_update(step="executed", status="completed",
+                                       detail=json.dumps(exec_result, ensure_ascii=False)[:5000],
+                                       progress=1.0, done=True, result={"proposal": proposal, "execution": exec_result})
                         else:
-                            JARVISBridge._sistreams[task_id].update({
-                                "step": "rejected", "status": "completed", "done": True,
-                            })
+                            _si_update(step="rejected", status="completed", done=True)
                     else:
-                        JARVISBridge._sistreams[task_id].update({
-                            "step": "failed", "status": "error", "done": True,
-                            "error": "No improvement steps generated",
-                        })
+                        _si_update(step="failed", status="error", done=True, error="No improvement steps generated")
                 else:
                     result = si.full_cycle()
-                    JARVISBridge._sistreams[task_id].update({
-                        "step": "completed", "status": "completed",
-                        "detail": json.dumps(result, ensure_ascii=False)[:5000],
-                        "progress": 1.0, "done": True,
-                        "result": result,
-                    })
+                    _si_update(step="completed", status="completed",
+                               detail=json.dumps(result, ensure_ascii=False)[:5000],
+                               progress=1.0, done=True, result=result)
 
             except Exception as e:
                 logger.exception("selfImprovementStream failed")
-                JARVISBridge._sistreams[task_id]["error"] = str(e)
+                _si_update(error=str(e))
             finally:
-                JARVISBridge._sistreams[task_id]["done"] = True
+                _si_update(done=True)
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
         return {"taskId": task_id}
 
     def _emit_si_progress(self, task_id: str, step: str, status: str, detail: str, progress: float = 0.0):
-        JARVISBridge._sistreams[task_id].update({
-            "step": step, "status": status, "detail": detail, "progress": progress,
-        })
+        JARVISBridge._stream_set(JARVISBridge._sistreams, JARVISBridge._sistreams_lock, task_id,
+                                 step=step, status=status, detail=detail, progress=progress)
 
     def selfImprovementGetStream(self, task_id: str) -> dict:
-        stream = JARVISBridge._sistreams.get(task_id)
-        if not stream:
-            return {"done": True, "error": "Task not found"}
-        d = dict(stream)
-        if "result" in d:
-            del d["result"]
+        d = JARVISBridge._stream_get(JARVISBridge._sistreams, JARVISBridge._sistreams_lock, task_id)
+        d.pop("result", None)
         return d
 
     def selfImprovementAnswer(self, question_id: str, answer: str) -> dict:
@@ -1319,9 +1334,10 @@ Generate 2-5 steps. Use realistic values based on the user's request."""
         try:
             if self._si_instance:
                 self._si_instance.cancel()
-            if task_id and task_id in JARVISBridge._sistreams:
-                JARVISBridge._sistreams[task_id]["done"] = True
-                JARVISBridge._sistreams[task_id]["cancelled"] = True
+            with JARVISBridge._sistreams_lock:
+                if task_id in JARVISBridge._sistreams:
+                    JARVISBridge._sistreams[task_id]["done"] = True
+                    JARVISBridge._sistreams[task_id]["cancelled"] = True
             return {"success": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -2406,15 +2422,20 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
     # ========================================================================
 
     _voice_streams: dict[str, dict] = {}
+    _voice_streams_lock: threading.Lock = threading.Lock()
 
     def voiceConversationStream(self, audio_base64: str, conv_id: str = "", history: list | None = None, agent_id: str = "") -> dict:
         task_id = str(uuid.uuid4())
-        stream = {
+        init = {
             "text": "", "response": "", "audioBase64": "",
             "status": "transcribing", "timings": {},
             "done": False, "error": None,
         }
-        JARVISBridge._voice_streams[task_id] = stream
+        with JARVISBridge._voice_streams_lock:
+            JARVISBridge._voice_streams[task_id] = init
+
+        def _v_update(**kw):
+            JARVISBridge._stream_set(JARVISBridge._voice_streams, JARVISBridge._voice_streams_lock, task_id, **kw)
 
         def _run():
             try:
@@ -2429,9 +2450,9 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
                 from jarvis.voice_conversation import run_pipeline
 
                 def on_progress(**kw):
-                    JARVISBridge._voice_streams[task_id].update(kw)
+                    _v_update(**kw)
 
-                stream["status"] = "transcribing"
+                _v_update(status="transcribing")
                 result = run_pipeline(
                     audio_base64,
                     llm_gateway=self._llm,
@@ -2441,23 +2462,20 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
                     history=history,
                     on_progress=on_progress,
                 )
-                JARVISBridge._voice_streams[task_id].update(result)
-                stream["status"] = "done" if not result.get("error") else "error"
+                _v_update(**result)
+                _v_update(status="done" if not result.get("error") else "error")
             except Exception as e:
                 logger.exception("voiceConversationStream failed")
-                JARVISBridge._voice_streams[task_id].update({"error": str(e), "status": "error"})
+                _v_update(error=str(e), status="error")
             finally:
-                JARVISBridge._voice_streams[task_id]["done"] = True
+                _v_update(done=True)
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
         return {"taskId": task_id}
 
     def voiceConversationGetStream(self, task_id: str) -> dict:
-        stream = JARVISBridge._voice_streams.get(task_id)
-        if not stream:
-            return {"done": True, "error": "Task not found"}
-        return dict(stream)
+        return JARVISBridge._stream_get(JARVISBridge._voice_streams, JARVISBridge._voice_streams_lock, task_id)
 
     # ========================================================================
     # Camera capture

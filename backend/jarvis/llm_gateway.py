@@ -1,5 +1,6 @@
 """Multi-provider LLM Gateway — OpenAI, Anthropic, AWS Bedrock, Ollama."""
 
+import atexit
 import glob
 import json
 import logging
@@ -492,6 +493,20 @@ class NativeLLMClient(BaseLLMClient):
 
 
 _CLIENT_CACHE: dict[str, BaseLLMClient] = {}
+
+
+def _close_all_clients():
+    for key, client in list(_CLIENT_CACHE.items()):
+        c = getattr(client, "_client", None)
+        if isinstance(c, httpx.Client):
+            try:
+                c.close()
+            except Exception:
+                pass
+        del _CLIENT_CACHE[key]
+
+
+atexit.register(_close_all_clients)
 
 
 def get_llm_client(config: LLMProviderConfig) -> BaseLLMClient:

@@ -302,7 +302,14 @@ MIGRATIONS: list[Migration] = [
 ]
 
 
+import re
+
+_VALID_IDENTIFIER = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
 def _column_exists(db: Database, table: str, column: str) -> bool:
+    if not _VALID_IDENTIFIER.match(table) or not _VALID_IDENTIFIER.match(column):
+        raise ValueError(f"Invalid table/column name: {table}.{column}")
     row = db.fetchone(
         f"SELECT COUNT(*) AS cnt FROM pragma_table_info('{table}') WHERE name=?",
         (column,),

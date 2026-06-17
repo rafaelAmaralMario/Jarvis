@@ -1087,7 +1087,7 @@ class ToolManager:
             from bs4 import BeautifulSoup
 
             url = "https://html.duckduckgo.com/html/"
-            resp = requests.post(url, data={"q": query}, timeout=15, verify=False, headers={
+            resp = requests.post(url, data={"q": query}, timeout=15, verify=True, headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) JARVIS/1.0",
             })
             resp.raise_for_status()
@@ -1126,7 +1126,7 @@ class ToolManager:
             import requests
             from bs4 import BeautifulSoup
 
-            resp = requests.get(url, timeout=15, verify=False, headers={
+            resp = requests.get(url, timeout=15, verify=True, headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) JARVIS/1.0",
             })
             resp.raise_for_status()
@@ -1158,7 +1158,7 @@ class ToolManager:
         try:
             import requests
             os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-            resp = requests.get(url, timeout=120, stream=True, verify=False, headers={
+            resp = requests.get(url, timeout=120, stream=True, verify=True, headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) JARVIS/1.0",
             })
             resp.raise_for_status()
@@ -1276,15 +1276,24 @@ class ToolManager:
         except Exception as e:
             return ToolResult(success=False, error=f"Download failed: {e}")
 
+    _whisper_cache: dict[str, Any] = {}
+
+    def _get_whisper_model(self, model_size: str):
+        if model_size not in self._whisper_cache:
+            import faster_whisper
+            self._whisper_cache[model_size] = faster_whisper.WhisperModel(
+                model_size, device="cpu", compute_type="int8"
+            )
+        return self._whisper_cache[model_size]
+
     def _handle_transcribe_audio(self, args: dict[str, Any]) -> ToolResult:
-        import faster_whisper
         path = self._resolve_path(args["path"])
         if not os.path.exists(path):
             return ToolResult(success=False, error=f"File not found: {path}")
         model_size = args.get("model", "tiny")
         language = args.get("language") or None
         try:
-            model = faster_whisper.WhisperModel(model_size, device="cpu", compute_type="int8")
+            model = self._get_whisper_model(model_size)
             segments, info = model.transcribe(path, language=language)
             text = " ".join(seg.text for seg in segments)
             return ToolResult(

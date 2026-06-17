@@ -69,8 +69,21 @@ class RAGService:
             logger.warning("Ollama embedding failed: %s. Using fallback.", e)
             return self._embed_fallback(texts)
 
+    _FALLBACK_MODEL = None
+
     @staticmethod
     def _embed_fallback(texts: list[str]) -> list[list[float]]:
+        try:
+            if RAGService._FALLBACK_MODEL is None:
+                from sentence_transformers import SentenceTransformer
+                RAGService._FALLBACK_MODEL = SentenceTransformer(
+                    "paraphrase-multilingual-MiniLM-L12-v2",
+                    device="cpu",
+                )
+            emb = RAGService._FALLBACK_MODEL.encode(texts, normalize_embeddings=True)
+            return emb.tolist()
+        except ImportError:
+            pass
         import hashlib
         results = []
         for t in texts:

@@ -42,6 +42,7 @@ vision = [
 audio = [
     "piper-tts>=1.2,<2",
     "faster-whisper>=1.1,<2",
+    "scipy>=1.14,<2",
 ]
 image = [
     "torch>=2.5,<3",
@@ -49,6 +50,12 @@ image = [
     "transformers>=4.47,<5",
     "accelerate>=1.3,<2",
     "imageio[ffmpeg]>=2.36,<3",
+]
+rag = [
+    "chromadb>=1.0,<2",
+]
+whatsapp = [
+    "pywhatkit>=5.0,<6",
 ]
 dev = [
     "pytest>=8,<9",
