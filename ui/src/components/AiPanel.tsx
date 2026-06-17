@@ -765,7 +765,7 @@ export function AiPanel({ fullView }: AiPanelProps) {
             </select>
             <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">▼</span>
           </div>
-          {providers.length > 1 && (
+          {providers && providers.length > 1 && (
             <div className="relative">
               <select
                 value={selectedProvider}
@@ -776,7 +776,7 @@ export function AiPanel({ fullView }: AiPanelProps) {
                 className="appearance-none bg-muted/50 text-[11px] text-muted-foreground truncate focus:outline-none cursor-pointer px-2 py-0.5 rounded-md border border-border pr-5"
                 title="Provider"
               >
-                {providers.filter(p => p.enabled).map(p => (
+                {(providers ?? []).filter(p => p.enabled).map(p => (
                   <option key={p.provider} value={p.provider}>{p.provider}</option>
                 ))}
               </select>
