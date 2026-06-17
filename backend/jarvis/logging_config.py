@@ -4,6 +4,13 @@ Layout:
   logs/backend/{errors,warnings,info}/<session>.log
   logs/frontend/{errors,warnings,info}/<session>.log
   logs/server/{errors,warnings,info}/<session>.log
+
+Usage:
+  from jarvis.logging_config import setup_logging, get_component_logger
+
+  setup_logging()           # backend (main app)
+  get_component_logger("frontend")  # frontend logs via bridge
+  get_component_logger("server")    # sync server logs via bridge
 """
 
 import logging
@@ -11,11 +18,27 @@ import logging.handlers
 import os
 import sys
 import threading
-from datetime import datetime
+import traceback as _traceback
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Literal
 
 Component = Literal["backend", "frontend", "server"]
+
+# ── 3rd-party loggers we want to silence ──────────────────────────
+_QUIET_LOGGERS = [
+    "httpx",
+    "httpcore",
+    "httpcore.http11",
+    "httpcore.http11_connection",
+    "httpcore.connection",
+    "urllib3",
+    "websockets",
+    "websockets.client",
+    "asyncio",
+    "PIL",
+    "fitz",
+]
 
 
 def get_log_dir() -> Path:
@@ -31,6 +54,17 @@ def get_log_dir() -> Path:
 SESSION_TS = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 
+class _AutoExcInfoFilter(logging.Filter):
+    """Automatically adds exc_info to ERROR+ records if an exception is active."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.ERROR and not record.exc_info:
+            exc = sys.exc_info()
+            if exc and exc[0] is not None:
+                record.exc_info = exc
+        return True
+
+
 class _ComponentRouterHandler(logging.Handler):
     """Routes log records to component + level subdirectories.
 
@@ -44,10 +78,11 @@ class _ComponentRouterHandler(logging.Handler):
         self._base_dir = base_dir
         self._handlers: dict[str, logging.FileHandler] = {}
         self._formatter = logging.Formatter(
-            "[%(asctime)s] %(levelname)-8s %(name)s:%(lineno)d — %(message)s",
+            "[%(asctime)s] %(levelname)-8s %(name)s:%(lineno)d — %(message)s%(exc_text)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
         self._setup_levels()
+        self.addFilter(_AutoExcInfoFilter())
 
     def _setup_levels(self) -> None:
         for sub in ("errors", "warnings", "info"):
@@ -94,6 +129,12 @@ def _notify_crash(message: str) -> None:
             pass
 
 
+def _silence_noisy_loggers() -> None:
+    for name in _QUIET_LOGGERS:
+        lg = logging.getLogger(name)
+        lg.setLevel(logging.WARNING)
+
+
 def setup_logging(
     level: int = logging.DEBUG,
     component: Component = "backend",
@@ -106,8 +147,11 @@ def setup_logging(
         root = logging.getLogger()
         root.setLevel(level)
 
+        # Silence noisy 3rd-party libraries
+        _silence_noisy_loggers()
+
         formatter = logging.Formatter(
-            "[%(asctime)s] %(levelname)-8s %(name)s:%(lineno)d — %(message)s",
+            "[%(asctime)s] %(levelname)-8s %(name)s:%(lineno)d — %(message)s%(exc_text)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
 
@@ -122,6 +166,12 @@ def setup_logging(
         console_handler.setFormatter(formatter)
         root.addHandler(console_handler)
 
+    # Clean up old logs on startup (keep 7 days)
+    try:
+        cleanup_old_logs()
+    except Exception:
+        pass
+
     return str(log_dir / component / "info" / f"{SESSION_TS}.log")
 
 
@@ -134,13 +184,24 @@ def get_component_logger(component: Component) -> logging.Logger:
     name = f"jarvis.{component}"
     logger = logging.getLogger(name)
 
-    # Only add the component router once
     if not any(isinstance(h, _ComponentRouterHandler) and h._component == component for h in logger.handlers):
         router = _ComponentRouterHandler(log_dir, component, logging.DEBUG)
         logger.addHandler(router)
-        logger.propagate = False  # Don't duplicate to root
+        logger.propagate = False
 
     return logger
+
+
+def _log_with_exc(logger: logging.Logger, level: str, message: str) -> None:
+    """Call the appropriate logger method, passing exc_info for errors."""
+    if level == "error":
+        logger.error(message, exc_info=True)
+    elif level == "warn":
+        logger.warning(message)
+    elif level == "debug":
+        logger.debug(message)
+    else:
+        logger.info(message)
 
 
 def log_from_frontend(level: str, message: str, data: dict | None = None) -> None:
@@ -149,13 +210,7 @@ def log_from_frontend(level: str, message: str, data: dict | None = None) -> Non
     text = message
     if data:
         text += f" | {data}"
-    level_map = {
-        "debug": logger.debug,
-        "info": logger.info,
-        "warn": logger.warning,
-        "error": logger.error,
-    }
-    level_map.get(level, logger.info)(text)
+    _log_with_exc(logger, level, text)
 
 
 def log_from_server(level: str, message: str, data: dict | None = None) -> None:
@@ -164,18 +219,24 @@ def log_from_server(level: str, message: str, data: dict | None = None) -> None:
     text = message
     if data:
         text += f" | {data}"
-    level_map = {
-        "debug": logger.debug,
-        "info": logger.info,
-        "warn": logger.warning,
-        "error": logger.error,
-    }
-    level_map.get(level, logger.info)(text)
+    _log_with_exc(logger, level, text)
 
 
-# Shortcut to write frontend logs directly
 def frontend_log(level: str, message: str, data: dict | None = None) -> None:
     log_from_frontend(level, message, data)
+
+
+def cleanup_old_logs(days: int = 7) -> None:
+    """Remove log files older than ``days`` days."""
+    log_dir = get_log_dir()
+    cutoff = datetime.now() - timedelta(days=days)
+    for child in log_dir.rglob("*.log"):
+        try:
+            mtime = datetime.fromtimestamp(child.stat().st_mtime)
+            if mtime < cutoff:
+                child.unlink()
+        except Exception:
+            pass
 
 
 def install_exception_hooks() -> None:
@@ -184,8 +245,7 @@ def install_exception_hooks() -> None:
     original_excepthook = sys.excepthook
 
     def _excepthook(exc_type, exc_value, exc_tb) -> None:
-        import traceback
-        msg = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        msg = "".join(_traceback.format_exception(exc_type, exc_value, exc_tb))
         logging.getLogger("jarvis").critical("Unhandled exception:\n%s", msg)
         _notify_crash(msg)
         if original_excepthook:
@@ -196,8 +256,9 @@ def install_exception_hooks() -> None:
     original_thread_hook = threading.excepthook
 
     def _thread_hook(args: threading.ExceptHookArgs) -> None:
-        import traceback
-        msg = "".join(traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback))
+        msg = "".join(
+            _traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback)
+        )
         logging.getLogger("jarvis").critical("Unhandled thread exception:\n%s", msg)
         _notify_crash(msg)
         if original_thread_hook:
